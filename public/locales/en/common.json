@@ -341,7 +341,8 @@
       "seats": "seats",
       "exchange_rate": "exchange rate",
       "market_rate": "market rate",
-      "number_of_minutes": "number of minutes"
+      "number_of_minutes": "number of minutes",
+      "units_per_sale": "units per sale"
     }
   },
   "toast": {
@@ -456,7 +457,10 @@
     "size": {
       "MEDIUM": "Medium",
       "LARGE": "Large",
-      "PIECE": "Piece"
+      "PIECE": "Piece",
+      "PACK": "Pack",
+      "BOX": "Box",
+      "CARTON": "Carton"
     }
   },
   "enums": {
@@ -517,7 +521,10 @@
     "variant": {
       "MEDIUM": "Medium",
       "LARGE": "Large",
-      "PIECE": "Piece"
+      "PIECE": "Piece",
+      "PACK": "Pack",
+      "BOX": "Box",
+      "CARTON": "Carton"
     },
     "unit": {
       "PACK": "Pack",
@@ -529,12 +536,18 @@
       "CAN": "Can",
       "CUP": "Cup",
       "PACKAGE": "Package",
-      "TANK": "Tank"
+      "TANK": "Tank",
+      "BAG": "Bag",
+      "KILOGRAM": "Kilogram",
+      "LITER": "Liter",
+      "GRAM": "Gram",
+      "MILLILITER": "Milliliter"
     },
     "category_group": {
       "FRESH_DRINK": "Fresh Drink",
       "BEVERAGE": "Beverage",
-      "SNACK": "Snack"
+      "SNACK": "Snack",
+      "INGREDIENT": "Ingredient"
     },
     "table_size": {
       "SMALL": "Small",
@@ -557,6 +570,25 @@
       "FEEDBACK_SUGGESTIONS": "Feedback Suggestions",
       "PARTNERSHIP": "Partnership",
       "ORDER_SUPPORT": "Order Support"
+    },
+    "movement_reason": {
+      "PURCHASE": "Purchase",
+      "SALE": "Sale",
+      "RETURN": "Return",
+      "WASTE": "Waste",
+      "ADJUSTMENT": "Adjustment"
+    },
+    "waste_reason": {
+      "EXPIRED": "Expired",
+      "DAMAGED": "Damaged",
+      "SPILLED": "Spilled",
+      "QUALITY": "Quality issue",
+      "OTHER": "Other"
+    },
+    "report_period": {
+      "DAY": "Day",
+      "MONTH": "Month",
+      "YEAR": "Year"
     }
   }
 }

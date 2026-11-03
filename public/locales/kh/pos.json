@@ -27,7 +27,10 @@
     "add": "បន្ថែម",
     "add_to_order": "បន្ថែម {name} ទៅការបញ្ជាទិញ",
     "add_variant": "បន្ថែម {name} ({variant}) {price}",
-    "quantity_of": "បរិមាណ {name}"
+    "quantity_of": "បរិមាណ {name}",
+    "stock_label": "មានក្នុងស្តុក {stock}",
+    "low_stock_label": "ស្តុកជិតអស់ · {stock}",
+    "can_make": "អាចធ្វើបាន {count}"
   },
   "quantity": {
     "decrease": "បន្ថយបរិមាណ",

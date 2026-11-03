@@ -2,7 +2,8 @@ import { humanise } from "@/lib/utils";
 
 export type EnumGroup =
   | "role" | "user_status" | "status" | "order_status" | "payment_method" | "gender"
-  | "audit_action" | "variant" | "unit" | "category_group" | "table_size" | "call_reason" | "contact_topic";
+  | "audit_action" | "variant" | "unit" | "category_group" | "table_size" | "call_reason" | "contact_topic"
+  | "movement_reason" | "waste_reason" | "report_period";
 
 type Translate = (key: string, fallback?: string) => string;
 

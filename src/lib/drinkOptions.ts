@@ -16,7 +16,9 @@ export const MILK_CHOICES: MilkType[] = ["NORMAL", "LESS", "EXTRA", "NONE"];
 const SUGAR_LABELS: Record<SugarLevel, string> = { ZERO: "No Sugar", LESS: "Less Sugar", NORMAL: "Normal Sugar", EXTRA: "Extra Sugar" };
 const ICE_LABELS: Record<IceLevel, string> = { NO_ICE: "No Ice", LESS_ICE: "Less Ice", NORMAL: "Normal Ice", EXTRA_ICE: "Extra Ice" };
 const MILK_LABELS: Record<MilkType, string> = { NONE: "No Milk", LESS: "Less Milk", NORMAL: "Normal Milk", EXTRA: "Extra Milk" };
-const SIZE_LABELS: Record<VariantLabel, string> = { MEDIUM: "Medium", LARGE: "Large", PIECE: "Piece" };
+const SIZE_LABELS: Record<VariantLabel, string> = {
+  MEDIUM: "Medium", LARGE: "Large", PIECE: "Piece", PACK: "Pack", BOX: "Box", CARTON: "Carton",
+};
 
 export const sugarLabel = (level: SugarLevel) => translate(`drink_options.sugar.${level}`, SUGAR_LABELS[level] ?? level);
 export const iceLabel = (level: IceLevel) => translate(`drink_options.ice.${level}`, ICE_LABELS[level] ?? level);

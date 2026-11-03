@@ -49,7 +49,9 @@ import type {
 } from "@/store/api/types";
 import { cn, titleCase } from "@/lib/utils";
 import { hasDrinkOptions, optionSummary } from "@/lib/drinkOptions";
+import { hasStockFor } from "@/lib/stockUnits";
 import { useCatalogAlerts } from "@/hooks/useCatalogAlerts";
+import { useInventoryAlerts } from "@/hooks/useInventoryAlerts";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useStaffOrderAlerts } from "@/hooks/useStaffOrderAlerts";
 import { useI18n } from "@/contexts/I18nContext";
@@ -164,6 +166,8 @@ export default function PosView() {
       void refetchCategories();
     }, [refetch, refetchCategories])
   );
+  // Sales, deliveries and waste on any till change what is left, including how many recipe drinks can be made.
+  useInventoryAlerts(useCallback(() => { void refetch(); }, [refetch]));
 
   const [createBaristaOrder, { isLoading: isCreatingBarista }] = useCreateBaristaOrderMutation();
   const [createAdminOrder, { isLoading: isCreatingAdmin }] = useCreateAdminOrderMutation();
@@ -190,7 +194,7 @@ export default function PosView() {
   const visibleProducts = useMemo(() => {
     const term = search.trim().toLowerCase();
     return (productPage?.content ?? []).filter((product) => {
-      if (product.status !== "ACTIVE") return false;
+      if (product.status !== "ACTIVE" || product.categoryGroup === "INGREDIENT") return false;
       if (!product.variants.some((v) => v.status === "ACTIVE")) return false;
       if (!term) return true;
       return (
@@ -205,8 +209,7 @@ export default function PosView() {
       toast.error(t("pos.toast.finish_payment_first", "Finish or cancel the payment before editing the order."));
       return;
     }
-    const quantity = cart.filter((line) => line.product.id === product.id).reduce((sum, line) => sum + line.quantity, 0);
-    if (quantity + 1 > Number(product.quantityOnHand)) {
+    if (!hasStockFor(product, options.variant, cart)) {
       toast.error(t("pos.toast.not_enough_stock", "{name} does not have enough stock.", { name: product.name }));
       return;
     }
@@ -252,6 +255,12 @@ export default function PosView() {
       addToCart(product, options);
       return;
     }
+    // Switching a line from a can to a carton (or to another size) can take more stock than it did.
+    const editing = cart.find((line) => line.key === editKey);
+    if (editing && !hasStockFor(product, options.variant, cart.filter((line) => line.key !== editKey), editing.quantity)) {
+      toast.error(t("pos.toast.not_enough_stock", "{name} does not have enough stock.", { name: product.name }));
+      return;
+    }
     const key = lineKey(product.id, options);
     setCart((current) => {
       const edited = current.find((line) => line.key === editKey);
@@ -270,8 +279,7 @@ export default function PosView() {
     if (pendingOrder || confirmingRef.current) return;
     const item = cart.find((line) => line.key === key);
     if (item && delta > 0) {
-      const quantity = cart.filter((line) => line.product.id === item.product.id).reduce((sum, line) => sum + line.quantity, 0);
-      if (quantity + delta > Number(item.product.quantityOnHand)) {
+      if (!hasStockFor(item.product, item.variant, cart, delta)) {
         toast.error(t("pos.toast.not_enough_stock", "{name} does not have enough stock.", { name: item.product.name }));
         return;
       }

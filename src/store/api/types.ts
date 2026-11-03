@@ -55,7 +55,8 @@ export type DiscountType = "PERCENTAGE" | "FIXED";
 export type Currency = "USD" | "KHR";
 export type StockMovementType = "STOCK_IN" | "STOCK_OUT";
 export type StockStrategy = "FIFO" | "LIFO";
-export type StockUnit = "PACK" | "BOX" | "CARTON" | "PIECE";
+// The unit stock is bought in; one holds the product's unitsPerStock sell units.
+export type StockUnit = "PACK" | "BOX" | "CARTON" | "PIECE" | "BAG" | "BOTTLE" | "KILOGRAM" | "LITER";
 export type SellUnit =
   | "PLATE"
   | "BOTTLE"
@@ -64,9 +65,18 @@ export type SellUnit =
   | "CARTON"
   | "PACKAGE"
   | "TANK"
-  | "PIECE";
-export type CategoryGroup = "FRESH_DRINK" | "BEVERAGE" | "SNACK";
-export type VariantLabel = "MEDIUM" | "LARGE" | "PIECE";
+  | "PIECE"
+  | "GRAM"
+  | "MILLILITER";
+// INGREDIENT: stock-only items (beans, milk, cups) that recipes use up; never sold on their own.
+export type CategoryGroup = "FRESH_DRINK" | "BEVERAGE" | "SNACK" | "INGREDIENT";
+export type StockMovementReason = "PURCHASE" | "SALE" | "RETURN" | "WASTE" | "ADJUSTMENT";
+export type WasteReason = "EXPIRED" | "DAMAGED" | "SPILLED" | "QUALITY" | "OTHER";
+export type ReportPeriod = "DAY" | "MONTH" | "YEAR";
+// PACK / BOX / CARTON sell several base units at once (unitsPerSale), e.g. a carton of 24 cans.
+export type VariantLabel = "MEDIUM" | "LARGE" | "PIECE" | "PACK" | "BOX" | "CARTON";
+// Which unit a stock-in / stock-cut quantity is in: the stock unit it is bought in, or the sell unit stock is counted in.
+export type QuantityUnit = "PURCHASE" | "BASE";
 // Same values as the API's SugarLevel / IceLevel / MilkType enums.
 export type SugarLevel = "ZERO" | "LESS" | "NORMAL" | "EXTRA";
 export type IceLevel = "NO_ICE" | "LESS_ICE" | "NORMAL" | "EXTRA_ICE";
@@ -230,19 +240,26 @@ export interface ProductVariantResponse {
   name: VariantLabel;
   price: Numeric;
   finalPrice: Numeric;
+  // Base units (the product's sell unit) one sale takes from stock: 1 can, or 24 for a carton.
+  unitsPerSale: number;
   sortOrder: number | null;
   status: Status;
+  // How many can be sold right now: from its own stock, or from its ingredients when recipeBased.
+  availableQuantity: number | null;
+  recipeBased: boolean;
 }
 
 export interface CreateProductVariantRequest {
   name: VariantLabel;
   price: Numeric;
+  unitsPerSale?: number;
   sortOrder?: number;
 }
 
 export interface UpdateProductVariantRequest {
   name?: VariantLabel;
   price?: Numeric;
+  unitsPerSale?: number;
   sortOrder?: number;
   status?: Status;
 }
@@ -385,9 +402,15 @@ export interface ProductImportResponse {
 export interface InventoryResponse {
   productId: UUID;
   productName: string;
-  unit: string;
+  // The sell unit quantityOnHand and reorderLevel are counted in, e.g. CAN.
+  unit: SellUnit;
   quantityOnHand: Numeric;
   reorderLevel: Numeric;
+  // The unit stock is bought in and how many sell units it holds, e.g. CARTON of 24.
+  stockUnit: StockUnit;
+  unitsPerStock: Numeric;
+  // Used up by recipes rather than sold.
+  ingredient: boolean;
 }
 
 export interface StockInImportRowError {
@@ -408,8 +431,16 @@ export interface StockMovementResponse {
   productId: UUID;
   productName: string;
   type: StockMovementType;
+  // Null only on very old movements from before reasons were kept.
+  reason: StockMovementReason | null;
+  wasteReason: WasteReason | null;
   strategy: StockStrategy | null;
+  // In `unit`, the product's sell unit, as is balanceAfter.
   quantity: Numeric;
+  unit: SellUnit;
+  balanceAfter: Numeric | null;
+  totalCost: Numeric | null;
+  orderId: UUID | null;
   note: string | null;
   performedBy: UUID | null;
   performedByName: string | null;
@@ -435,6 +466,8 @@ export interface StockCutResponse {
 export interface StockInRequest {
   productId: UUID;
   quantity: Numeric;
+  unit: QuantityUnit;
+  // Per `unit`: per carton when buying cartons, per can when buying loose cans.
   unitCost: Numeric;
   note?: string;
 }
@@ -442,8 +475,124 @@ export interface StockInRequest {
 export interface StockCutRequest {
   productId: UUID;
   quantity: Numeric;
+  unit: QuantityUnit;
   strategy: StockStrategy;
   note?: string;
+}
+
+export interface WasteRequest {
+  productId: UUID;
+  quantity: Numeric;
+  unit: QuantityUnit;
+  wasteReason: WasteReason;
+  note?: string;
+}
+
+// Sold items put back on the shelf. With an order, no more than that order took out can come back.
+export interface StockReturnRequest {
+  productId: UUID;
+  quantity: Numeric;
+  unit: QuantityUnit;
+  orderId?: UUID;
+  note?: string;
+}
+
+// A physical count: stock becomes countedQuantity and the difference is recorded.
+export interface StockCountRequest {
+  productId: UUID;
+  countedQuantity: Numeric;
+  unit: QuantityUnit;
+  note?: string;
+}
+
+export interface MovementSearchQuery extends PageQuery {
+  productId?: UUID;
+  type?: StockMovementType;
+  reason?: StockMovementReason;
+  // yyyy-MM-dd, inclusive.
+  from?: string;
+  to?: string;
+}
+
+// One product over a report period; quantities in `unit`, money in USD. onHand and stockValue are as of now.
+export interface InventoryReportRow {
+  productId: UUID;
+  productName: string;
+  categoryName: string | null;
+  ingredient: boolean;
+  unit: SellUnit;
+  purchased: Numeric;
+  sold: Numeric;
+  returned: Numeric;
+  wasted: Numeric;
+  adjustedIn: Numeric;
+  adjustedOut: Numeric;
+  purchaseCost: Numeric;
+  salesCost: Numeric;
+  wasteCost: Numeric;
+  onHand: Numeric;
+  reorderLevel: Numeric;
+  stockValue: Numeric;
+}
+
+export interface InventoryReportResponse {
+  period: ReportPeriod;
+  from: string;
+  to: string;
+  purchaseCost: Numeric;
+  purchaseCount: number;
+  salesCost: Numeric;
+  saleCount: number;
+  wasteCost: Numeric;
+  wasteCount: number;
+  wasteCostByReason: Partial<Record<WasteReason, Numeric>>;
+  returnValue: Numeric;
+  adjustmentValue: Numeric;
+  movementCount: number;
+  stockValue: Numeric;
+  lowStockCount: number;
+  outOfStockCount: number;
+  products: InventoryReportRow[];
+}
+
+export interface InventoryReportQuery {
+  period: ReportPeriod;
+  // yyyy-MM-dd inside the period; today when left out.
+  date?: string;
+}
+
+export interface RecipeItemRequest {
+  ingredientId: UUID;
+  // Whole number in the ingredient's sell unit, e.g. 18 (GRAM) or 150 (MILLILITER).
+  quantity: Numeric;
+}
+
+export interface SetRecipeRequest {
+  // Replaces the whole recipe of the size; empty = sold from its own stock again.
+  items: RecipeItemRequest[];
+}
+
+export interface RecipeItemResponse {
+  ingredientId: UUID;
+  ingredientName: string;
+  unit: SellUnit;
+  quantity: Numeric;
+  unitCost: Numeric;
+  lineCost: Numeric;
+  onHand: Numeric;
+}
+
+export interface RecipeResponse {
+  productId: UUID;
+  variantId: UUID;
+  variantName: VariantLabel;
+  variantStatus: Status;
+  finalPrice: Numeric;
+  items: RecipeItemResponse[];
+  cost: Numeric;
+  margin: Numeric;
+  marginPercent: Numeric | null;
+  availableQuantity: number;
 }
 
 export interface OrderItemExtraResponse {

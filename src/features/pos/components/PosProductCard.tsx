@@ -8,6 +8,7 @@ import type { ProductResponse, ProductVariantResponse } from "@/store/api/types"
 import { cn, titleCase } from "@/lib/utils";
 import { enumLabel } from "@/lib/enumLabel";
 import { hasDrinkOptions } from "@/lib/drinkOptions";
+import { formatStock, unitsPerSale } from "@/lib/stockUnits";
 import { useI18n } from "@/contexts/I18nContext";
 
 // How much of one product is already in the order, in total and per size.
@@ -52,10 +53,8 @@ export const PosProductCard = memo(function PosProductCard({
 }) {
   const { t } = useI18n();
   const name = titleCase(product.name);
+  // Stock and reorder level are both counted in the sell unit (cans), whatever unit it was bought in.
   const stock = Number(product.quantityOnHand);
-  const outOfStock = stock <= 0;
-  const lowStock = !outOfStock && stock <= Number(product.reorderLevel);
-  const stockUnit = enumLabel(t, "unit", product.stockUnit);
   const inCart = counts.total;
   const customizable = hasDrinkOptions(product);
   const pick = (variant: ProductVariantResponse) => (customizable ? onCustomize(product, variant) : onAdd(product, variant));
@@ -64,6 +63,22 @@ export const PosProductCard = memo(function PosProductCard({
     .filter((v) => v.status === "ACTIVE")
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   const onlyVariant = activeVariants.length === 1 ? activeVariants[0] : null;
+  // A drink made from a recipe has no stock of its own: how many can be made depends on its ingredients.
+  const recipeBased = activeVariants.some((v) => v.recipeBased);
+  const canMake = Math.max(0, ...activeVariants.filter((v) => v.recipeBased).map((v) => v.availableQuantity ?? 0));
+  // A carton needs a whole carton's worth of cans on hand.
+  const notEnoughFor = (variant: ProductVariantResponse) =>
+    variant.recipeBased ? (variant.availableQuantity ?? 0) < 1 : unitsPerSale(variant) > stock;
+  const outOfStock = activeVariants.length === 0 || activeVariants.every(notEnoughFor);
+  const lowStock = !outOfStock && !recipeBased && stock <= Number(product.reorderLevel);
+  // A product also sold by the carton shows its stock in cartons too: "50 Can (2 Carton + 2)".
+  const sellsMultiUnit = activeVariants.some((v) => unitsPerSale(v) > 1);
+  const stockLabel = sellsMultiUnit
+    ? formatStock(t, stock, product)
+    : `${stock.toLocaleString()} ${enumLabel(t, "unit", product.sellUnit)}`;
+  const perUnit = onlyVariant && unitsPerSale(onlyVariant) > 1
+    ? enumLabel(t, "variant", onlyVariant.name)
+    : enumLabel(t, "unit", product.sellUnit);
   const prices = activeVariants.map((v) => Number(v.finalPrice));
   const lowest = Math.min(...prices);
   const highest = Math.max(...prices);
@@ -106,14 +121,16 @@ export const PosProductCard = memo(function PosProductCard({
         <p className="pos_product_price">
           <strong>{priceLabel}</strong>
           {originalPrice !== null ? <s>{money(originalPrice)}</s> : null}
-          <span>{t("pos.product.per_unit", "per {unit}", { unit: enumLabel(t, "unit", product.sellUnit) })}</span>
+          <span>{t("pos.product.per_unit", "per {unit}", { unit: perUnit })}</span>
         </p>
         <p className={cn("pos_product_stock", lowStock && "is_low", outOfStock && "is_out")}>
           {outOfStock
             ? t("pos.product.out_of_stock", "Out of stock")
-            : lowStock
-              ? t("pos.product.low_stock", "Low stock · {count} {unit}", { count: stock, unit: stockUnit })
-              : t("pos.product.stock", "{count} {unit} in stock", { count: stock, unit: stockUnit })}
+            : recipeBased
+              ? t("pos.product.can_make", "Can make {count}", { count: canMake })
+              : lowStock
+              ? t("pos.product.low_stock_label", "Low stock · {stock}", { stock: stockLabel })
+              : t("pos.product.stock_label", "{stock} in stock", { stock: stockLabel })}
         </p>
 
         <div className="pos_product_action">
@@ -133,7 +150,7 @@ export const PosProductCard = memo(function PosProductCard({
               <button
                 type="button"
                 className="is_add"
-                disabled={outOfStock}
+                disabled={notEnoughFor(onlyVariant)}
                 aria-haspopup={customizable ? "dialog" : undefined}
                 aria-label={
                   inCart > 0
@@ -144,7 +161,7 @@ export const PosProductCard = memo(function PosProductCard({
                 }
                 onClick={() => pick(onlyVariant)}
               >
-                {inCart === 0 && outOfStock ? (
+                {inCart === 0 && notEnoughFor(onlyVariant) ? (
                   t("pos.product.out_of_stock", "Out of stock")
                 ) : (
                   <>
@@ -158,11 +175,12 @@ export const PosProductCard = memo(function PosProductCard({
             <div className="pos_product_variants">
               {activeVariants.map((variant) => {
                 const count = counts.byVariant[variant.id] ?? 0;
+                const perSale = unitsPerSale(variant);
                 return (
                   <button
                     key={variant.id}
                     type="button"
-                    disabled={outOfStock}
+                    disabled={notEnoughFor(variant)}
                     aria-haspopup={customizable ? "dialog" : undefined}
                     onClick={() => pick(variant)}
                     className={cn("pos_product_variant", count > 0 && "is_selected")}
@@ -172,7 +190,10 @@ export const PosProductCard = memo(function PosProductCard({
                       price: money(Number(variant.finalPrice)),
                     })}
                   >
-                    <span>{enumLabel(t, "variant", variant.name)}</span>
+                    <span>
+                      {enumLabel(t, "variant", variant.name)}
+                      {perSale > 1 ? ` ×${perSale}` : null}
+                    </span>
                     <b>{money(Number(variant.finalPrice))}</b>
                     {count > 0 ? (
                       <span key={count} className="pos_product_variant_count" aria-hidden>

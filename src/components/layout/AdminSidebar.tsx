@@ -28,6 +28,11 @@ export function Sidebar() {
   const { t } = useI18n();
   const { role } = useCurrentRole();
   const sections = navigationSections.map((section) => ({ ...section, items: section.items.filter((item) => canAccessAdminPage(role, item.href)) })).filter((section) => section.items.length);
+  // The most specific entry wins, so /inventory/history lights up "Inventory history" and not "Inventory" as well.
+  const activeHref = sections
+    .flatMap((section) => section.items.map((item) => item.href))
+    .filter((href) => isNavItemActive(pathname, href))
+    .sort((a, b) => b.length - a.length)[0];
 
   const handleNavClick = () => {
     setIsMobileMenuOpen(false);
@@ -46,7 +51,7 @@ export function Sidebar() {
           {section.title && ( <p className="title"> {t(section.titleKey, section.title)} </p> )}
           <div className="sidebar_wrap">
             {section.items.map((item) => {
-              const isActive = isNavItemActive(pathname, item.href);
+              const isActive = item.href === activeHref;
               return (
                 <Link key={item.name} href={item.href} onClick={handleNavClick} className={cn("sidebar_item", isActive ? "active" : "")}>
                   <item.icon className="icons" strokeWidth={2.2} />

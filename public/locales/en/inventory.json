@@ -10,7 +10,8 @@
     "reorder_level": "Reorder Level"
   },
   "table": {
-    "current_stock": "Current Stock"
+    "current_stock": "Current Stock",
+    "per_stock_unit": "{count} per {unit}"
   },
   "levels": {
     "ok": "In Stock",
@@ -25,7 +26,9 @@
   "filters": {
     "search_products": "Search products",
     "stock_level": "Stock Level",
-    "all_levels": "All levels"
+    "all_levels": "All levels",
+    "item_type": "Item Type",
+    "all_items": "All items"
   },
   "card": {
     "title": "Stock Levels",
@@ -49,22 +52,23 @@
     "none": "No inventory records. Products get a stock row when they are created."
   },
   "toast": {
-    "stocked_in": "Stocked in {quantity} {unit}",
-    "stock_cut": "Cut {quantity} {unit}"
+    "received": "Received {quantity}",
+    "wasted": "Recorded {quantity} as waste",
+    "returned": "Returned {quantity} to stock",
+    "counted": "Stock count saved: {quantity}",
+    "cut": "Cut {quantity}"
   },
   "errors": {
     "download_expense_report": "Could not download the expense report.",
     "record_movement": "Could not record the stock movement."
   },
   "form": {
-    "title": "Stock Movement",
-    "movement": "Movement",
-    "select_movement": "Select movement",
     "unit_cost": "Unit Cost (USD)",
     "costing_strategy": "Costing Strategy",
     "select_strategy": "Select strategy",
     "note_placeholder": "Optional reason or reference",
-    "current_stock": "Current stock: {quantity} {unit}"
+    "fifo": "FIFO (oldest batch first)",
+    "lifo": "LIFO (newest batch first)"
   },
   "detail": {
     "title": "Inventory Detail",
@@ -84,6 +88,125 @@
     "table": {
       "strategy": "Strategy",
       "performed_by": "Performed By"
+    }
+  },
+  "kind": {
+    "menu": "Menu items",
+    "ingredients": "Ingredients",
+    "ingredient": "Ingredient"
+  },
+  "stock_action": {
+    "actions": {
+      "stock_in": "Receive Stock",
+      "waste": "Record Waste",
+      "return": "Return to Stock",
+      "count": "Stock Count",
+      "stock_cut": "Stock Cut (draw-down)"
+    },
+    "fields": {
+      "action": "Action",
+      "select_action": "Select action",
+      "unit": "Quantity Unit",
+      "unit_cost_per": "Cost per {unit} (USD)",
+      "waste_reason": "Waste Reason",
+      "select_waste_reason": "Select reason",
+      "order": "Order Number (optional)",
+      "counted_quantity": "Counted Quantity"
+    },
+    "preview": {
+      "current": "Current stock: {quantity}",
+      "leaves": "= {quantity} · leaves {after}",
+      "becomes": "Stock becomes {after}",
+      "count": "Counted {counted} · difference {difference}",
+      "return_hint": "With an order number, no more can come back than that order took out."
+    },
+    "errors": {
+      "waste_reason_required": "Choose why the stock was wasted.",
+      "whole_units_purchase": "{quantity} {unit} is {base} {sellUnit}. Stock is counted in whole {sellUnit}, so enter an amount that comes to a whole number.",
+      "whole_units_base": "Stock is counted in whole {sellUnit}. Enter a whole number.",
+      "not_enough": "Only {onHand} on hand.",
+      "count_unchanged": "Stock already is {onHand}; there is nothing to adjust.",
+      "order_invalid": "Enter an order number like #A1B2C3D4.",
+      "order_not_found": "No order matches {order}.",
+      "order_ambiguous": "Several orders start with {order}; enter more of the number.",
+      "order_lookup": "Could not look up that order."
+    }
+  },
+  "movement": {
+    "reason": "Reason",
+    "balance_after": "Balance After",
+    "cost": "Cost",
+    "stock_in": "Stock In",
+    "stock_out": "Stock Out"
+  },
+  "history": {
+    "title": "Inventory History",
+    "card": {
+      "title": "Stock Movements",
+      "meta": "Movements: {count}"
+    },
+    "filters": {
+      "all_types": "All types",
+      "all_reasons": "All reasons",
+      "from": "From",
+      "to": "To"
+    },
+    "empty": {
+      "filtered": "No stock movements match these filters.",
+      "none": "No stock movements recorded yet."
+    }
+  },
+  "reports": {
+    "title": "Inventory Dashboard & Reports",
+    "breadcrumb": "Reports",
+    "export": "Export Excel",
+    "period_meta": "{from} → {to}",
+    "filters": {
+      "period": "Period",
+      "month": "Month",
+      "year": "Year"
+    },
+    "stats": {
+      "unavailable": "Unavailable",
+      "stock_value": "Stock Value Now",
+      "stock_value_hint": "What everything on hand cost",
+      "purchases": "Purchases",
+      "purchases_hint": "{count} stock-ins",
+      "sales_cost": "Cost of Goods Sold",
+      "sales_cost_hint": "{count} sales",
+      "waste": "Waste",
+      "waste_hint": "{count} waste records",
+      "low_stock": "Low Stock",
+      "out_of_stock": "Out of Stock",
+      "as_of_now": "As of now"
+    },
+    "waste": {
+      "title": "Waste by Reason",
+      "cost": "Waste Cost",
+      "share": "Share",
+      "empty": "No waste recorded in this period."
+    },
+    "products": {
+      "title": "Products",
+      "meta": "{from} → {to} · {count} movements",
+      "empty": "No stock items yet.",
+      "empty_filtered": "No products of this type."
+    },
+    "table": {
+      "purchased": "Purchased",
+      "sold": "Sold",
+      "returned": "Returned",
+      "wasted": "Wasted",
+      "adjusted_in": "Adjusted In",
+      "adjusted_out": "Adjusted Out",
+      "purchase_cost": "Purchase Cost",
+      "sales_cost": "Cost of Sales",
+      "waste_cost": "Waste Cost",
+      "on_hand": "On Hand",
+      "stock_value": "Stock Value"
+    },
+    "errors": {
+      "export": "Could not download the inventory report."
     }
   }
 }

@@ -13,6 +13,8 @@
   "nav_products": "Products",
   "nav_categories": "Categories",
   "nav_inventory": "Inventory",
+  "nav_inventory_history": "Inventory history",
+  "nav_inventory_reports": "Inventory reports",
   "nav_stock_alerts": "Stock alerts",
   "nav_events": "Events",
   "nav_banners": "Banners",

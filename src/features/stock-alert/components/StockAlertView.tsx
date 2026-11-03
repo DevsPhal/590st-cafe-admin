@@ -21,6 +21,7 @@ import { useListLowStockQuery } from "@/store/api/inventoryApi";
 import { usePageSize } from "@/contexts/AdminPreferencesContext";
 import { titleCase } from "@/lib/utils";
 import { enumLabel } from "@/lib/enumLabel";
+import { formatStock, unitsPerStock, type StockUnits } from "@/lib/stockUnits";
 import { useInventoryAlerts } from "@/hooks/useInventoryAlerts";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useI18n } from "@/contexts/I18nContext";
@@ -96,17 +97,26 @@ export default function StockAlertView() {
               const reorder = Number(alert.reorderLevel);
               const shortfall = Math.max(reorder - onHand, 0);
               const isOut = onHand <= 0;
+              const units: StockUnits = { sellUnit: alert.unit, stockUnit: alert.stockUnit, unitsPerStock: alert.unitsPerStock };
+              const perStock = unitsPerStock(units);
 
               return (
                 <Row key={alert.productId} striped={index % 2 === 1}>
                   <Cell>{(page - 1) * size + index + 1}</Cell>
                   <Cell className="font-semibold">{titleCase(alert.productName)}</Cell>
-                  <Cell className={isOut ? "font-semibold text-red-700" : undefined}>
-                    {onHand.toLocaleString()}
+                  <Cell className={isOut ? "whitespace-nowrap font-semibold text-red-700" : "whitespace-nowrap"}>
+                    {formatStock(t, onHand, units)}
                   </Cell>
-                  <Cell>{enumLabel(t, "unit", alert.unit)}</Cell>
-                  <Cell>{reorder.toLocaleString()}</Cell>
-                  <Cell>{shortfall.toLocaleString()}</Cell>
+                  <Cell>
+                    {enumLabel(t, "unit", alert.unit)}
+                    {perStock > 1 ? (
+                      <span className="block text-xs text-muted-foreground">
+                        {t("stock_alerts.table.per_stock_unit", "{count} per {unit}", { count: perStock, unit: enumLabel(t, "unit", alert.stockUnit) })}
+                      </span>
+                    ) : null}
+                  </Cell>
+                  <Cell className="whitespace-nowrap">{reorder.toLocaleString()} {enumLabel(t, "unit", alert.unit)}</Cell>
+                  <Cell className="whitespace-nowrap font-semibold">{formatStock(t, shortfall, units)}</Cell>
                   <Cell>
                     <StatusBadge
                       label={

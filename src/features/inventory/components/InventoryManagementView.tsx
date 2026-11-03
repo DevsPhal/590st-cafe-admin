@@ -12,16 +12,8 @@ import {
   ExcelImportButton,
   FilterActions,
   FilterPanel,
-  FormInput,
-  FormModal,
-  FormProductSelect,
-  FormSelect,
-  FormTextarea,
-  ModalGrid,
   PaginationFooter,
-  ProductSelectOption,
   Row,
-  RowActions,
   SelectField,
   SimpleTable,
   StatTile,
@@ -30,7 +22,6 @@ import {
   TableState,
   listLoadState,
   TextField,
-  MoneyField,
 } from "@/components/common/AdminKit";
 import { apiErrorMessage } from "@/store/api/baseApi";
 import { usePageSize } from "@/contexts/AdminPreferencesContext";
@@ -39,39 +30,45 @@ import {
   useDownloadMonthlyStockExpenseReportMutation,
   useDownloadStockInImportTemplateMutation,
   useListInventoryQuery,
-  useStockCutMutation,
   useStockInFromExcelMutation,
-  useStockInMutation,
 } from "@/store/api/inventoryApi";
-import { useListProductsQuery } from "@/store/api/productApi";
 import { useCurrentRole } from "@/store/api/useCurrentRole";
-import type { InventoryResponse, StockStrategy } from "@/store/api/types";
+import type { InventoryResponse } from "@/store/api/types";
 import { downloadBlob, titleCase } from "@/lib/utils";
 import { enumLabel } from "@/lib/enumLabel";
+import { formatStock, unitsPerStock } from "@/lib/stockUnits";
 import { useInventoryAlerts } from "@/hooks/useInventoryAlerts";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
 import { DatePickerInput } from "@/components/forms/DatePickerInput";
-import { Download } from "lucide-react";
-import { parseForm } from "@/lib/validation";
-import { stockMovementSchema } from "@/lib/formSchemas";
+import { ClipboardCheck, Download, Eye, PackagePlus, PackageX, type LucideIcon } from "lucide-react";
+import { LEVEL_TONE, matchesKind, sellQuantity, stockLevel, stockUnitsOf, type ItemKind, type StockLevel } from "../stock";
+import { ItemKindField } from "./ItemKindField";
+import { StockActionModal, useStockActionModal } from "./StockActionModal";
 
-type MovementKind = "STOCK_IN" | "STOCK_CUT";
+const itemLevel = (item: InventoryResponse) => stockLevel(Number(item.quantityOnHand), Number(item.reorderLevel));
 
-type StockLevel = "OUT" | "LOW" | "OK";
+type RowAction = [icon: LucideIcon, onClick: () => void, label: string];
 
-function stockLevel(item: InventoryResponse): StockLevel {
-  const onHand = Number(item.quantityOnHand);
-  if (onHand <= 0) return "OUT";
-  if (onHand <= Number(item.reorderLevel)) return "LOW";
-  return "OK";
+// Same look as AdminKit's RowActions, with the stock actions admins reach for most.
+function StockRowActions({ actions }: { actions: RowAction[] }) {
+  return (
+    <div className="flex flex-nowrap items-center gap-2">
+      {actions.map(([Icon, onClick, label]) => (
+        <button
+          key={label}
+          type="button"
+          onClick={onClick}
+          className="grid h-7 w-7 place-items-center rounded-full bg-(--brand-ink) text-(--brand-lime) transition hover:bg-(--brand-ink-hover)"
+          aria-label={label}
+          title={label}
+        >
+          <Icon className="h-4 w-4" />
+        </button>
+      ))}
+    </div>
+  );
 }
-
-const LEVEL_TONE: Record<StockLevel, "success" | "warning" | "danger"> = {
-  OUT: "danger",
-  LOW: "warning",
-  OK: "success",
-};
 
 export default function Inventory() {
   const { t } = useI18n();
@@ -98,7 +95,8 @@ export default function Inventory() {
   const [size, setSize] = usePageSize();
   const [searchTerm, setSearchTerm] = usePersistentState("inventory:searchTerm", "");
   const [levelFilter, setLevelFilter] = usePersistentState("inventory:levelFilter", "");
-  const isFiltering = Boolean(searchTerm.trim() || levelFilter);
+  const [kindFilter, setKindFilter] = usePersistentState<ItemKind>("inventory:kindFilter", "");
+  const isFiltering = Boolean(searchTerm.trim() || levelFilter || kindFilter);
   const [expenseMonth, setExpenseMonth] = usePersistentState("inventory:expenseMonth", () => new Date().toISOString().slice(0, 7));
 
   const {
@@ -112,10 +110,7 @@ export default function Inventory() {
 
   useInventoryAlerts(useCallback(() => { void refetch(); }, [refetch]));
 
-  const { data: productPage } = useListProductsQuery({ page: 1, size: 500 });
-
-  const [stockIn, { isLoading: isStockingIn }] = useStockInMutation();
-  const [stockCut, { isLoading: isCutting }] = useStockCutMutation();
+  const stockAction = useStockActionModal();
   const [stockInFromExcel] = useStockInFromExcelMutation();
   const [downloadStockInTemplate] = useDownloadStockInImportTemplateMutation();
   const [downloadExpenseReport, { isLoading: isDownloadingExpenseReport }] =
@@ -130,100 +125,23 @@ export default function Inventory() {
     }
   };
 
-  const [formOpen, setFormOpen] = usePersistentState("inventory:formOpen", false);
-  const [selectedProduct, setSelectedProduct] = usePersistentState<ProductSelectOption | null>("inventory:selectedProduct", null);
-  const [movementKind, setMovementKind] = usePersistentState<MovementKind>("inventory:movementKind", "STOCK_IN");
-  const [quantity, setQuantity] = usePersistentState("inventory:quantity", "");
-  const [unitCost, setUnitCost] = usePersistentState("inventory:unitCost", "");
-  const [strategy, setStrategy] = usePersistentState<StockStrategy>("inventory:strategy", "FIFO");
-  const [note, setNote] = usePersistentState("inventory:note", "");
-
   const inventory = useMemo(() => inventoryPage?.content ?? [], [inventoryPage]);
-
-  const productOptions = useMemo<ProductSelectOption[]>(
-    () =>
-      (productPage?.content ?? []).map((product) => ({
-        id: product.id,
-        name: product.name,
-        sku: product.sku,
-        currentStock: Number(product.quantityOnHand),
-        unit: enumLabel(t, "unit", product.stockUnit),
-      })),
-    [productPage, t]
-  );
 
   const matchingInventory = useMemo(
     () =>
       inventory.filter((item) => {
         const term = searchTerm.trim().toLowerCase();
         const matchesSearch = !term || item.productName.toLowerCase().includes(term);
-        const matchesLevel = !levelFilter || stockLevel(item) === levelFilter;
-        return matchesSearch && matchesLevel;
+        const matchesLevel = !levelFilter || itemLevel(item) === levelFilter;
+        return matchesSearch && matchesLevel && matchesKind(item.ingredient, kindFilter);
       }),
-    [inventory, searchTerm, levelFilter]
+    [inventory, searchTerm, levelFilter, kindFilter]
   );
   const view = filteredPage(matchingInventory, inventoryPage, page, size, isFiltering);
   const visibleInventory = view.rows;
 
-  const lowCount = inventory.filter((i) => stockLevel(i) === "LOW").length;
-  const outCount = inventory.filter((i) => stockLevel(i) === "OUT").length;
-
-  const handleOpenForm = (item?: InventoryResponse) => {
-    if (!isAdmin) return;
-    const option = item
-      ? productOptions.find((p) => p.id === item.productId) ?? {
-          id: item.productId,
-          name: item.productName,
-          sku: "-",
-          currentStock: Number(item.quantityOnHand),
-          unit: enumLabel(t, "unit", item.unit),
-        }
-      : null;
-    setSelectedProduct(option);
-    setMovementKind("STOCK_IN");
-    setQuantity("");
-    setUnitCost("");
-    setStrategy("FIFO");
-    setNote("");
-    setFormOpen(true);
-  };
-
-  const handleSubmit = async () => {
-    if (!isAdmin) return;
-    const parsed = parseForm(stockMovementSchema(movementKind), {
-      productId: selectedProduct?.id ?? "",
-      quantity,
-      unitCost,
-      note,
-    });
-    if (!parsed || !selectedProduct) return;
-    const qty = parsed.quantity;
-
-    try {
-      if (movementKind === "STOCK_IN") {
-        await stockIn({
-          productId: selectedProduct.id,
-          quantity: qty,
-          unitCost: parsed.unitCost ?? 0,
-          note: parsed.note,
-        }).unwrap();
-        toast.success(t("inventory.toast.stocked_in", "Stocked in {quantity} {unit}", { quantity: qty, unit: selectedProduct.unit }));
-      } else {
-        await stockCut({
-          productId: selectedProduct.id,
-          quantity: qty,
-          strategy,
-          note: parsed.note,
-        }).unwrap();
-        toast.success(t("inventory.toast.stock_cut", "Cut {quantity} {unit}", { quantity: qty, unit: selectedProduct.unit }));
-      }
-      setFormOpen(false);
-    } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("inventory.errors.record_movement", "Could not record the stock movement.")));
-    }
-  };
-
-  const isSaving = isStockingIn || isCutting;
+  const lowCount = inventory.filter((i) => itemLevel(i) === "LOW").length;
+  const outCount = inventory.filter((i) => itemLevel(i) === "OUT").length;
 
   return (
     <PageShell>
@@ -272,7 +190,11 @@ export default function Inventory() {
           <option value="LOW">{levelLabel.LOW}</option>
           <option value="OUT">{levelLabel.OUT}</option>
         </SelectField>
-        <FilterActions onClear={() => { setSearchTerm(""); setLevelFilter(""); setPage(1); }} onSearch={refetch} />
+        <ItemKindField value={kindFilter} onChange={(kind) => { setKindFilter(kind); setPage(1); }} />
+        <FilterActions
+          onClear={() => { setSearchTerm(""); setLevelFilter(""); setKindFilter(""); setPage(1); }}
+          onSearch={refetch}
+        />
       </FilterPanel>
 
       <DataCard
@@ -311,7 +233,7 @@ export default function Inventory() {
                   download: () => downloadStockInTemplate().unwrap(),
                 }}
               />
-              <TableActions onRegister={() => handleOpenForm()} primaryLabel={t("inventory.actions.adjust_stock", "Adjust Stock")} />
+              <TableActions onRegister={() => stockAction.open()} primaryLabel={t("inventory.actions.adjust_stock", "Adjust Stock")} />
             </div>
           ) : undefined
         }
@@ -327,23 +249,41 @@ export default function Inventory() {
           />
           {list.showRows &&
             visibleInventory.map((item, index) => {
-              const level = stockLevel(item);
+              const level = itemLevel(item);
+              const units = stockUnitsOf(item);
+              const perStock = unitsPerStock(units);
+              const rowActions: RowAction[] = [[Eye, () => router.push(`/inventory/${item.productId}`), t("actions.view", "View")]];
+              if (isAdmin) {
+                rowActions.push(
+                  [PackagePlus, () => stockAction.open(item, "STOCK_IN"), t("inventory.stock_action.actions.stock_in", "Receive Stock")],
+                  [PackageX, () => stockAction.open(item, "WASTE"), t("inventory.stock_action.actions.waste", "Record Waste")],
+                  [ClipboardCheck, () => stockAction.open(item, "COUNT"), t("inventory.stock_action.actions.count", "Stock Count")]
+                );
+              }
               return (
                 <Row key={item.productId} striped={index % 2 === 1}>
                   <Cell>{view.offset + index + 1}</Cell>
-                  <Cell className="font-semibold">{titleCase(item.productName)}</Cell>
-                  <Cell>{Number(item.quantityOnHand).toLocaleString()}</Cell>
-                  <Cell>{enumLabel(t, "unit", item.unit)}</Cell>
-                  <Cell>{Number(item.reorderLevel).toLocaleString()}</Cell>
+                  <Cell className="font-semibold">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {titleCase(item.productName)}
+                      {item.ingredient ? <StatusBadge label={t("inventory.kind.ingredient", "Ingredient")} tone="info" /> : null}
+                    </div>
+                  </Cell>
+                  <Cell className="whitespace-nowrap">{formatStock(t, Number(item.quantityOnHand), units)}</Cell>
+                  <Cell>
+                    {enumLabel(t, "unit", item.unit)}
+                    {perStock > 1 ? (
+                      <span className="block text-xs text-muted-foreground">
+                        {t("inventory.table.per_stock_unit", "{count} per {unit}", { count: perStock, unit: enumLabel(t, "unit", item.stockUnit) })}
+                      </span>
+                    ) : null}
+                  </Cell>
+                  <Cell className="whitespace-nowrap">{sellQuantity(t, Number(item.reorderLevel), item.unit)}</Cell>
                   <Cell>
                     <StatusBadge label={levelLabel[level]} tone={LEVEL_TONE[level]} />
                   </Cell>
                   <Cell>
-                    <RowActions
-                      onView={() => router.push(`/inventory/${item.productId}`)}
-                      onEdit={isAdmin ? () => handleOpenForm(item) : undefined}
-                      isLoading={isSaving}
-                    />
+                    <StockRowActions actions={rowActions} />
                   </Cell>
                 </Row>
               );
@@ -362,76 +302,7 @@ export default function Inventory() {
         />
       </DataCard>
 
-      <FormModal
-        open={isAdmin && formOpen}
-        onOpenChange={setFormOpen}
-        title={t("inventory.form.title", "Stock Movement")}
-        submitLabel={t("actions.submit", "Submit")}
-        onSubmit={handleSubmit}
-        isLoading={isSaving}
-      >
-        <ModalGrid>
-          <div className="md:col-span-3">
-            <FormProductSelect
-              label={t("fields.product", "Product")}
-              required
-              options={productOptions}
-              value={selectedProduct}
-              onChange={setSelectedProduct}
-            />
-          </div>
-          <FormSelect
-            label={t("inventory.form.movement", "Movement")}
-            placeholder={t("inventory.form.select_movement", "Select movement")}
-            value={movementKind}
-            onChange={(e) => setMovementKind(e.target.value as MovementKind)}
-            required
-          >
-            <option value="STOCK_IN">Stock In (purchase)</option>
-            <option value="STOCK_CUT">Stock Cut (draw-down)</option>
-          </FormSelect>
-          <FormInput
-            label={t("fields.quantity", "Quantity")}
-            type="number"
-            placeholder="0"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            required
-          />
-          {movementKind === "STOCK_IN" ? (
-            <MoneyField
-              label={t("inventory.form.unit_cost", "Unit Cost (USD)")}
-              value={unitCost}
-              onValueChange={setUnitCost}
-              required
-            />
-          ) : (
-            <FormSelect
-              label={t("inventory.form.costing_strategy", "Costing Strategy")}
-              placeholder={t("inventory.form.select_strategy", "Select strategy")}
-              value={strategy}
-              onChange={(e) => setStrategy(e.target.value as StockStrategy)}
-              required
-            >
-              <option value="FIFO">FIFO (oldest batch first)</option>
-              <option value="LIFO">LIFO (newest batch first)</option>
-            </FormSelect>
-          )}
-          <div className="md:col-span-3">
-            <FormTextarea
-              label={t("fields.note", "Note")}
-              placeholder={t("inventory.form.note_placeholder", "Optional reason or reference")}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </div>
-          {selectedProduct ? (
-            <p className="md:col-span-3 text-sm text-muted-foreground">
-              {t("inventory.form.current_stock", "Current stock: {quantity} {unit}", { quantity: selectedProduct.currentStock, unit: selectedProduct.unit })}
-            </p>
-          ) : null}
-        </ModalGrid>
-      </FormModal>
+      <StockActionModal form={stockAction.form} setForm={stockAction.setForm} />
     </PageShell>
   );
 }

@@ -341,7 +341,8 @@
       "seats": "ចំនួនកៅអី",
       "exchange_rate": "អត្រាប្តូរប្រាក់",
       "market_rate": "អត្រាទីផ្សារ",
-      "number_of_minutes": "ចំនួននាទី"
+      "number_of_minutes": "ចំនួននាទី",
+      "units_per_sale": "ចំនួនឯកតាក្នុងការលក់ម្តង"
     }
   },
   "toast": {
@@ -456,7 +457,10 @@
     "size": {
       "MEDIUM": "មធ្យម",
       "LARGE": "ធំ",
-      "PIECE": "ដុំ"
+      "PIECE": "ដុំ",
+      "PACK": "កញ្ចប់",
+      "BOX": "ប្រអប់",
+      "CARTON": "កេស"
     }
   },
   "enums": {
@@ -517,7 +521,10 @@
     "variant": {
       "MEDIUM": "មធ្យម",
       "LARGE": "ធំ",
-      "PIECE": "ដុំ"
+      "PIECE": "ដុំ",
+      "PACK": "កញ្ចប់",
+      "BOX": "ប្រអប់",
+      "CARTON": "កេស"
     },
     "unit": {
       "PACK": "កញ្ចប់",
@@ -529,12 +536,18 @@
       "CAN": "កំប៉ុង",
       "CUP": "កែវ",
       "PACKAGE": "កញ្ចប់ធំ",
-      "TANK": "ធុង"
+      "TANK": "ធុង",
+      "BAG": "ថង់",
+      "KILOGRAM": "គីឡូក្រាម",
+      "LITER": "លីត្រ",
+      "GRAM": "ក្រាម",
+      "MILLILITER": "មីលីលីត្រ"
     },
     "category_group": {
       "FRESH_DRINK": "ភេសជ្ជៈស្រស់",
       "BEVERAGE": "ភេសជ្ជៈ",
-      "SNACK": "អាហារសម្រន់"
+      "SNACK": "អាហារសម្រន់",
+      "INGREDIENT": "គ្រឿងផ្សំ"
     },
     "table_size": {
       "SMALL": "តូច",
@@ -557,6 +570,25 @@
       "FEEDBACK_SUGGESTIONS": "មតិកែលម្អ និងសំណូមពរ",
       "PARTNERSHIP": "ភាពជាដៃគូ",
       "ORDER_SUPPORT": "ជំនួយការបញ្ជាទិញ"
+    },
+    "movement_reason": {
+      "PURCHASE": "ទិញចូល",
+      "SALE": "លក់",
+      "RETURN": "ប្រគល់មកវិញ",
+      "WASTE": "ខូចខាត",
+      "ADJUSTMENT": "កែតម្រូវ"
+    },
+    "waste_reason": {
+      "EXPIRED": "ផុតកំណត់",
+      "DAMAGED": "ខូច",
+      "SPILLED": "កំពប់",
+      "QUALITY": "គុណភាពមិនល្អ",
+      "OTHER": "ផ្សេងៗ"
+    },
+    "report_period": {
+      "DAY": "ថ្ងៃ",
+      "MONTH": "ខែ",
+      "YEAR": "ឆ្នាំ"
     }
   }
 }

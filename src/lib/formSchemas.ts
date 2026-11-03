@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ESTIMATE_MAX_MINUTES } from "@/lib/estimate";
 import type { SellUnit, StockUnit, VariantLabel } from "@/store/api/types";
-import { translate } from "@/contexts/translate";
+import { translate, type TranslationParams } from "@/contexts/translate";
 import {
   emailField,
   fullNameField,
@@ -145,7 +145,22 @@ export const SKU_PATTERN = /^[A-Z0-9]+([-_.][A-Z0-9]+)*$/;
 export const SKU_MAX_LENGTH = 64;
 export const SKU_FORMAT_HINT = "Letters, digits and single - _ . separators, e.g. FD-COF-IL-001";
 
-export function productSchema({ isCreate, hasNoCategories }: { isCreate: boolean; hasNoCategories: boolean }) {
+// Messages only the product screens use live in products.json rather than the shared validation set.
+function productMessage(key: string, fallback: string, params?: () => TranslationParams) {
+  return { error: () => translate(`products.validation.${key}`, fallback, params?.()) };
+}
+
+/** `isIngredient`: the chosen category is stock-only, so a new product gets no starting variant or price. */
+export function productSchema({
+  isCreate,
+  hasNoCategories,
+  isIngredient,
+}: {
+  isCreate: boolean;
+  hasNoCategories: boolean;
+  isIngredient: boolean;
+}) {
+  const needsStartingVariant = isCreate && !isIngredient;
   return z
     .object({
       name: requiredText("Product name"),
@@ -155,12 +170,15 @@ export function productSchema({ isCreate, hasNoCategories }: { isCreate: boolean
           ? message("category_missing", "Create a category first — a product has to belong to one.")
           : message("category_required", "Choose a category."),
       ),
-      stockUnit: requiredChoice<StockUnit>(message("stock_unit_required", "Choose a stock unit.")),
+      stockUnit: requiredChoice<StockUnit>(
+        productMessage("purchase_unit_required", "Choose the purchase unit (what stock is bought in)."),
+      ),
       sellUnit: requiredChoice<SellUnit>(message("sell_unit_required", "Choose a sell unit.")),
       skuMode: z.string(),
       sku: z.string().trim(),
-      unitsPerStock: optionalNumberField("units per stock", { min: 0.001 }),
-      reorderLevel: optionalNumberField("reorder level", { min: 0 }),
+      // Blank = 1: the product is bought in the same unit it is counted in.
+      unitsPerStock: optionalNumberField("units per stock", { min: 1, integer: true }).transform((value) => value ?? 1),
+      reorderLevel: optionalNumberField("reorder level", { min: 0, integer: true }),
       variantName: z.string().transform((value) => value as VariantLabel | ""),
       variantPrice: z.string(),
     })
@@ -171,11 +189,11 @@ export function productSchema({ isCreate, hasNoCategories }: { isCreate: boolean
         path: ["sku"],
       },
     )
-    .refine((v) => !isCreate || Boolean(v.variantName), {
+    .refine((v) => !needsStartingVariant || Boolean(v.variantName), {
       ...message("variant_required", "Choose a variant (e.g. Medium) for the starting price."),
       path: ["variantName"],
     })
-    .refine((v) => !isCreate || startingPrice.safeParse(v.variantPrice).success, {
+    .refine((v) => !needsStartingVariant || startingPrice.safeParse(v.variantPrice).success, {
       ...message("starting_price_invalid", "Enter a valid starting price (0 or more)."),
       path: ["variantPrice"],
     });
@@ -196,10 +214,54 @@ export function discountSchema(type: "PERCENTAGE" | "FIXED") {
     });
 }
 
-export const variantSchema = z.object({
-  price: numberField("price", { min: 0 }),
-  sortOrder: optionalNumberField("display order", { min: 0, integer: true }),
-});
+/**
+ * `unitsPerSaleFor` names the pack and sell unit when units per sale must be typed: the server only fills it in
+ * for a pack named after the product's purchase unit. Blank otherwise means "let the server decide".
+ */
+export function variantSchema({ unitsPerSaleFor }: { unitsPerSaleFor?: { pack: string; unit: string } } = {}) {
+  return z
+    .object({
+      price: numberField("price", { min: 0 }),
+      sortOrder: optionalNumberField("display order", { min: 0, integer: true }),
+      unitsPerSale: optionalNumberField("units per sale", { min: 1, integer: true }),
+    })
+    .refine((v) => !unitsPerSaleFor || v.unitsPerSale !== undefined, {
+      ...productMessage("units_per_sale_required", "Enter how many {unit} one {pack} holds.", () => unitsPerSaleFor ?? {}),
+      path: ["unitsPerSale"],
+    });
+}
+
+/** One size's recipe (SetRecipeRequest): whole quantities in each ingredient's sell unit, each ingredient once. */
+export function recipeSchema(ingredientName: (id: string) => string) {
+  return z
+    .object({
+      items: z.array(
+        z.object({
+          ingredientId: requiredChoice(
+            productMessage("recipe_ingredient_required", "Choose an ingredient on every row, or remove the empty row."),
+          ),
+          quantity: numberField("quantity", { min: 1, integer: true }),
+        }),
+      ),
+    })
+    .superRefine(({ items }, ctx) => {
+      const seen = new Set<string>();
+      items.forEach(({ ingredientId }, index) => {
+        if (seen.has(ingredientId)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["items", index, "ingredientId"],
+            message: translate(
+              "products.validation.recipe_duplicate",
+              "{name} is listed more than once. Each ingredient can only appear once in a recipe.",
+              { name: ingredientName(ingredientId) },
+            ),
+          });
+        }
+        seen.add(ingredientId);
+      });
+    });
+}
 
 export const extraSchema = z.object({
   name: requiredText("Extra name"),

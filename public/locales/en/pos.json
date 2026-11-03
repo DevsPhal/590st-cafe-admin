@@ -27,7 +27,10 @@
     "add": "Add",
     "add_to_order": "Add {name} to the order",
     "add_variant": "Add {variant} {name}, {price}",
-    "quantity_of": "Quantity of {name}"
+    "quantity_of": "Quantity of {name}",
+    "stock_label": "{stock} in stock",
+    "low_stock_label": "Low stock · {stock}",
+    "can_make": "Can make {count}"
   },
   "quantity": {
     "decrease": "Decrease quantity",

@@ -10,7 +10,8 @@
     "reorder_level": "កម្រិតបញ្ជាទិញឡើងវិញ"
   },
   "table": {
-    "current_stock": "ស្តុកបច្ចុប្បន្ន"
+    "current_stock": "ស្តុកបច្ចុប្បន្ន",
+    "per_stock_unit": "{count} ក្នុងមួយ{unit}"
   },
   "levels": {
     "ok": "មានស្តុក",
@@ -25,7 +26,9 @@
   "filters": {
     "search_products": "ស្វែងរកផលិតផល",
     "stock_level": "កម្រិតស្តុក",
-    "all_levels": "គ្រប់កម្រិត"
+    "all_levels": "គ្រប់កម្រិត",
+    "item_type": "ប្រភេទទំនិញ",
+    "all_items": "ទំនិញទាំងអស់"
   },
   "card": {
     "title": "កម្រិតស្តុក",
@@ -49,22 +52,23 @@
     "none": "មិនទាន់មានកំណត់ត្រាស្តុកទេ។ ផលិតផលនីមួយៗនឹងមានជួរស្តុកនៅពេលបង្កើត។"
   },
   "toast": {
-    "stocked_in": "បានបញ្ចូលស្តុក {quantity} {unit}",
-    "stock_cut": "បានកាត់ស្តុក {quantity} {unit}"
+    "received": "បានទទួលស្តុក {quantity}",
+    "wasted": "បានកត់ត្រា {quantity} ជាការខូចខាត",
+    "returned": "បានដាក់ {quantity} ត្រឡប់ចូលស្តុកវិញ",
+    "counted": "បានរក្សាទុកការរាប់ស្តុក៖ {quantity}",
+    "cut": "បានកាត់ស្តុក {quantity}"
   },
   "errors": {
     "download_expense_report": "មិនអាចទាញយករបាយការណ៍ចំណាយបានទេ។",
     "record_movement": "មិនអាចកត់ត្រាចលនាស្តុកបានទេ។"
   },
   "form": {
-    "title": "ចលនាស្តុក",
-    "movement": "ចលនា",
-    "select_movement": "ជ្រើសរើសចលនា",
     "unit_cost": "ថ្លៃដើមឯកតា (USD)",
     "costing_strategy": "វិធីសាស្ត្រគណនាថ្លៃដើម",
     "select_strategy": "ជ្រើសរើសវិធីសាស្ត្រ",
     "note_placeholder": "មូលហេតុ ឬឯកសារយោង (ជាជម្រើស)",
-    "current_stock": "ស្តុកបច្ចុប្បន្ន៖ {quantity} {unit}"
+    "fifo": "FIFO (បាច់ចាស់ចេញមុន)",
+    "lifo": "LIFO (បាច់ថ្មីចេញមុន)"
   },
   "detail": {
     "title": "ព័ត៌មានលម្អិតស្តុក",
@@ -84,6 +88,125 @@
     "table": {
       "strategy": "វិធីសាស្ត្រ",
       "performed_by": "អនុវត្តដោយ"
+    }
+  },
+  "kind": {
+    "menu": "ទំនិញក្នុងម៉ឺនុយ",
+    "ingredients": "គ្រឿងផ្សំ",
+    "ingredient": "គ្រឿងផ្សំ"
+  },
+  "stock_action": {
+    "actions": {
+      "stock_in": "ទទួលស្តុក",
+      "waste": "កត់ត្រាការខូចខាត",
+      "return": "ដាក់ត្រឡប់ចូលស្តុក",
+      "count": "រាប់ស្តុក",
+      "stock_cut": "កាត់ស្តុក (ដកចេញ)"
+    },
+    "fields": {
+      "action": "សកម្មភាព",
+      "select_action": "ជ្រើសរើសសកម្មភាព",
+      "unit": "ឯកតាបរិមាណ",
+      "unit_cost_per": "ថ្លៃដើមក្នុងមួយ{unit} (USD)",
+      "waste_reason": "មូលហេតុនៃការខូចខាត",
+      "select_waste_reason": "ជ្រើសរើសមូលហេតុ",
+      "order": "លេខការបញ្ជាទិញ (ជាជម្រើស)",
+      "counted_quantity": "បរិមាណដែលបានរាប់"
+    },
+    "preview": {
+      "current": "ស្តុកបច្ចុប្បន្ន៖ {quantity}",
+      "leaves": "= {quantity} · នៅសល់ {after}",
+      "becomes": "ស្តុកនឹងក្លាយជា {after}",
+      "count": "បានរាប់ {counted} · ខុសគ្នា {difference}",
+      "return_hint": "បើមានលេខការបញ្ជាទិញ មិនអាចដាក់ត្រឡប់វិញលើសពីចំនួនដែលការបញ្ជាទិញនោះបានដកចេញទេ។"
+    },
+    "errors": {
+      "waste_reason_required": "សូមជ្រើសរើសមូលហេតុដែលស្តុកខូចខាត។",
+      "whole_units_purchase": "{quantity} {unit} ស្មើនឹង {base} {sellUnit}។ ស្តុកត្រូវរាប់ជា {sellUnit} គត់ ដូច្នេះសូមបញ្ចូលចំនួនដែលចេញជាលេខគត់។",
+      "whole_units_base": "ស្តុកត្រូវរាប់ជា {sellUnit} គត់។ សូមបញ្ចូលលេខគត់។",
+      "not_enough": "មានតែ {onHand} នៅក្នុងស្តុកប៉ុណ្ណោះ។",
+      "count_unchanged": "ស្តុកមាន {onHand} រួចហើយ គ្មានអ្វីត្រូវកែតម្រូវទេ។",
+      "order_invalid": "សូមបញ្ចូលលេខការបញ្ជាទិញដូចជា #A1B2C3D4។",
+      "order_not_found": "រកមិនឃើញការបញ្ជាទិញដែលត្រូវនឹង {order} ទេ។",
+      "order_ambiguous": "មានការបញ្ជាទិញច្រើនដែលចាប់ផ្តើមដោយ {order}។ សូមបញ្ចូលលេខបន្ថែមទៀត។",
+      "order_lookup": "មិនអាចស្វែងរកការបញ្ជាទិញនោះបានទេ។"
+    }
+  },
+  "movement": {
+    "reason": "មូលហេតុ",
+    "balance_after": "សមតុល្យបន្ទាប់",
+    "cost": "ថ្លៃដើម",
+    "stock_in": "ស្តុកចូល",
+    "stock_out": "ស្តុកចេញ"
+  },
+  "history": {
+    "title": "ប្រវត្តិស្តុក",
+    "card": {
+      "title": "ចលនាស្តុក",
+      "meta": "ចលនា៖ {count}"
+    },
+    "filters": {
+      "all_types": "គ្រប់ប្រភេទ",
+      "all_reasons": "គ្រប់មូលហេតុ",
+      "from": "ពី",
+      "to": "ដល់"
+    },
+    "empty": {
+      "filtered": "គ្មានចលនាស្តុកដែលត្រូវនឹងតម្រងទាំងនេះទេ។",
+      "none": "មិនទាន់មានចលនាស្តុកនៅឡើយទេ។"
+    }
+  },
+  "reports": {
+    "title": "ផ្ទាំងគ្រប់គ្រង និងរបាយការណ៍ស្តុក",
+    "breadcrumb": "របាយការណ៍",
+    "export": "នាំចេញ Excel",
+    "period_meta": "{from} → {to}",
+    "filters": {
+      "period": "រយៈពេល",
+      "month": "ខែ",
+      "year": "ឆ្នាំ"
+    },
+    "stats": {
+      "unavailable": "មិនមាន",
+      "stock_value": "តម្លៃស្តុកបច្ចុប្បន្ន",
+      "stock_value_hint": "ថ្លៃដើមនៃស្តុកទាំងអស់ដែលមាន",
+      "purchases": "ការទិញចូល",
+      "purchases_hint": "ស្តុកចូល {count} ដង",
+      "sales_cost": "ថ្លៃដើមទំនិញដែលបានលក់",
+      "sales_cost_hint": "ការលក់ {count} ដង",
+      "waste": "ការខូចខាត",
+      "waste_hint": "កំណត់ត្រាខូចខាត {count}",
+      "low_stock": "ស្តុកជិតអស់",
+      "out_of_stock": "អស់ស្តុក",
+      "as_of_now": "គិតត្រឹមពេលនេះ"
+    },
+    "waste": {
+      "title": "ការខូចខាតតាមមូលហេតុ",
+      "cost": "ថ្លៃដើមខូចខាត",
+      "share": "ភាគរយ",
+      "empty": "មិនមានការខូចខាតក្នុងរយៈពេលនេះទេ។"
+    },
+    "products": {
+      "title": "ផលិតផល",
+      "meta": "{from} → {to} · ចលនា {count}",
+      "empty": "មិនទាន់មានទំនិញក្នុងស្តុកនៅឡើយទេ។",
+      "empty_filtered": "គ្មានផលិតផលប្រភេទនេះទេ។"
+    },
+    "table": {
+      "purchased": "បានទិញចូល",
+      "sold": "បានលក់",
+      "returned": "បានដាក់ត្រឡប់",
+      "wasted": "ខូចខាត",
+      "adjusted_in": "កែតម្រូវចូល",
+      "adjusted_out": "កែតម្រូវចេញ",
+      "purchase_cost": "ថ្លៃទិញចូល",
+      "sales_cost": "ថ្លៃដើមលក់",
+      "waste_cost": "ថ្លៃដើមខូចខាត",
+      "on_hand": "ស្តុកនៅសល់",
+      "stock_value": "តម្លៃស្តុក"
+    },
+    "errors": {
+      "export": "មិនអាចទាញយករបាយការណ៍ស្តុកបានទេ។"
     }
   }
 }

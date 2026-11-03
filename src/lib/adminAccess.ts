@@ -9,7 +9,8 @@ export function canAccessAdminPage(role: Role | undefined, pathname: string): bo
   if (route === "categories" || route === "reports") return true;
   if (route === "invoices") return true;
   if (route === "tables" || route === "payments") return true;
-  if (route === "inventory") return true;
+  // Baristas see stock and its history; the money side (reports) is for admins.
+  if (route === "inventory") return role !== "BARISTA" || pathname.split("/")[2] !== "reports";
   if (route === "products" && pathname.replace(/\/$/, "") === "/products") return true;
   if (role === "BARISTA") return false;
   if (route === "users" || route === "customers") return role === "SUPER_ADMIN";

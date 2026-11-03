@@ -541,8 +541,8 @@ export function OperationalAlertsContent({
                 <span className="sr-only">:</span>
               </span>
               <span className="shrink-0 rounded-lg bg-amber-100 px-2.5 py-1 text-sm font-bold tabular-nums text-amber-900">
-                {Number(item.quantityOnHand)}{" "}
-                <span className="text-xs font-semibold tracking-wide">{item.unit}</span>
+                {Number(item.quantityOnHand).toLocaleString()}{" "}
+                <span className="text-xs font-semibold tracking-wide">{enumLabel(t, "unit", item.unit)}</span>
               </span>
               <ChevronRight
                 aria-hidden

@@ -1,23 +1,33 @@
 import { baseApi, unwrap } from "./baseApi";
 import type {
+  InventoryReportQuery,
+  InventoryReportResponse,
   InventoryResponse,
+  MovementSearchQuery,
   PageQuery,
   PageResponse,
+  StockCountRequest,
   StockCutRequest,
   StockCutResponse,
   StockInImportResponse,
   StockInRequest,
   StockMovementResponse,
+  StockReturnRequest,
   UUID,
+  WasteRequest,
 } from "./types";
 
+// Any stock change also changes what drinks can be made, so recipes, history and reports are refreshed too.
 const STOCK_MOVEMENT_TAGS = (productId: UUID) => [
   { type: "Inventory" as const, id: productId },
   { type: "Inventory" as const, id: "LIST" },
   { type: "Inventory" as const, id: "LOW_STOCK" },
   { type: "StockMovement" as const, id: productId },
+  { type: "StockMovement" as const, id: "LIST" },
   { type: "Product" as const, id: productId },
   { type: "Product" as const, id: "LIST" },
+  { type: "Recipe" as const, id: "LIST" },
+  { type: "InventoryReport" as const, id: "LIST" },
 ];
 
 export const inventoryApi = baseApi.injectEndpoints({
@@ -77,6 +87,44 @@ export const inventoryApi = baseApi.injectEndpoints({
       ],
     }),
 
+    searchStockMovements: builder.query<PageResponse<StockMovementResponse>, MovementSearchQuery>({
+      query: (params) => ({ url: "/api/admin/inventory/movements", params }),
+      transformResponse: unwrap<PageResponse<StockMovementResponse>>,
+      providesTags: [{ type: "StockMovement", id: "LIST" }],
+    }),
+
+    getInventoryReport: builder.query<InventoryReportResponse, InventoryReportQuery>({
+      query: (params) => ({ url: "/api/admin/inventory/reports/summary", params }),
+      transformResponse: unwrap<InventoryReportResponse>,
+      providesTags: [{ type: "InventoryReport", id: "LIST" }],
+    }),
+
+    downloadInventoryReport: builder.mutation<Blob, InventoryReportQuery>({
+      query: (params) => ({
+        url: "/api/admin/inventory/reports/summary/export",
+        params,
+        responseHandler: (response: Response) => (response.ok ? response.blob() : response.json()),
+      }),
+    }),
+
+    recordWaste: builder.mutation<StockCutResponse, WasteRequest>({
+      query: (body) => ({ url: "/api/admin/inventory/waste", method: "POST", body }),
+      transformResponse: unwrap<StockCutResponse>,
+      invalidatesTags: (_r, _e, { productId }) => STOCK_MOVEMENT_TAGS(productId),
+    }),
+
+    returnToStock: builder.mutation<StockMovementResponse, StockReturnRequest>({
+      query: (body) => ({ url: "/api/admin/inventory/returns", method: "POST", body }),
+      transformResponse: unwrap<StockMovementResponse>,
+      invalidatesTags: (_r, _e, { productId }) => STOCK_MOVEMENT_TAGS(productId),
+    }),
+
+    countStock: builder.mutation<StockMovementResponse, StockCountRequest>({
+      query: (body) => ({ url: "/api/admin/inventory/count", method: "POST", body }),
+      transformResponse: unwrap<StockMovementResponse>,
+      invalidatesTags: (_r, _e, { productId }) => STOCK_MOVEMENT_TAGS(productId),
+    }),
+
     stockIn: builder.mutation<StockMovementResponse, StockInRequest>({
       query: (body) => ({
         url: "/api/admin/inventory/stock-in",
@@ -122,6 +170,9 @@ export const inventoryApi = baseApi.injectEndpoints({
         { type: "Inventory", id: "LIST" },
         { type: "Inventory", id: "LOW_STOCK" },
         { type: "Product", id: "LIST" },
+        { type: "StockMovement", id: "LIST" },
+        { type: "Recipe", id: "LIST" },
+        { type: "InventoryReport", id: "LIST" },
       ],
     }),
 
@@ -144,6 +195,12 @@ export const {
   useListLowStockQuery,
   useGetInventoryByProductQuery,
   useListStockMovementsQuery,
+  useSearchStockMovementsQuery,
+  useGetInventoryReportQuery,
+  useDownloadInventoryReportMutation,
+  useRecordWasteMutation,
+  useReturnToStockMutation,
+  useCountStockMutation,
   useStockInMutation,
   useStockCutMutation,
   useDownloadStockInImportTemplateMutation,

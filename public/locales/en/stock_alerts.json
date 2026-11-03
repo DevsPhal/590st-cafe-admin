@@ -16,7 +16,8 @@
     "on_hand": "On Hand",
     "reorder_level": "Reorder Level",
     "shortfall": "Shortfall",
-    "severity": "Severity"
+    "severity": "Severity",
+    "per_stock_unit": "{count} per {unit}"
   },
   "empty": {
     "no_alerts": "Nothing is below its reorder level. Stock levels are healthy."

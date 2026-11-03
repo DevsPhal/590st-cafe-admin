@@ -12,7 +12,11 @@
     "name_or_sku": "Name or SKU",
     "search_placeholder": "Search products",
     "all_categories": "All categories",
-    "all_statuses": "All statuses"
+    "all_statuses": "All statuses",
+    "kind": "Type",
+    "all_kinds": "All",
+    "menu_items": "Menu items",
+    "ingredients": "Ingredients"
   },
   "card": {
     "title": "Products",
@@ -23,14 +27,14 @@
   },
   "fields": {
     "stock": "Stock",
-    "stock_unit": "Stock Unit",
     "sell_unit": "Sell Unit",
-    "units_per_stock": "Units per Stock",
     "reorder_level": "Reorder Level",
     "variant": "Variant",
     "discount": "Discount",
     "variants": "Variants",
-    "extras": "Extras"
+    "extras": "Extras",
+    "purchase_unit": "Purchase Unit",
+    "units_per_purchase": "Sell units per purchase unit"
   },
   "empty": {
     "filtered": "No products match these filters.",
@@ -52,30 +56,40 @@
     "regenerate": "Regenerate",
     "generate": "Generate",
     "sku_generated_hint": "Generated from category and name. Type to enter your own.",
-    "stock_unit_placeholder": "Select stock unit",
     "sell_unit_placeholder": "Select sell unit",
-    "units_per_stock_placeholder": "e.g. 24 cans per carton",
     "category_placeholder": "Select category",
     "reorder_level_placeholder": "e.g. 10",
     "variant_placeholder": "Select variant",
     "starting_price": "Starting Price (USD)",
-    "more_config_hint": "More variants, extras and a discount can be added afterward on the configuration screen.",
+    "more_config_hint": "More variants, recipes, extras and a discount can be added afterward on the configuration screen.",
     "price_line": "Price: {price}",
-    "manage_variants_link": "manage variants, extras and discount",
+    "manage_variants_link": "manage variants, recipes, extras and discount",
     "discount_line": "Discount: {discount}",
     "discount_none": "none",
     "manage_discount_link": "manage discount and sizes",
     "status_placeholder": "Select status",
     "description_placeholder": "Short description",
-    "image": "Product Image"
+    "image": "Product Image",
+    "purchase_unit_placeholder": "Select purchase unit",
+    "purchase_unit_hint": "What stock is bought in, e.g. Carton or Kilogram.",
+    "sell_unit_hint": "Stock and the reorder level are counted in it, e.g. Can or Gram.",
+    "units_per_purchase_hint": "1 {purchase} = {count} {sell}",
+    "units_per_purchase_empty_hint": "Whole number; blank means 1.",
+    "units_per_purchase_placeholder": "e.g. 24 cans per carton, 1000 g per kg",
+    "reorder_level_in": "Reorder Level ({unit})",
+    "reorder_level_hint": "Counted in the sell unit; stock at or below it shows as low.",
+    "ingredient_hint": "Ingredients are stock-only: no variants, price, extras or discount. Add their stock from",
+    "ingredient_hint_link": "Inventory",
+    "ingredient_hint_after": ", then use them in drink recipes."
   },
   "discount_off": "{value} off",
   "detail": {
     "title": "Product Detail",
-    "manage_link": "Manage variants, extras and discount",
+    "manage_link": "Manage variants, recipes, extras and discount",
     "none": "None",
     "none_yet": "None yet",
-    "image": "Image :"
+    "image": "Image :",
+    "ingredient_variants": "None: an ingredient is used up by recipes, not sold"
   },
   "toast": {
     "sku_needs_name_category": "Enter a product name and choose a category to generate a SKU.",
@@ -94,7 +108,7 @@
   },
   "config": {
     "title": "Product settings",
-    "breadcrumb": "Variants and discount",
+    "breadcrumb": "Variants, recipes and discount",
     "loading_product": "Loading product...",
     "price_usd": "Price (USD)",
     "discount": {
@@ -123,7 +137,9 @@
       "save": "Save variant",
       "add": "Add variant",
       "disable": "Disable",
-      "enable": "Enable"
+      "enable": "Enable",
+      "units_per_sale": "Sell units per sale ({unit})",
+      "units_per_sale_hint": "How many {unit} one {pack} takes from stock."
     },
     "extras_on_product": {
       "title": "Extras on this product",
@@ -192,6 +208,68 @@
       "delete_extra_description": "Delete \"{name}\" from the extras catalog?",
       "remove_extra_title": "Remove extra",
       "remove_extra_description": "Stop offering \"{name}\" on this product?"
+    },
+    "ingredient": {
+      "title": "Ingredient",
+      "note": "Ingredients have no variants, price, extras or discount and are never sold. Drink recipes use them up, and their stock is added from",
+      "inventory_link": "Inventory",
+      "stock": "In stock: {stock}"
+    }
+  },
+  "badges": {
+    "ingredient": "Ingredient",
+    "recipe": "Recipe"
+  },
+  "list": {
+    "not_sold": "Not sold"
+  },
+  "validation": {
+    "purchase_unit_required": "Choose the purchase unit (what stock is bought in).",
+    "units_per_sale_required": "Enter how many {unit} one {pack} holds.",
+    "recipe_ingredient_required": "Choose an ingredient on every row, or remove the empty row.",
+    "recipe_duplicate": "{name} is listed more than once. Each ingredient can only appear once in a recipe."
+  },
+  "recipe": {
+    "title": "Recipes",
+    "meta": "Sizes with a recipe use up their ingredients when sold; the others are sold from this product's own stock.",
+    "loading": "Loading recipes...",
+    "no_ingredients": "No ingredients yet. Register products in an Ingredient category (e.g. beans in Gram, milk in Milliliter) on the",
+    "no_ingredients_link": "Products list",
+    "no_ingredients_after": ", then come back to build recipes.",
+    "missing_sizes": "No recipe yet for: {sizes}.",
+    "no_sizes": "Add a variant first: recipes are set per size.",
+    "no_recipe_badge": "No recipe yet",
+    "cost": "Cost",
+    "price": "Price",
+    "margin": "Margin",
+    "margin_percent": "Margin %",
+    "available": "Available",
+    "can_make": "Can make {count} now",
+    "needs_recipe": "Fresh drinks are made to order: without a recipe this size is sold from the drink's own stock, which is usually empty.",
+    "no_recipe": "No recipe: this size is sold from the product's own stock.",
+    "ingredient": "Ingredient",
+    "ingredient_placeholder": "Select an ingredient",
+    "on_hand": "On hand: {stock}",
+    "quantity": "Quantity",
+    "quantity_of": "Quantity of {name}",
+    "line_cost": "Line cost",
+    "line_cost_after_save": "Shown after saving",
+    "unsaved": "Unsaved changes. Save to update the cost and margin.",
+    "add_row": "Add ingredient",
+    "save": "Save recipe",
+    "remove": "Remove recipe",
+    "copy_from": "Copy from {size}",
+    "toast": {
+      "saved": "{size} recipe saved",
+      "removed": "{size} recipe removed"
+    },
+    "errors": {
+      "save": "Could not save the recipe.",
+      "remove": "Could not remove the recipe."
+    },
+    "confirm": {
+      "remove_title": "Remove recipe",
+      "remove_description": "Remove the {size} recipe? This size will be sold from the product's own stock again."
     }
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { RefreshCw, TriangleAlert } from "lucide-react";
 import toast from "react-hot-toast";
@@ -52,9 +52,18 @@ import {
   useUpdateProductMutation,
   useUploadProductImageMutation,
 } from "@/store/api/productApi";
-import type { ProductResponse, SellUnit, SkuMode, Status, StockUnit, VariantLabel } from "@/store/api/types";
+import type { CategoryGroup, ProductResponse, SellUnit, SkuMode, Status, StockUnit, VariantLabel } from "@/store/api/types";
 import { formatSku, productPriceLabel, titleCase } from "@/lib/utils";
 import { enumLabel } from "@/lib/enumLabel";
+import { formatStock, stockUnitSize } from "@/lib/stockUnits";
+import {
+  allowedVariantLabels,
+  hasRecipe,
+  isIngredient,
+  isIngredientGroup,
+  isPackLabel,
+  variantDisplayName,
+} from "@/features/product/productKinds";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useCatalogAlerts } from "@/hooks/useCatalogAlerts";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -62,10 +71,12 @@ import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
 import { parseForm } from "@/lib/validation";
 import { productSchema, SKU_MAX_LENGTH } from "@/lib/formSchemas";
 
-const STOCK_UNITS: StockUnit[] = ["PACK", "BOX", "CARTON", "PIECE"];
-const SELL_UNITS: SellUnit[] = ["PLATE", "BOTTLE", "CAN", "CUP", "CARTON", "PACKAGE", "TANK", "PIECE"];
-const VARIANT_LABELS: VariantLabel[] = ["MEDIUM", "LARGE", "PIECE"];
+const STOCK_UNITS: StockUnit[] = ["PACK", "BOX", "CARTON", "PIECE", "BAG", "BOTTLE", "KILOGRAM", "LITER"];
+const SELL_UNITS: SellUnit[] = [
+  "PLATE", "BOTTLE", "CAN", "CUP", "CARTON", "PACKAGE", "TANK", "PIECE", "GRAM", "MILLILITER",
+];
 
+type KindFilter = "" | "MENU" | "INGREDIENT";
 
 type ProductFormFields = {
   name: string;
@@ -101,6 +112,25 @@ const EMPTY_FORM: ProductFormFields = {
 const money = (value: number | null | undefined) =>
   value == null ? "-" : `$${Number(value).toFixed(2)}`;
 
+function WithHint({ hint, children }: { hint: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      {children}
+      <span className="text-xs text-muted-foreground">{hint}</span>
+    </div>
+  );
+}
+
+function ProductBadges({ product }: { product: ProductResponse }) {
+  const { t } = useI18n();
+  return (
+    <>
+      {isIngredient(product) && <StatusBadge label={t("products.badges.ingredient", "Ingredient")} tone="neutral" />}
+      {hasRecipe(product) && <StatusBadge label={t("products.badges.recipe", "Recipe")} tone="info" />}
+    </>
+  );
+}
+
 export default function Products() {
   const { t } = useI18n();
   const { isAdmin } = useCurrentRole();
@@ -110,8 +140,9 @@ export default function Products() {
   const [searchTerm, setSearchTerm] = usePersistentState("products:searchTerm", "");
   const [categoryFilter, setCategoryFilter] = usePersistentState("products:categoryFilter", "");
   const [statusFilter, setStatusFilter] = usePersistentState("products:statusFilter", "");
+  const [kindFilter, setKindFilter] = usePersistentState<KindFilter>("products:kindFilter", "");
 
-  const isFiltering = Boolean(searchTerm.trim() || statusFilter);
+  const isFiltering = Boolean(searchTerm.trim() || statusFilter || kindFilter);
   const {
     data: productPage,
     currentData,
@@ -165,9 +196,10 @@ export default function Products() {
           product.name.toLowerCase().includes(term) ||
           product.sku.toLowerCase().includes(term);
         const matchesStatus = !statusFilter || product.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        const matchesKind = !kindFilter || (kindFilter === "INGREDIENT") === isIngredient(product);
+        return matchesSearch && matchesStatus && matchesKind;
       }),
-    [products, searchTerm, statusFilter]
+    [products, searchTerm, statusFilter, kindFilter]
   );
   const view = filteredPage(matchingProducts, productPage, page, size, isFiltering);
   const visibleProducts = view.rows;
@@ -177,8 +209,28 @@ export default function Products() {
   ).length;
   const discountedCount = products.filter((p) => p.discountActive).length;
 
+  const categoryGroupOf = (categoryId: string): CategoryGroup | null =>
+    categories.find((category) => category.id === categoryId)?.categoryGroup ??
+    (selected?.categoryId === categoryId ? selected.categoryGroup : null);
+  // Ingredients are mostly weighed, so a new one starts in grams; any other unit can still be picked.
+  const ingredientDefaults = (categoryId: string, sellUnit: SellUnit | "") =>
+    isIngredientGroup(categoryGroupOf(categoryId)) && !sellUnit ? { sellUnit: "GRAM" as const } : {};
+
+  const formCategoryGroup = categoryGroupOf(formFields.categoryId);
+  const isIngredientForm = isIngredientGroup(formCategoryGroup);
+  // A pack can only start the product when it's the unit stock is bought in, since the server then knows its
+  // size; other packs are added on the configuration screen, where their size is entered.
+  const startingVariantLabels = allowedVariantLabels(formCategoryGroup).filter(
+    (label) => !isPackLabel(label) || label === formFields.stockUnit
+  );
+  const startingVariant: VariantLabel | "" =
+    formFields.variantName && startingVariantLabels.includes(formFields.variantName) ? formFields.variantName : "";
+  const purchaseUnitLabel = enumLabel(t, "unit", formFields.stockUnit);
+  const sellUnitLabel = enumLabel(t, "unit", formFields.sellUnit);
+
   const handleOpenForm = (product?: ProductResponse) => {
     if (!isAdmin) return;
+    const firstCategoryId = categories[0]?.id ?? "";
     setSelected(product ?? null);
     setImageFile(null);
     setFormFields(
@@ -197,7 +249,7 @@ export default function Products() {
             variantName: "",
             variantPrice: "",
           }
-        : { ...EMPTY_FORM, categoryId: categories[0]?.id ?? "" }
+        : { ...EMPTY_FORM, categoryId: firstCategoryId, ...ingredientDefaults(firstCategoryId, "") }
     );
     setFormOpen(true);
   };
@@ -211,7 +263,7 @@ export default function Products() {
 
   // A generated preview depends on name + category, so drop it when either changes; the server
   // still generates a fresh SKU on save while the mode stays GENERATE.
-  const updateSkuSource = (patch: Pick<Partial<ProductFormFields>, "name" | "categoryId">) =>
+  const updateSkuSource = (patch: Pick<Partial<ProductFormFields>, "name" | "categoryId" | "sellUnit">) =>
     setFormFields({
       ...formFields,
       ...patch,
@@ -239,9 +291,10 @@ export default function Products() {
   const handleSubmitForm = async () => {
     if (!isAdmin) return;
     const manualSku = formatSku(formFields.sku.trim());
-    const parsed = parseForm(productSchema({ isCreate: !selected, hasNoCategories }), {
+    const parsed = parseForm(productSchema({ isCreate: !selected, hasNoCategories, isIngredient: isIngredientForm }), {
       ...formFields,
       sku: manualSku,
+      variantName: startingVariant,
     });
     if (!parsed) return;
     const { name, description, stockUnit, sellUnit, variantName, unitsPerStock, reorderLevel } = parsed;
@@ -285,10 +338,12 @@ export default function Products() {
           reorderLevel,
         }).unwrap();
         productId = created.id;
-        await createVariant({
-          productId,
-          body: { name: variantName as VariantLabel, price: variantPrice },
-        }).unwrap();
+        if (!isIngredientForm) {
+          await createVariant({
+            productId,
+            body: { name: variantName as VariantLabel, price: variantPrice },
+          }).unwrap();
+        }
       }
 
       if (imageFile) {
@@ -390,7 +445,19 @@ export default function Products() {
           <option value="ACTIVE">{enumLabel(t, "status", "ACTIVE")}</option>
           <option value="INACTIVE">{enumLabel(t, "status", "INACTIVE")}</option>
         </SelectField>
-        <FilterActions onClear={() => { setSearchTerm(""); setStatusFilter(""); setCategoryFilter(""); setPage(1); }} onSearch={refetch} />
+        <SelectField
+          label={t("products.filters.kind", "Type")}
+          placeholder={t("products.filters.all_kinds", "All")}
+          value={kindFilter}
+          onChange={(e) => {
+            setKindFilter(e.target.value as KindFilter);
+            setPage(1);
+          }}
+        >
+          <option value="MENU">{t("products.filters.menu_items", "Menu items")}</option>
+          <option value="INGREDIENT">{t("products.filters.ingredients", "Ingredients")}</option>
+        </SelectField>
+        <FilterActions onClear={() => { setSearchTerm(""); setStatusFilter(""); setCategoryFilter(""); setKindFilter(""); setPage(1); }} onSearch={refetch} />
       </FilterPanel>
 
       <DataCard
@@ -434,10 +501,21 @@ export default function Products() {
                 <Cell>
                   <Thumbnail src={product.imageUrl} kind="product" />
                 </Cell>
-                <Cell className="font-semibold">{titleCase(product.name)}</Cell>
+                <Cell>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold">{titleCase(product.name)}</span>
+                    <ProductBadges product={product} />
+                  </div>
+                </Cell>
                 <Cell>{formatSku(product.sku)}</Cell>
                 <Cell>{titleCase(product.categoryName)}</Cell>
-                <Cell>{productPriceLabel(product.variants)}</Cell>
+                <Cell>
+                  {isIngredient(product) ? (
+                    <span className="text-muted-foreground">{t("products.list.not_sold", "Not sold")}</span>
+                  ) : (
+                    productPriceLabel(product.variants)
+                  )}
+                </Cell>
                 <Cell>
                   <span
                     className={
@@ -446,7 +524,7 @@ export default function Products() {
                         : undefined
                     }
                   >
-                    {Number(product.quantityOnHand)} {enumLabel(t, "unit", product.stockUnit)}
+                    {formatStock(t, Number(product.quantityOnHand), product)}
                   </span>
                 </Cell>
                 <Cell>
@@ -548,43 +626,12 @@ export default function Products() {
             </span>
           </div>
           <FormSelect
-            label={t("products.fields.stock_unit", "Stock Unit")}
-            placeholder={t("products.form.stock_unit_placeholder", "Select stock unit")}
-            value={formFields.stockUnit}
-            onChange={(e) => setFormFields({ ...formFields, stockUnit: e.target.value as StockUnit })}
-            required
-          >
-            {STOCK_UNITS.map((unit) => (
-              <option key={unit} value={unit}>
-                {enumLabel(t, "unit", unit)}
-              </option>
-            ))}
-          </FormSelect>
-          <FormSelect
-            label={t("products.fields.sell_unit", "Sell Unit")}
-            placeholder={t("products.form.sell_unit_placeholder", "Select sell unit")}
-            value={formFields.sellUnit}
-            onChange={(e) => setFormFields({ ...formFields, sellUnit: e.target.value as SellUnit })}
-            required
-          >
-            {SELL_UNITS.map((unit) => (
-              <option key={unit} value={unit}>
-                {enumLabel(t, "unit", unit)}
-              </option>
-            ))}
-          </FormSelect>
-          <FormInput
-            label={t("products.fields.units_per_stock", "Units per Stock")}
-            type="number"
-            placeholder={t("products.form.units_per_stock_placeholder", "e.g. 24 cans per carton")}
-            value={formFields.unitsPerStock}
-            onChange={(e) => setFormFields({ ...formFields, unitsPerStock: e.target.value })}
-          />
-          <FormSelect
             label={t("fields.category", "Category")}
             placeholder={t("products.form.category_placeholder", "Select category")}
             value={formFields.categoryId}
-            onChange={(e) => updateSkuSource({ categoryId: e.target.value })}
+            onChange={(e) =>
+              updateSkuSource({ categoryId: e.target.value, ...ingredientDefaults(e.target.value, formFields.sellUnit) })
+            }
             required
           >
             {categories.map((category) => (
@@ -593,31 +640,90 @@ export default function Products() {
               </option>
             ))}
           </FormSelect>
-          <FormInput
-            label={t("products.fields.reorder_level", "Reorder Level")}
-            type="number"
-            placeholder={t("products.form.reorder_level_placeholder", "e.g. 10")}
-            value={formFields.reorderLevel}
-            onChange={(e) =>
-              setFormFields({ ...formFields, reorderLevel: e.target.value })
+          <WithHint hint={t("products.form.purchase_unit_hint", "What stock is bought in, e.g. Carton or Kilogram.")}>
+            <FormSelect
+              label={t("products.fields.purchase_unit", "Purchase Unit")}
+              placeholder={t("products.form.purchase_unit_placeholder", "Select purchase unit")}
+              value={formFields.stockUnit}
+              onChange={(e) => setFormFields({ ...formFields, stockUnit: e.target.value as StockUnit })}
+              required
+            >
+              {STOCK_UNITS.map((unit) => (
+                <option key={unit} value={unit}>
+                  {enumLabel(t, "unit", unit)}
+                </option>
+              ))}
+            </FormSelect>
+          </WithHint>
+          <WithHint hint={t("products.form.sell_unit_hint", "Stock and the reorder level are counted in it, e.g. Can or Gram.")}>
+            <FormSelect
+              label={t("products.fields.sell_unit", "Sell Unit")}
+              placeholder={t("products.form.sell_unit_placeholder", "Select sell unit")}
+              value={formFields.sellUnit}
+              onChange={(e) => setFormFields({ ...formFields, sellUnit: e.target.value as SellUnit })}
+              required
+            >
+              {SELL_UNITS.map((unit) => (
+                <option key={unit} value={unit}>
+                  {enumLabel(t, "unit", unit)}
+                </option>
+              ))}
+            </FormSelect>
+          </WithHint>
+          <WithHint
+            hint={
+              formFields.stockUnit && formFields.sellUnit
+                ? t("products.form.units_per_purchase_hint", "1 {purchase} = {count} {sell}", {
+                    purchase: purchaseUnitLabel,
+                    count: formFields.unitsPerStock.trim() || 1,
+                    sell: sellUnitLabel,
+                  })
+                : t("products.form.units_per_purchase_empty_hint", "Whole number; blank means 1.")
             }
-          />
-          {!selected ? (
+          >
+            <FormInput
+              label={t("products.fields.units_per_purchase", "Sell units per purchase unit")}
+              type="number"
+              min={1}
+              step={1}
+              placeholder={t("products.form.units_per_purchase_placeholder", "e.g. 24 cans per carton, 1000 g per kg")}
+              value={formFields.unitsPerStock}
+              onChange={(e) => setFormFields({ ...formFields, unitsPerStock: e.target.value })}
+            />
+          </WithHint>
+          <WithHint hint={t("products.form.reorder_level_hint", "Counted in the sell unit; stock at or below it shows as low.")}>
+            <FormInput
+              label={
+                formFields.sellUnit
+                  ? t("products.form.reorder_level_in", "Reorder Level ({unit})", { unit: sellUnitLabel })
+                  : t("products.fields.reorder_level", "Reorder Level")
+              }
+              type="number"
+              min={0}
+              step={1}
+              placeholder={t("products.form.reorder_level_placeholder", "e.g. 10")}
+              value={formFields.reorderLevel}
+              onChange={(e) =>
+                setFormFields({ ...formFields, reorderLevel: e.target.value })
+              }
+            />
+          </WithHint>
+          {!selected && !isIngredientForm ? (
             <FormSelect
               label={t("products.fields.variant", "Variant")}
               placeholder={t("products.form.variant_placeholder", "Select variant")}
-              value={formFields.variantName}
+              value={startingVariant}
               onChange={(e) => setFormFields({ ...formFields, variantName: e.target.value as VariantLabel })}
               required
             >
-              {VARIANT_LABELS.map((label) => (
+              {startingVariantLabels.map((label) => (
                 <option key={label} value={label}>
                   {enumLabel(t, "variant", label)}
                 </option>
               ))}
             </FormSelect>
           ) : null}
-          {!selected ? (
+          {!selected && !isIngredientForm ? (
             <MoneyField
               label={t("products.form.starting_price", "Starting Price (USD)")}
               value={formFields.variantPrice}
@@ -625,12 +731,21 @@ export default function Products() {
               required
             />
           ) : null}
-          {!selected ? (
+          {isIngredientForm ? (
             <p className="text-sm text-muted-foreground md:col-span-3">
-              {t("products.form.more_config_hint", "More variants, extras and a discount can be added afterward on the configuration screen.")}
+              {t("products.form.ingredient_hint", "Ingredients are stock-only: no variants, price, extras or discount. Add their stock from")}{" "}
+              <Link href="/inventory" className="font-semibold underline">
+                {t("products.form.ingredient_hint_link", "Inventory")}
+              </Link>
+              {t("products.form.ingredient_hint_after", ", then use them in drink recipes.")}
             </p>
           ) : null}
-          {selected ? (
+          {!selected && !isIngredientForm ? (
+            <p className="text-sm text-muted-foreground md:col-span-3">
+              {t("products.form.more_config_hint", "More variants, recipes, extras and a discount can be added afterward on the configuration screen.")}
+            </p>
+          ) : null}
+          {selected && !isIngredientForm ? (
             <p className="text-sm text-muted-foreground md:col-span-3">
               {t("products.form.price_line", "Price: {price}", { price: productPriceLabel(selected.variants) })}
               {" — "}
@@ -638,11 +753,11 @@ export default function Products() {
                 href={`/products/${selected.id}/configuration`}
                 className="font-semibold underline"
               >
-                {t("products.form.manage_variants_link", "manage variants, extras and discount")}
+                {t("products.form.manage_variants_link", "manage variants, recipes, extras and discount")}
               </Link>
             </p>
           ) : null}
-          {selected ? (
+          {selected && !isIngredientForm ? (
             <p className="text-sm text-muted-foreground md:col-span-3">
               {t("products.form.discount_line", "Discount: {discount}", {
                 discount:
@@ -709,25 +824,35 @@ export default function Products() {
       >
         {selected && (
           <div className="admin_modal_form_wrap">
-            {isAdmin && <Link href={`/products/${selected.id}/configuration`} className="mb-4 inline-block underline">{t("products.detail.manage_link", "Manage variants, extras and discount")}</Link>}
+            {isAdmin && !isIngredient(selected) && <Link href={`/products/${selected.id}/configuration`} className="mb-4 inline-block underline">{t("products.detail.manage_link", "Manage variants, recipes, extras and discount")}</Link>}
             <DetailGrid>
-              <DetailItem label={t("fields.name", "Name")}>{titleCase(selected.name)}</DetailItem>
+              <DetailItem label={t("fields.name", "Name")}>
+                <div className="flex flex-wrap items-center gap-2">
+                  {titleCase(selected.name)}
+                  <ProductBadges product={selected} />
+                </div>
+              </DetailItem>
               <DetailItem label={t("fields.sku", "SKU")}>{formatSku(selected.sku)}</DetailItem>
               <DetailItem label={t("fields.category", "Category")}>{titleCase(selected.categoryName)}</DetailItem>
-              <DetailItem label={t("products.fields.discount", "Discount")}>
-                {selected.discountActive
-                  ? t("products.discount_off", "{value} off", {
-                      value: `${selected.discountValue}${
-                        selected.discountType === "PERCENTAGE" ? "%" : " USD"
-                      }`,
-                    })
-                  : t("products.detail.none", "None")}
-              </DetailItem>
+              {!isIngredient(selected) && (
+                <DetailItem label={t("products.fields.discount", "Discount")}>
+                  {selected.discountActive
+                    ? t("products.discount_off", "{value} off", {
+                        value: `${selected.discountValue}${
+                          selected.discountType === "PERCENTAGE" ? "%" : " USD"
+                        }`,
+                      })
+                    : t("products.detail.none", "None")}
+                </DetailItem>
+              )}
               <DetailItem label={t("products.fields.stock", "Stock")}>
-                {Number(selected.quantityOnHand)} {enumLabel(t, "unit", selected.stockUnit)}
+                {formatStock(t, Number(selected.quantityOnHand), selected)}
               </DetailItem>
               <DetailItem label={t("products.fields.reorder_level", "Reorder Level")}>
-                {Number(selected.reorderLevel)} {enumLabel(t, "unit", selected.stockUnit)}
+                {Number(selected.reorderLevel).toLocaleString()} {enumLabel(t, "unit", selected.sellUnit)}
+              </DetailItem>
+              <DetailItem label={t("products.fields.purchase_unit", "Purchase Unit")}>
+                {stockUnitSize(t, selected)}
               </DetailItem>
               <DetailItem label={t("fields.status", "Status")}>
                 <StatusBadge
@@ -736,19 +861,28 @@ export default function Products() {
                 />
               </DetailItem>
               <DetailItem label={t("products.fields.variants", "Variants")}>
-                {selected.variants.length > 0
+                {isIngredient(selected)
+                  ? t("products.detail.ingredient_variants", "None: an ingredient is used up by recipes, not sold")
+                  : selected.variants.length > 0
                   ? selected.variants
-                      .map((variant) => `${enumLabel(t, "variant", variant.name)}: ${money(variant.finalPrice)}`)
+                      .map(
+                        (variant) =>
+                          `${variantDisplayName(t, variant, selected.sellUnit)}: ${money(variant.finalPrice)}${
+                            variant.recipeBased ? ` (${t("products.badges.recipe", "Recipe")})` : ""
+                          }`
+                      )
                       .join(", ")
                   : t("products.detail.none_yet", "None yet")}
               </DetailItem>
-              <DetailItem label={t("products.fields.extras", "Extras")}>
-                {selected.extras.length > 0
-                  ? selected.extras
-                      .map((extra) => `${titleCase(extra.name)} (+${money(extra.price)})`)
-                      .join(", ")
-                  : t("products.detail.none", "None")}
-              </DetailItem>
+              {!isIngredient(selected) && (
+                <DetailItem label={t("products.fields.extras", "Extras")}>
+                  {selected.extras.length > 0
+                    ? selected.extras
+                        .map((extra) => `${titleCase(extra.name)} (+${money(extra.price)})`)
+                        .join(", ")
+                    : t("products.detail.none", "None")}
+                </DetailItem>
+              )}
               <DetailItem label={t("fields.description", "Description")}>{selected.description || "-"}</DetailItem>
               <div className="detail_item">
                 <p className="detail_item_label">{t("products.detail.image", "Image :")}</p>

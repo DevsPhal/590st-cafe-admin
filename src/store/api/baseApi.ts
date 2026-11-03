@@ -189,6 +189,8 @@ export const baseApi = createApi({
     "Category",
     "Inventory",
     "StockMovement",
+    "Recipe",
+    "InventoryReport",
     "Order",
     "OrderHistory",
     "StaffCall",

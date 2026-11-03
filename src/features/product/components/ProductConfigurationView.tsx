@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useState, type ChangeEvent, type FormEvent } from "react";
+import Link from "next/link";
 import toast from "react-hot-toast";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
-import { AdminTopActions, DataCard, FormInput, FormSelect, MoneyField, Thumbnail } from "@/components/common/AdminKit";
+import { AdminTopActions, DataCard, FormInput, FormSelect, MoneyField, StatusBadge, Thumbnail } from "@/components/common/AdminKit";
 import { MoneyInput } from "@/components/forms/MoneyInput";
 import { formatAmount } from "@/lib/moneyInput";
 import { apiErrorMessage } from "@/store/api/baseApi";
@@ -23,15 +24,19 @@ import type {
 } from "@/store/api/types";
 import { productPriceLabel, titleCase } from "@/lib/utils";
 import { enumLabel } from "@/lib/enumLabel";
+import { formatStock, unitsPerStock } from "@/lib/stockUnits";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useCatalogAlerts } from "@/hooks/useCatalogAlerts";
 import { parseForm } from "@/lib/validation";
 import { attachExtraSchema, discountSchema, extraSchema, variantSchema } from "@/lib/formSchemas";
+import { allowedVariantLabels, isIngredient, isPackLabel, variantDisplayName } from "@/features/product/productKinds";
+import RecipeSection from "./RecipeSection";
 
 const inputClass = "mt-1 block w-full rounded border px-3 py-2 text-sm";
 const discountTypes: Record<DiscountType, string> = { PERCENTAGE: "Percentage", FIXED: "Amount in USD" };
-const VARIANT_LABELS: VariantLabel[] = ["MEDIUM", "LARGE", "PIECE"];
 
+// Each recipe's price and margin come from the variant price and discount, but variant and discount saves
+// don't touch the recipe cache, so refresh it by hand.
 function DiscountForm({ product }: { product: ProductResponse }) {
   const { t } = useI18n();
   const [type, setType] = useState<DiscountType>(product.discountType ?? "PERCENTAGE");
@@ -75,22 +80,34 @@ function DiscountForm({ product }: { product: ProductResponse }) {
   </form>;
 }
 
-function VariantForm({ productId, variant, takenLabels }: { productId: string; variant?: ProductVariantResponse; takenLabels: VariantLabel[] }) {
+function VariantForm({ product, variant, takenLabels }: { product: ProductResponse; variant?: ProductVariantResponse; takenLabels: VariantLabel[] }) {
   const { t } = useI18n();
   const { confirm, confirmDialog } = useConfirmDialog();
-  const [name, setName] = useState<VariantLabel>(variant?.name ?? VARIANT_LABELS.find((l) => !takenLabels.includes(l)) ?? "MEDIUM");
+  const productId = product.id;
+  const allowed = allowedVariantLabels(product.categoryGroup);
+  // A variant made before its category changed keeps showing its label, even if that label is no longer offered.
+  const labels = variant ? (allowed.includes(variant.name) ? allowed : [variant.name, ...allowed]) : allowed.filter((l) => !takenLabels.includes(l));
+  // Like the server: a pack named after the purchase unit holds a whole one (a carton of 24 cans).
+  const defaultUnitsPerSale = (label: VariantLabel) => (label === product.stockUnit ? String(unitsPerStock(product)) : "");
+  const initialName = variant?.name ?? labels[0] ?? "MEDIUM";
+  const [name, setName] = useState<VariantLabel>(initialName);
   const [price, setPrice] = useState(formatAmount(String(variant?.price ?? ""), 2));
   const [sortOrder, setSortOrder] = useState(String(variant?.sortOrder ?? 0));
+  const [perSale, setPerSale] = useState(variant ? String(variant.unitsPerSale ?? "") : defaultUnitsPerSale(initialName));
   const [create, createState] = useCreateVariantMutation();
   const [update, updateState] = useUpdateVariantMutation();
   const [remove, removeState] = useDeleteVariantMutation();
   const busy = createState.isLoading || updateState.isLoading || removeState.isLoading;
+  const isPack = isPackLabel(name);
+  const sellUnit = enumLabel(t, "unit", product.sellUnit);
+  const packName = enumLabel(t, "variant", name);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const parsed = parseForm(variantSchema, { price, sortOrder });
+    const unitsPerSaleFor = isPack && name !== product.stockUnit ? { pack: packName, unit: sellUnit } : undefined;
+    const parsed = parseForm(variantSchema({ unitsPerSaleFor }), { price, sortOrder, unitsPerSale: isPack ? perSale : "" });
     if (!parsed) return;
-    const body = { name, price: parsed.price, sortOrder: parsed.sortOrder ?? 0 };
+    const body = { name, price: parsed.price, sortOrder: parsed.sortOrder ?? 0, ...(parsed.unitsPerSale !== undefined ? { unitsPerSale: parsed.unitsPerSale } : {}) };
     try {
       if (variant) await update({ productId, id: variant.id, body }).unwrap();
       else { await create({ productId, body }).unwrap(); setPrice(""); setSortOrder("0"); }
@@ -110,13 +127,20 @@ function VariantForm({ productId, variant, takenLabels }: { productId: string; v
   }
 
   return <form onSubmit={submit} className="space-y-3 rounded-lg border p-4">
-    <h3 className="font-semibold">{variant ? `${enumLabel(t, "variant", variant.name)} (${enumLabel(t, "status", variant.status).toLowerCase()})` : t("products.config.variant.add_title", "Add a variant")}</h3>
+    <div className="flex flex-wrap items-center gap-2">
+      <h3 className="font-semibold">{variant ? `${variantDisplayName(t, variant, product.sellUnit)} (${enumLabel(t, "status", variant.status).toLowerCase()})` : t("products.config.variant.add_title", "Add a variant")}</h3>
+      {variant?.recipeBased && <StatusBadge label={t("products.badges.recipe", "Recipe")} tone="info" />}
+    </div>
     <div className="grid gap-3 md:grid-cols-3">
-      <FormSelect label={t("products.fields.variant", "Variant")} value={name} onChange={(event) => setName(event.target.value as VariantLabel)} disabled={Boolean(variant)}>
-        {VARIANT_LABELS.map((label) => <option key={label} value={label}>{enumLabel(t, "variant", label)}</option>)}
+      <FormSelect label={t("products.fields.variant", "Variant")} value={name} onChange={(event) => { const next = event.target.value as VariantLabel; setName(next); setPerSale(defaultUnitsPerSale(next)); }} disabled={Boolean(variant)}>
+        {labels.map((label) => <option key={label} value={label}>{enumLabel(t, "variant", label)}</option>)}
       </FormSelect>
       <label className="text-sm">{t("products.config.price_usd", "Price (USD)")}<MoneyInput wrapperClassName="mt-1" className={inputClass} required value={price} onValueChange={setPrice} /></label>
       <label className="text-sm">{t("products.config.variant.display_order", "Display order")}<input className={inputClass} required type="number" step="1" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} /></label>
+      {isPack && <label className="text-sm">{t("products.config.variant.units_per_sale", "Sell units per sale ({unit})", { unit: sellUnit })}
+        <input className={inputClass} type="number" min="1" step="1" inputMode="numeric" value={perSale} onChange={(event) => setPerSale(event.target.value)} />
+        <span className="mt-1 block text-xs text-muted-foreground">{t("products.config.variant.units_per_sale_hint", "How many {unit} one {pack} takes from stock.", { unit: sellUnit, pack: packName })}</span>
+      </label>}
     </div>
     <div className="flex flex-wrap gap-3"><button className="btn_primary_black" disabled={busy}>{busy ? t("states.saving", "Saving...") : variant ? t("products.config.variant.save", "Save variant") : t("products.config.variant.add", "Add variant")}</button>
       {variant && <><button className="btn_outline_black" type="button" disabled={busy} onClick={toggleStatus}>{variant.status === "ACTIVE" ? t("products.config.variant.disable", "Disable") : t("products.config.variant.enable", "Enable")}</button>
@@ -293,7 +317,9 @@ export default function ProductConfigurationView({ productId }: { productId: str
   const product = useGetProductQuery(productId);
   const variants = useListVariantsQuery(productId);
   const extraCatalog = useListExtrasQuery();
+  const data = product.data;
   const takenLabels = (variants.data ?? []).map((v) => v.name);
+  const canAddVariant = data ? allowedVariantLabels(data.categoryGroup).some((label) => !takenLabels.includes(label)) : false;
 
   useCatalogAlerts(
     useCallback(() => {
@@ -304,18 +330,30 @@ export default function ProductConfigurationView({ productId }: { productId: str
   );
 
   return <PageShell>
-    <PageHeader title={product.data?.name ? titleCase(product.data.name) : t("products.config.title", "Product settings")} breadcrumbs={[{ label: t("breadcrumb.home", "Home"), href: "/" }, { label: t("products.breadcrumb.products", "Products"), href: "/products" }, { label: t("products.config.breadcrumb", "Variants and discount") }]} rightSlot={<AdminTopActions />} />
-    {product.isLoading ? <p role="status">{t("products.config.loading_product", "Loading product...")}</p> : product.error ? <div role="alert">{apiErrorMessage(product.error as never)} <button className="underline" onClick={() => product.refetch()}>{t("actions.retry", "Retry")}</button></div> : product.data && <>
-      <DataCard title={t("products.config.discount.title", "Product discount")}><DiscountForm key={JSON.stringify([product.data.id, product.data.discountType, product.data.discountValue, product.data.discountStartAt, product.data.discountEndAt])} product={product.data} /></DataCard>
+    <PageHeader title={data?.name ? titleCase(data.name) : t("products.config.title", "Product settings")} breadcrumbs={[{ label: t("breadcrumb.home", "Home"), href: "/" }, { label: t("products.breadcrumb.products", "Products"), href: "/products" }, { label: t("products.config.breadcrumb", "Variants, recipes and discount") }]} rightSlot={<AdminTopActions />} />
+    {product.isLoading ? <p role="status">{t("products.config.loading_product", "Loading product...")}</p> : product.error ? <div role="alert">{apiErrorMessage(product.error as never)} <button className="underline" onClick={() => product.refetch()}>{t("actions.retry", "Retry")}</button></div> : data && (isIngredient(data) ? <>
+      <DataCard title={t("products.config.ingredient.title", "Ingredient")}>
+        <div className="space-y-2 p-2 text-sm">
+          <p>
+            {t("products.config.ingredient.note", "Ingredients have no variants, price, extras or discount and are never sold. Drink recipes use them up, and their stock is added from")}{" "}
+            <Link href="/inventory" className="font-semibold underline">{t("products.config.ingredient.inventory_link", "Inventory")}</Link>.
+          </p>
+          <p className="text-muted-foreground">{t("products.config.ingredient.stock", "In stock: {stock}", { stock: formatStock(t, Number(data.quantityOnHand), data) })}</p>
+        </div>
+      </DataCard>
+    </> : <>
+      <DataCard title={t("products.config.discount.title", "Product discount")}><DiscountForm key={JSON.stringify([data.id, data.discountType, data.discountValue, data.discountStartAt, data.discountEndAt])} product={data} /></DataCard>
       <DataCard title={t("products.fields.variants", "Variants")} meta={t("products.config.variants.meta", "Every product needs at least one variant to have a price.")}>
         <div className="space-y-4 p-2">
           {variants.isLoading ? <p role="status">{t("products.config.variants.loading", "Loading variants...")}</p> : variants.error ? <div role="alert">{apiErrorMessage(variants.error as never)} <button className="underline" onClick={() => variants.refetch()}>{t("actions.retry", "Retry")}</button></div> : <>
             {!variants.data?.length && <p className="text-sm text-muted-foreground">{t("products.config.variants.empty", "No variants yet — this product has no price until you add one.")}</p>}
-            {variants.data?.map((variant) => <VariantForm key={variant.id} productId={productId} variant={variant} takenLabels={takenLabels} />)}
-            {takenLabels.length < VARIANT_LABELS.length && <VariantForm productId={productId} takenLabels={takenLabels} />}
+            {variants.data?.map((variant) => <VariantForm key={variant.id} product={data} variant={variant} takenLabels={takenLabels} />)}
+            {/* Keyed by what's taken so the form starts over on the next free label after each add. */}
+            {canAddVariant && <VariantForm key={takenLabels.join()} product={data} takenLabels={takenLabels} />}
           </>}
         </div>
       </DataCard>
+      <RecipeSection product={data} />
       <ExtrasSection productId={productId} />
       <DataCard title={t("products.config.catalog.title", "Extras catalog")} meta={t("products.config.catalog.meta", "The shop-wide add-ons that any product can offer.")}>
         <div className="space-y-4 p-2">
@@ -326,6 +364,6 @@ export default function ProductConfigurationView({ productId }: { productId: str
           </>}
         </div>
       </DataCard>
-    </>}
+    </>)}
   </PageShell>;
 }

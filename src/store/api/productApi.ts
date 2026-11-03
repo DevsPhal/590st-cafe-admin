@@ -64,6 +64,7 @@ export const productApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: "Product", id },
         { type: "Product", id: "LIST" },
+        { type: "Recipe", id },
         { type: "Inventory", id: "LIST" },
         { type: "Inventory", id: "LOW_STOCK" },
       ],
@@ -92,6 +93,7 @@ export const productApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: "Product", id },
         { type: "Product", id: "LIST" },
+        { type: "Recipe", id },
       ],
     }),
 
@@ -101,6 +103,7 @@ export const productApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: "Product", id },
         { type: "Product", id: "LIST" },
+        { type: "Recipe", id },
       ],
     }),
 
@@ -176,6 +179,7 @@ export const productApi = baseApi.injectEndpoints({
         { type: "Variant", id: productId },
         { type: "Product", id: productId },
         { type: "Product", id: "LIST" },
+        { type: "Recipe", id: productId },
       ],
     }),
 
@@ -193,6 +197,7 @@ export const productApi = baseApi.injectEndpoints({
         { type: "Variant", id: productId },
         { type: "Product", id: productId },
         { type: "Product", id: "LIST" },
+        { type: "Recipe", id: productId },
       ],
     }),
 
@@ -205,6 +210,7 @@ export const productApi = baseApi.injectEndpoints({
         { type: "Variant", id: productId },
         { type: "Product", id: productId },
         { type: "Product", id: "LIST" },
+        { type: "Recipe", id: productId },
       ],
     }),
 

@@ -13,6 +13,8 @@
   "nav_products": "ផលិតផល",
   "nav_categories": "ប្រភេទ",
   "nav_inventory": "ស្តុក",
+  "nav_inventory_history": "ប្រវត្តិស្តុក",
+  "nav_inventory_reports": "របាយការណ៍ស្តុក",
   "nav_stock_alerts": "ការជូនដំណឹងស្តុក",
   "nav_events": "ព្រឹត្តិការណ៍",
   "nav_banners": "ផ្ទាំងបដា",

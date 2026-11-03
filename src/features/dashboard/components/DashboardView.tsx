@@ -31,6 +31,7 @@ import { useRefreshOptions } from "@/contexts/AdminPreferencesContext";
 import { useStaffOrderAlerts } from "@/hooks/useStaffOrderAlerts";
 import { useInventoryAlerts } from "@/hooks/useInventoryAlerts";
 import { useI18n } from "@/contexts/I18nContext";
+import { enumLabel } from "@/lib/enumLabel";
 
 // "-$392.50" for a loss, not "$-392.50".
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -528,7 +529,7 @@ export default function DashboardView() {
                     {titleCase(item.productName)}
                   </span>
                   <strong>
-                    {Number(item.quantityOnHand)} {item.unit}
+                    {Number(item.quantityOnHand).toLocaleString()} {enumLabel(t, "unit", item.unit)}
                   </strong>
                 </div>
               ))}
