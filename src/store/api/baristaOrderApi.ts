@@ -6,6 +6,7 @@ import type {
   Currency,
   DeliveryFeeRequest,
   EstimatedTimeRequest,
+  InvoiceLanguage,
   OrderResponse,
   OrderSearchParams,
   OrderStatus,
@@ -311,9 +312,10 @@ export const baristaOrderApi = baseApi.injectEndpoints({
       ],
     }),
 
-    downloadBaristaOrderInvoice: builder.mutation<Blob, UUID>({
-      query: (id) => ({
+    downloadBaristaOrderInvoice: builder.mutation<Blob, { id: UUID; language?: InvoiceLanguage }>({
+      query: ({ id, language }) => ({
         url: `/api/barista/orders/${id}/invoice`,
+        params: language ? { language } : undefined,
         responseHandler: (response: Response) =>
           response.ok ? response.blob() : response.json(),
       }),

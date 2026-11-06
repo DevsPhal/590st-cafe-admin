@@ -77,7 +77,7 @@ export type FieldOption = {
   value: string;
 };
 
-function LanguageFlag({
+export function LanguageFlag({
   src,
   alt,
   className,

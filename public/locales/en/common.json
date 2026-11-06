@@ -236,7 +236,15 @@
     "new_sale": "New Sale",
     "title": "Invoice #{code}",
     "print_failed": "Could not print the invoice.",
-    "download_failed": "Could not download the invoice."
+    "download_failed": "Could not download the invoice.",
+    "choose_language": "Choose Invoice Language",
+    "choose_language_hint": "Order {number} · only the selected language is printed.",
+    "language": "Invoice language",
+    "english_invoice": "English Invoice",
+    "khmer_invoice": "Khmer Invoice",
+    "select": "Select",
+    "selected": "Selected",
+    "print_selected": "Print Selected Invoice"
   },
   "estimate": {
     "counting": "~{minutes} min left · ready by {clock}",

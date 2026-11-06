@@ -53,6 +53,8 @@ export type PaymentMethod = "CASH" | "BAKONG";
 export type FulfillmentMethod = "PICKUP" | "DELIVERY" | "DINE_IN";
 export type DiscountType = "PERCENTAGE" | "FIXED";
 export type Currency = "USD" | "KHR";
+// The language an invoice PDF is printed in; both carry the same order and amounts.
+export type InvoiceLanguage = "EN" | "KH";
 export type StockMovementType = "STOCK_IN" | "STOCK_OUT";
 export type StockStrategy = "FIFO" | "LIFO";
 // The unit stock is bought in; one holds the product's unitsPerStock sell units.

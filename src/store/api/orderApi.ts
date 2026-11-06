@@ -6,6 +6,7 @@ import type {
   Currency,
   DeliveryFeeRequest,
   EstimatedTimeRequest,
+  InvoiceLanguage,
   OrderAuditLogResponse,
   OrderResponse,
   OrderSearchParams,
@@ -307,9 +308,10 @@ export const orderApi = baseApi.injectEndpoints({
       ],
     }),
 
-    downloadOrderInvoice: builder.mutation<Blob, UUID>({
-      query: (id) => ({
+    downloadOrderInvoice: builder.mutation<Blob, { id: UUID; language?: InvoiceLanguage }>({
+      query: ({ id, language }) => ({
         url: `/api/admin/orders/${id}/invoice`,
+        params: language ? { language } : undefined,
         responseHandler: (response: Response) =>
           response.ok ? response.blob() : response.json(),
       }),
