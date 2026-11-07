@@ -6191,35 +6191,52 @@ body {
   }
 }
 .invoice_receipt_store {
-  font-size: 1.3em;
+  font-size: 1.4em;
+  font-weight: 700;
+  text-align: center;
+}
+.invoice_receipt_title {
   font-weight: 700;
   text-align: center;
 }
 .invoice_receipt_rule {
   display: block;
-  margin: 0.2em 0;
-  border-top: 1px solid var(--receipt-ink);
+  margin: 0.15em 0;
+  border-top: 1px dashed var(--receipt-ink);
+  &.is_heavy {
+    border-top: 1.5px solid var(--receipt-ink);
+  }
 }
+// Label on the left, value on the right, like every row of the printed receipt.
 .invoice_receipt_line {
   display: flex;
   align-items: center;
-  gap: 0.4em;
+  justify-content: space-between;
+  gap: 0.6em;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
-  &.is_split {
-    justify-content: space-between;
-    > span:first-child {
-      display: flex;
-      flex: 1;
-      align-items: center;
-      gap: 0.4em;
-    }
+  &.is_detail {
+    justify-content: flex-start;
+    padding-left: 1.7em;
+    font-size: 0.85em;
   }
   &.is_total {
-    font-size: 1.2em;
+    font-size: 1.3em;
     font-weight: 700;
   }
+}
+.invoice_receipt_item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+}
+.invoice_receipt_item_name {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.5em;
+  min-width: 0;
 }
 .invoice_receipt_bar {
   display: inline-block;
