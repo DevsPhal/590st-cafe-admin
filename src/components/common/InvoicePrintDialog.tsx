@@ -53,10 +53,7 @@ const OPTIONS: {
 // The printed wording, mirrored from ReceiptLabels.java in the API, which renders the real PDF.
 const RECEIPT_LABELS: Record<
   InvoiceLanguage,
-  Record<
-    "title" | "order" | "date" | "servedBy" | "customer" | "total" | "payment" | "received" | "thanks",
-    string
-  >
+  Record<"title" | "order" | "date" | "servedBy" | "customer" | "total" | "payment" | "thanks", string>
 > = {
   EN: {
     title: "INVOICE",
@@ -66,7 +63,6 @@ const RECEIPT_LABELS: Record<
     customer: "Customer",
     total: "TOTAL",
     payment: "Payment method",
-    received: "Amount received",
     thanks: "Thank you, come again!",
   },
   KH: {
@@ -77,7 +73,6 @@ const RECEIPT_LABELS: Record<
     customer: "អតិថិជន",
     total: "សរុប",
     payment: "វិធីបង់ប្រាក់",
-    received: "ប្រាក់ទទួល",
     thanks: "សូមអរគុណ សូមអញ្ជើញមកម្តងទៀត",
   },
 };
@@ -214,61 +209,51 @@ function ReceiptPreview({
       >
         <span className="invoice_receipt_store">590st Cafe</span>
         <span className="invoice_receipt_title">{labels.title}</span>
-        <span className="invoice_receipt_rule" />
-        <span className="invoice_receipt_line">
+        <span className="invoice_receipt_rule is_dashed" />
+        <span className="invoice_receipt_line is_split">
           <span>{labels.order}</span>
           <span>{orderId ? `#${orderCode(orderId)}` : ""}</span>
         </span>
-        <span className="invoice_receipt_line">
-          <span>{labels.date}</span>
-          <PreviewBar width="42%" />
-        </span>
-        <span className="invoice_receipt_line">
-          <span>{labels.servedBy}</span>
-          <PreviewBar width="30%" />
-        </span>
-        <span className="invoice_receipt_line">
-          <span>{labels.customer}</span>
-          <PreviewBar width="34%" />
-        </span>
-        <span className="invoice_receipt_rule" />
-        {[
-          { quantity: 2, name: "48%", detail: "56%" },
-          { quantity: 1, name: "38%", detail: "30%" },
-        ].map((item) => (
-          <span key={item.quantity} className="invoice_receipt_item">
-            <span className="invoice_receipt_line">
-              <span className="invoice_receipt_item_name">
-                {item.quantity}× <PreviewBar width={item.name} />
+        {(
+          [
+            [labels.date, "38%"],
+            [labels.servedBy, "26%"],
+            [labels.customer, "32%"],
+          ] as const
+        ).map(([label, width]) => (
+          <span key={label} className="invoice_receipt_line is_split">
+            <span>{label}</span>
+            <span className="invoice_receipt_bar" style={{ width }} />
+          </span>
+        ))}
+        <span className="invoice_receipt_rule is_dashed" />
+        {["55%", "40%"].map((width, index) => (
+          <span key={width} className="invoice_receipt_item">
+            <span className="invoice_receipt_line is_split">
+              <span>
+                <span className="invoice_receipt_quantity">{index + 1}×</span>
+                <span className="invoice_receipt_bar" style={{ width }} />
               </span>
-              <PreviewBar width="16%" />
+              <span className="invoice_receipt_bar" style={{ width: "16%" }} />
             </span>
             <span className="invoice_receipt_line is_detail">
-              <PreviewBar width={item.detail} />
+              <span className="invoice_receipt_bar" style={{ width: index === 0 ? "62%" : "34%" }} />
             </span>
           </span>
         ))}
-        <span className="invoice_receipt_rule is_heavy" />
-        <span className="invoice_receipt_line is_total">
+        <span className="invoice_receipt_rule" />
+        <span className="invoice_receipt_line is_split is_total">
           <span>{labels.total}</span>
-          <PreviewBar width="24%" />
-        </span>
-        <span className="invoice_receipt_rule is_heavy" />
-        <span className="invoice_receipt_line">
-          <span>{labels.payment}</span>
-          <PreviewBar width="20%" />
-        </span>
-        <span className="invoice_receipt_line">
-          <span>{labels.received}</span>
-          <PreviewBar width="26%" />
+          <span className="invoice_receipt_bar" style={{ width: "22%" }} />
         </span>
         <span className="invoice_receipt_rule" />
+        <span className="invoice_receipt_line is_split">
+          <span>{labels.payment}</span>
+          <span className="invoice_receipt_bar" style={{ width: "20%" }} />
+        </span>
+        <span className="invoice_receipt_rule is_dashed" />
         <span className="invoice_receipt_thanks">{labels.thanks}</span>
       </span>
     </span>
   );
-}
-
-function PreviewBar({ width }: { width: string }) {
-  return <span className="invoice_receipt_bar" style={{ width }} />;
 }
