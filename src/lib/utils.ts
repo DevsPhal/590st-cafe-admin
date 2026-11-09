@@ -100,16 +100,32 @@ export function timeAgo(value: string, now = Date.now()): string {
   return translate("time.days_ago", "{count} d ago", { count: Math.floor(hours / 24) });
 }
 
+/**
+ * The active variants' price, or their range ("$1.00–$1.50"). By default the price customers pay now
+ * (finalPrice, after any running discount); pass "price" for the price before the discount.
+ */
 export function productPriceLabel(
-  variants: { finalPrice: number; status: string }[],
+  variants: { finalPrice: number; price?: number; status: string }[],
+  field: "finalPrice" | "price" = "finalPrice",
 ): string {
   const active = variants
     .filter((v) => v.status === "ACTIVE")
-    .map((v) => Number(v.finalPrice));
+    .map((v) => Number(v[field] ?? v.finalPrice));
   if (active.length === 0) return translate("price.none", "No price set");
   const min = Math.min(...active);
   const max = Math.max(...active);
   return min === max
     ? formatMoney(min)
     : `${formatMoney(min)}–${formatMoney(max)}`;
+}
+
+/** How much a running discount takes off ("20%" or "$0.50"); null when the product has no discount right now. */
+export function discountAmountLabel(product: {
+  discountActive: boolean;
+  discountType: "PERCENTAGE" | "FIXED" | null;
+  discountValue: number | null;
+}): string | null {
+  if (!product.discountActive || product.discountValue == null) return null;
+  const value = Number(product.discountValue);
+  return product.discountType === "PERCENTAGE" ? `${value}%` : formatMoney(value);
 }

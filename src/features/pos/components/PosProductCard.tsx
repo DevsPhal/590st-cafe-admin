@@ -105,7 +105,7 @@ export const PosProductCard = memo(function PosProductCard({
     <article className={cn("pos_product_card", inCart > 0 && "is_in_cart", outOfStock && "is_out_of_stock")}>
       <div className={cn("pos_product_media", onlyVariant && "is_tappable")} onClick={onlyVariant ? addFromPhoto : undefined}>
         <ProductImage src={product.imageUrl} />
-        {discountLabel ? <span className="pos_product_discount">{discountLabel}</span> : null}
+        {discountLabel ? <span className="pos_product_discount discount_badge">{discountLabel}</span> : null}
         {inCart > 0 ? (
           // Keyed by the count so the badge pops each time the quantity changes.
           <span key={inCart} className="pos_product_in_cart" aria-hidden>

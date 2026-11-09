@@ -55,6 +55,7 @@ import {
 } from "@/store/api/productApi";
 import type { CategoryGroup, ProductResponse, SellUnit, SkuMode, Status, StockUnit, VariantLabel } from "@/store/api/types";
 import { formatSku, productPriceLabel, titleCase } from "@/lib/utils";
+import { ProductPrice } from "./ProductPrice";
 import { enumLabel } from "@/lib/enumLabel";
 import { formatStock, stockUnitSize } from "@/lib/stockUnits";
 import {
@@ -516,7 +517,7 @@ export default function Products() {
                   {isIngredient(product) ? (
                     <span className="text-muted-foreground">{t("products.list.not_sold", "Not sold")}</span>
                   ) : (
-                    productPriceLabel(product.variants)
+                    <ProductPrice product={product} />
                   )}
                 </Cell>
                 <Cell>
