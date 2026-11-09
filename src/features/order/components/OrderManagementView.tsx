@@ -1,5 +1,6 @@
 "use client";
 import { OrderFulfillmentDetails } from "@/components/common/OrderFulfillmentDetails";
+import { rielTotalLabel } from "@/lib/khr";
 import { OrderEstimateEditor } from "@/components/common/OrderEstimateEditor";
 
 import { useCallback, useMemo } from "react";
@@ -381,6 +382,9 @@ export default function Orders() {
                 {selected.paymentMethod ? enumLabel(t, "payment_method", selected.paymentMethod) : t("orders.detail.not_paid", "Not paid")}
               </DetailItem>
               <DetailItem label={t("fields.total", "Total")}>{money(selected.totalAmount)}</DetailItem>
+              {rielTotalLabel(selected) ? (
+                <DetailItem label={t("orders.detail.total_khr", "Total in KHR")}>{rielTotalLabel(selected)}</DetailItem>
+              ) : null}
               <DetailItem label={t("orders.detail.amount_tendered", "Amount Tendered")}>
                 {formatByCurrency(selected.amountTendered, selected.amountTenderedCurrency)}
               </DetailItem>

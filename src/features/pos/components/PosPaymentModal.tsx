@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn, formatByCurrency } from "@/lib/utils";
+import { amountDue, changeDue } from "@/lib/khr";
 import type { Currency } from "@/store/api/types";
 import { useI18n } from "@/contexts/I18nContext";
 import { Button } from "@/components/common/Button";
@@ -91,10 +92,11 @@ export function PosPaymentModal({
   bakong,
 }: PosPaymentModalProps) {
   const { t } = useI18n();
-  const payable = useMemo(() => {
-    if (cash.currency === "USD" || !cash.khrPerUsdRate) return total;
-    return total * cash.khrPerUsdRate;
-  }, [total, cash.currency, cash.khrPerUsdRate]);
+  // In riel this is the total rounded to the nearest 100, the same figure the API charges and the receipt prints.
+  const payable = useMemo(
+    () => amountDue(total, cash.currency, cash.khrPerUsdRate),
+    [total, cash.currency, cash.khrPerUsdRate]
+  );
 
   const [cashInput, setCashInput] = useState(() => formatForInput(payable, cash.currency));
 
@@ -111,6 +113,8 @@ export function PosPaymentModal({
   }, [cashInput]);
 
   const balance = credit - payable;
+  // Change in riel is rounded the same way the API rounds it, so the screen matches the receipt.
+  const shownBalance = balance >= 0 ? changeDue(credit, payable, cash.currency) : balance;
 
   const appendValue = (value: string) => {
     if (value === "." && cash.currency === "KHR") return;
@@ -168,7 +172,7 @@ export function PosPaymentModal({
             <section className="pos_payment_left" aria-label={t("pos.payment.calculator_aria_label", "Payment calculator")}>
               <div className="pos_payment_payable">
                 <p>{t("pos.payment.payable_amount", "Payable Amount (Grand Total)")}</p>
-                <strong>{formatByCurrency(payable, isBakong ? "USD" : cash.currency)}</strong>
+                <strong>{isBakong ? formatByCurrency(total, "USD") : formatByCurrency(payable, cash.currency)}</strong>
               </div>
 
               {!isBakong ? (
@@ -387,7 +391,7 @@ export function PosPaymentModal({
                     <dt className="is_balance">{t("pos.payment.balance", "Balance:")}</dt>
                     <dd className={cn("is_balance", balance < 0 && "is_negative")}>
                       {balance < 0 ? "-" : ""}
-                      {formatByCurrency(Math.abs(balance), cash.currency)}
+                      {formatByCurrency(Math.abs(shownBalance), cash.currency)}
                     </dd>
                   </dl>
 

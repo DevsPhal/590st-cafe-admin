@@ -659,6 +659,8 @@ export interface OrderResponse {
   bakongMd5Hash: string | null;
   bakongCurrency: Currency | null;
   bakongAmount: Numeric | null;
+  /** KHR per USD used when a riel amount was worked out (cash in or out in riel, or a KHR KHQR); null otherwise. */
+  exchangeRate?: Numeric | null;
   /** When the QR payment window closes; unpaid online orders are cancelled after it. */
   bakongExpiresAt?: string | null;
   note: string | null;

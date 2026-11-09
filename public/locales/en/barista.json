@@ -99,6 +99,7 @@
     "paid_at": "Paid At",
     "not_paid_yet": "Not paid yet",
     "handled_by": "Handled By",
+    "total_khr": "Total in KHR",
     "change_given": "Change Given",
     "bakong_amount": "Bakong Amount",
     "note_from_customer": "Note from customer",

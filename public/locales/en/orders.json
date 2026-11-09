@@ -54,6 +54,7 @@
     "title": "Order Detail",
     "not_paid": "Not paid",
     "amount_tendered": "Amount Tendered",
+    "total_khr": "Total in KHR",
     "change_due": "Change Due",
     "ordered_at": "Ordered At",
     "paid_at": "Paid At",

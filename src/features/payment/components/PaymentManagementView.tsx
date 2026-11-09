@@ -46,6 +46,7 @@ import type { Currency, OrderResponse } from "@/store/api/types";
 import { formatByCurrency, titleCase } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/dateFormat";
 import { buildCashPaymentSchema, deliveryFeeSchema } from "@/lib/validation";
+import { amountDue, changeDue } from "@/lib/khr";
 import { useDefaultPageSize, useRefreshOptions } from "@/contexts/AdminPreferencesContext";
 import { useStaffOrderAlerts } from "@/hooks/useStaffOrderAlerts";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -169,14 +170,13 @@ export default function PaymentManagementView() {
   const [amountTendered, setAmountTendered] = useState("");
   const [currency, setCurrency] = useState<Currency>("USD");
 
+  // In riel the amount due is the total rounded to the nearest 100, the figure the API charges (lib/khr).
   const payableDue = (order: OrderResponse, targetCurrency: Currency): number =>
-    targetCurrency === "USD" || !khrPerUsdRate
-      ? Number(order.totalAmount)
-      : Number(order.totalAmount) * khrPerUsdRate;
+    amountDue(Number(order.totalAmount), targetCurrency, khrPerUsdRate);
 
   const exactAmountFor = (order: OrderResponse, targetCurrency: Currency): string => {
     const due = payableDue(order, targetCurrency);
-    return targetCurrency === "KHR" ? String(Math.round(due)) : due.toFixed(2);
+    return targetCurrency === "KHR" ? String(due) : due.toFixed(2);
   };
 
   const openCashModal = (order: OrderResponse) => {
@@ -593,7 +593,7 @@ export default function PaymentManagementView() {
             label={t("payments.cash_modal.change_due", "Change Due")}
             value={
               cashOrder && Number(amountTendered) >= cashDue
-                ? formatByCurrency(Number(amountTendered) - cashDue, currency)
+                ? formatByCurrency(changeDue(Number(amountTendered), cashDue, currency), currency)
                 : "-"
             }
             readOnly

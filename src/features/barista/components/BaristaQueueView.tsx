@@ -83,6 +83,7 @@ import { shopDate } from "@/lib/shopDate";
 import { InvoiceActions, toastPaidWithInvoice } from "@/components/common/InvoiceActions";
 import { orderCode, useOrderInvoice } from "@/hooks/useOrderInvoice";
 import { buildCashPaymentSchema } from "@/lib/validation";
+import { amountDue, changeDue, rielTotalLabel } from "@/lib/khr";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useNow } from "@/hooks/useNow";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -350,14 +351,13 @@ export default function BaristaQueueView() {
     setPage(totalPages);
   }
 
+  // In riel the amount due is the total rounded to the nearest 100, the figure the API charges (lib/khr).
   const payableDue = (order: OrderResponse, targetCurrency: Currency): number =>
-    targetCurrency === "USD" || !khrPerUsdRate
-      ? Number(order.totalAmount)
-      : Number(order.totalAmount) * khrPerUsdRate;
+    amountDue(Number(order.totalAmount), targetCurrency, khrPerUsdRate);
 
   const exactAmountFor = (order: OrderResponse, targetCurrency: Currency): string => {
     const due = payableDue(order, targetCurrency);
-    return targetCurrency === "KHR" ? String(Math.round(due)) : due.toFixed(2);
+    return targetCurrency === "KHR" ? String(due) : due.toFixed(2);
   };
 
   const openCashModal = (order: OrderResponse) => {
@@ -808,7 +808,7 @@ export default function BaristaQueueView() {
             label={t("barista.cash.change_due", "Change Due")}
             value={
               cashOrder && Number(amountTendered) >= cashDue
-                ? formatByCurrency(Number(amountTendered) - cashDue, cashCurrency)
+                ? formatByCurrency(changeDue(Number(amountTendered), cashDue, cashCurrency), cashCurrency)
                 : "-"
             }
             readOnly
@@ -857,6 +857,9 @@ export default function BaristaQueueView() {
                   : "-"}
               </DetailItem>
               <DetailItem label={t("fields.total", "Total")}>{money(detailOrder.totalAmount)}</DetailItem>
+              {rielTotalLabel(detailOrder) ? (
+                <DetailItem label={t("barista.detail.total_khr", "Total in KHR")}>{rielTotalLabel(detailOrder)}</DetailItem>
+              ) : null}
               {detailOrder.paymentMethod === "CASH" ? (
                 <>
                   <DetailItem label={t("barista.cash.amount_tendered", "Amount Tendered")}>
