@@ -1,5 +1,7 @@
 {
   "title": "Reports",
+  "export": "Export Excel",
+  "exporting": "Exporting...",
   "filters": {
     "finance_period": "Finance Period",
     "daily": "Daily",
@@ -9,7 +11,8 @@
     "month": "Month"
   },
   "errors": {
-    "finance_load_failed": "Could not load the finance summary."
+    "finance_load_failed": "Could not load the finance summary.",
+    "export_failed": "Could not download the report."
   },
   "stats": {
     "unavailable": "Unavailable",

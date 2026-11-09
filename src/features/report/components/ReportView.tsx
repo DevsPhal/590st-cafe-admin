@@ -1,7 +1,10 @@
 "use client";
 
+import toast from "react-hot-toast";
+import { Download } from "lucide-react";
 import { shopDate } from "@/lib/shopDate";
-import { titleCase } from "@/lib/utils";
+import { downloadBlob, titleCase } from "@/lib/utils";
+import { apiErrorMessage } from "@/store/api/baseApi";
 import { formatLocalDate } from "@/lib/dateFormat";
 import { useCurrentRole } from "@/store/api/useCurrentRole";
 import BaristaReportView from "./BaristaReportView";
@@ -21,6 +24,7 @@ import {
   TextField,
 } from "@/components/common/AdminKit";
 import {
+  useDownloadReportMutation,
   useGetDailyFinanceQuery,
   useGetDailyReportQuery,
   useGetMonthlyFinanceQuery,
@@ -30,6 +34,8 @@ import { usePersistentState } from "@/hooks/usePersistentState";
 import { useI18n } from "@/contexts/I18nContext";
 
 type Period = "DAILY" | "MONTHLY" | "YEARLY";
+
+const EXPORT_PERIOD = { DAILY: "DAY", MONTHLY: "MONTH", YEARLY: "YEAR" } as const;
 
 // "-$392.50" for a loss, not "$-392.50".
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -78,6 +84,16 @@ function AdminReportView() {
   const finance = activeFinance.currentData;
   const isLoadingFinance = activeFinance.isFetching && !finance;
   const financeValue = (value: number | undefined) => activeFinance.error ? t("reports.stats.unavailable", "Unavailable") : isLoadingFinance || !finance ? "..." : formatUsd(Number(value ?? 0));
+
+  const [downloadReport, { isLoading: isExporting }] = useDownloadReportMutation();
+  const handleExport = async () => {
+    try {
+      const blob = await downloadReport({ date, period: EXPORT_PERIOD[period], year, month }).unwrap();
+      downloadBlob(blob, `report-${date}.xlsx`);
+    } catch (err) {
+      toast.error(apiErrorMessage(err as never, t("reports.errors.export_failed", "Could not download the report.")));
+    }
+  };
 
   const baristas = report?.baristas ?? [];
   const baristaHeaders = [
@@ -187,6 +203,12 @@ function AdminReportView() {
       <DataCard
         title={t("reports.barista_takings.title", "Barista Takings")}
         meta={t("reports.barista_takings.meta", "Daily report for {date}", { date })}
+        actions={
+          <button type="button" onClick={handleExport} disabled={isExporting} className="btn_outline_black">
+            {isExporting ? t("reports.exporting", "Exporting...") : t("reports.export", "Export Excel")}
+            <Download />
+          </button>
+        }
       >
         <SimpleTable headers={baristaHeaders}>
           <TableState
