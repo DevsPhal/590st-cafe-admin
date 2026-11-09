@@ -15,7 +15,7 @@ export default function Unauthorized() {
   ).split("{role}");
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen text-center bg-gray-100 text-gray-900">
+    <div className="flex flex-col items-center justify-center h-dvh text-center bg-gray-100 text-gray-900">
       <h1 className="text-4xl font-bold mb-4">
         {t("auth.error_page.title", "Access Denied")}
       </h1>

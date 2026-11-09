@@ -71,7 +71,7 @@ export default function InvoiceViewerView({ orderId }: { orderId: string }) {
   }, [orderId, language, isAdmin, adminDownload, baristaDownload]);
 
   return (
-    <div className="flex h-screen flex-col bg-[#525659]">
+    <div className="flex h-dvh flex-col bg-[#525659]">
       <header className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-3 shadow-sm">
         <h1 className="text-base font-bold text-gray-900">{title}</h1>
         <div className="flex flex-wrap items-center gap-2">

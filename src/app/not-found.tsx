@@ -6,7 +6,7 @@ import { useI18n } from "@/contexts/I18nContext";
 export default function NotFound() {
   const { t } = useI18n();
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gray-50 text-center">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-gray-50 text-center">
       <h1 className="text-6xl font-black text-gray-900">404</h1>
       <p className="text-xl font-semibold text-gray-700">{t("not_found.title", "Page Not Found")}</p>
       <p className="text-sm text-gray-500">

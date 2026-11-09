@@ -223,7 +223,7 @@ export function LocationPickerModal({
                 placeholder={t("map.search_placeholder", "Street, landmark, area, or paste a Google Maps link")}
                 aria-label={t("map.search_label", "Search for a place")}
                 enterKeyHint="search"
-                className="h-10 w-full rounded-full border border-gray-200 bg-white pr-3 pl-9 text-sm outline-none focus:border-[#7ec900] focus:ring-2 focus:ring-[#befe35]/40"
+                className="h-10 w-full rounded-full border border-gray-200 bg-white pr-3 pl-9 text-base outline-none focus:border-[#7ec900] focus:ring-2 focus:ring-[#befe35]/40"
               />
             </div>
             <button

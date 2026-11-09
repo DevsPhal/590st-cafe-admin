@@ -1721,6 +1721,25 @@ body {
   }
 }
 
+// Mobile input zoom. iOS Safari zooms the whole page into a focused field whose text is under 16px. This rule is
+// outside Tailwind's layers, so it beats text-xs / text-sm on a field (layered utilities always lose to unlayered
+// rules); :where() keeps its specificity at zero, so a component class can still pick a size, and larger text
+// utilities (a 6-digit code field) are left alone. Field classes in the stylesheets are 1rem or more.
+:where(input, select, textarea):where(:not([type="checkbox"], [type="radio"], [type="range"], [type="color"],
+  [type="file"], [type="hidden"], [class*="text-lg"], [class*="text-xl"], [class*="text-2xl"], [class*="text-3xl"],
+  [class*="text-4xl"])) {
+  font-size: max(16px, 1rem);
+}
+
+// With the on-screen keyboard up (it overlays the page: viewport interactive-widget=resizes-visual), the POS
+// "View order" bar would cover the search field, so it steps aside until the field loses focus.
+@media (pointer: coarse) {
+  html:has(:is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), textarea, select):focus)
+    .pos_mobile_order_bar {
+    display: none !important;
+  }
+}
+
 // Inline validation: the message sits under its field, and the field's border turns red.
 .form_field_error {
   font-size: 0.75rem;
@@ -1765,7 +1784,7 @@ body {
     background-color: var(--surface);
     padding: 8px 16px;
     font-family: inherit;
-    font-size: 0.875rem;
+    font-size: 1rem;
     line-height: 1.25;
     color: var(--ink);
     outline: none;
@@ -2082,6 +2101,7 @@ body {
     background-color: var(--surface-muted);
     padding: 20px 24px;
     max-height: min(70vh, 640px);
+    max-height: min(70dvh, 640px);
     overflow-y: auto;
   }
   .admin_modal_footer {
@@ -2100,6 +2120,7 @@ body {
     .admin_modal_body {
       padding: 12px;
       max-height: min(76vh, 640px);
+      max-height: min(76dvh, 640px);
     }
     .admin_modal_footer {
       padding: 12px 16px;
@@ -2113,6 +2134,7 @@ body {
     .pos_payment_modal_body {
       padding: 20px;
       max-height: min(85vh, 760px);
+      max-height: min(85dvh, 760px);
       overflow-y: auto;
     }
   }
@@ -3979,7 +4001,7 @@ body {
     border: 1px solid var(--line);
     background-color: var(--surface);
     color: var(--ink);
-    font-size: 0.875rem;
+    font-size: 1rem;
     outline: none;
     appearance: none;
     &::placeholder {
@@ -4500,7 +4522,7 @@ body {
     padding: 12px 40px 12px 12px;
     border-radius: 16px;
     border-color: var(--line);
-    font-size: 0.875rem;
+    font-size: 1rem;
   }
   .form_field_icon {
     right: 12px;

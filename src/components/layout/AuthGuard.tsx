@@ -103,7 +103,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     status === 401
   ) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-(--surface-muted)">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-(--surface-muted)">
         <LogoMark />
         <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
       </div>
@@ -158,7 +158,7 @@ function GuardCard({
   children: ReactNode;
 }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-(--surface-muted) px-4">
+    <main className="flex min-h-dvh items-center justify-center bg-(--surface-muted) px-4">
       <div
         role="alert"
         className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-sm"

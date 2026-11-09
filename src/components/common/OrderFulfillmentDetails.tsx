@@ -65,7 +65,7 @@ export function OrderFulfillmentDetails({
             value={feeInput}
             onValueChange={setFeeInput}
             wrapperClassName="w-24"
-            className="w-full rounded border border-gray-300 py-1 pr-2 text-xs"
+            className="w-full rounded border border-gray-300 py-1 pr-2 text-base"
             aria-label={t("fulfillment.fee_label", "Delivery fee in USD")}
             aria-invalid={feeValidation.errors.fee ? true : undefined}
             aria-describedby={feeValidation.errors.fee ? "order-fee-error" : undefined}

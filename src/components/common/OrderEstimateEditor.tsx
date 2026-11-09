@@ -134,7 +134,7 @@ export function OrderEstimateEditor({
                 submitCustom();
               }
             }}
-            className="h-7 w-20 rounded-full border border-gray-300 px-3 text-xs outline-none focus:border-gray-900"
+            className="h-9 w-24 rounded-full border border-gray-300 px-3 text-base outline-none focus:border-gray-900"
             aria-label={t("estimate.custom_label", "Custom estimated minutes")}
             aria-invalid={validation.errors.minutes ? true : undefined}
             aria-describedby={validation.errors.minutes ? "estimate-minutes-error" : undefined}
@@ -143,7 +143,7 @@ export function OrderEstimateEditor({
             type="button"
             onClick={submitCustom}
             disabled={isSaving || !custom.trim()}
-            className="btn_primary_black h-7 rounded-full px-3 text-xs font-medium disabled:opacity-50"
+            className="btn_primary_black h-9 rounded-full px-3 text-xs font-medium disabled:opacity-50"
           >
             {isSaving ? t("states.saving", "Saving...") : t("actions.set", "Set")}
           </button>
