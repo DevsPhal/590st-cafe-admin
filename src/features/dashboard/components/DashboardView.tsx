@@ -5,7 +5,7 @@ import { useCallback, useMemo } from "react";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
 import { AdminTopActions, StatTile } from "@/components/common/AdminKit";
-import { AlertTriangle, ArrowRight, Banknote, Clock3, Loader2, PackageMinus, Receipt } from "lucide-react";
+import { AlertTriangle, ArrowRight, Banknote, Clock3, PackageMinus, Receipt } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -32,6 +32,7 @@ import { useStaffOrderAlerts } from "@/hooks/useStaffOrderAlerts";
 import { useInventoryAlerts } from "@/hooks/useInventoryAlerts";
 import { useI18n } from "@/contexts/I18nContext";
 import { enumLabel } from "@/lib/enumLabel";
+import { Loader } from "@/components/common/Loader";
 
 // "-$392.50" for a loss, not "$-392.50".
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -356,10 +357,7 @@ export default function DashboardView() {
                 )}
               </p>
             ) : weeklyQuery.isLoading ? (
-              <p className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />{" "}
-                {t("states.loading", "Loading...")}
-              </p>
+              <Loader block className="h-full" />
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart

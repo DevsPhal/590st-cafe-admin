@@ -12,6 +12,8 @@ import {
 import { cn, formatByCurrency } from "@/lib/utils";
 import type { Currency } from "@/store/api/types";
 import { useI18n } from "@/contexts/I18nContext";
+import { Button } from "@/components/common/Button";
+import { Loader } from "@/components/common/Loader";
 
 export type PosCartItem = {
   id: string;
@@ -295,7 +297,7 @@ export function PosPaymentModal({
                         unoptimized
                       />
                     ) : bakong.isGenerating ? (
-                      <Loader2 className="h-8 w-8 animate-spin text-gray-300" />
+                      <Loader label={t("pos.payment.generating_qr", "Generating QR...")} />
                     ) : (
                       <p className="px-4 text-center text-xs font-semibold text-gray-500">
                         {bakong.failure ?? t("pos.payment.no_qr", "No QR generated yet.")}
@@ -331,9 +333,9 @@ export function PosPaymentModal({
                         {t("pos.payment.waiting", "Waiting for payment — confirms automatically")}
                       </p>
                     ) : (
-                      <button
-                        type="button"
-                        className="btn_primary_yellow flex-1 text-xs"
+                      <Button
+                       
+                        variant="accent" className="flex-1 text-xs"
                         disabled={bakong.isGenerating}
                         onClick={bakong.onRetry}
                       >
@@ -341,7 +343,7 @@ export function PosPaymentModal({
                         {bakong.qrDataUrl
                           ? t("pos.payment.new_qr", "Get a new QR")
                           : t("pos.payment.generate_qr", "Generate QR")}
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -389,16 +391,16 @@ export function PosPaymentModal({
                     </dd>
                   </dl>
 
-                  <button
-                    type="button"
-                    className="btn_primary_yellow pos_payment_confirm"
+                  <Button
+                   
+                    variant="accent" className="pos_payment_confirm"
                     disabled={isLoading || balance < 0 || items.length === 0}
                     onClick={() => onConfirm?.(cash.currency, credit)}
                   >
                     {isLoading
                       ? t("states.processing", "Processing...")
                       : t("pos.payment.confirm", "Confirm Payment")}
-                  </button>
+                  </Button>
                 </>
               ) : (
                 <dl className="pos_payment_totals">

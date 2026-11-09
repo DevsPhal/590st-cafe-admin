@@ -86,7 +86,8 @@
     "credit": "Credit:",
     "balance": "Balance:",
     "confirm": "Confirm Payment",
-    "total": "Total:"
+    "total": "Total:",
+    "generating_qr": "Generating QR..."
   },
   "toast": {
     "finish_payment_first": "Finish or cancel the payment before editing the order.",

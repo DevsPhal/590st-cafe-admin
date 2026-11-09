@@ -1,21 +1,39 @@
 "use client";
 
-interface EmptyStateProps {
-  title: string;
-  description: string;
-  actionLabel?: string;
-}
+import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
-export function EmptyState({ title, description, actionLabel }: EmptyStateProps) {
+/**
+ * The one "nothing here" message: an optional icon, a title, an optional line of help and an optional action.
+ * Tables use TableState (which renders this for an empty page); everything else uses this directly.
+ */
+export function EmptyState({
+  title,
+  description,
+  icon: Icon,
+  action,
+  compact = false,
+  className,
+}: {
+  title: string;
+  description?: ReactNode;
+  icon?: LucideIcon;
+  action?: ReactNode;
+  /** Less padding, for a small panel or a single table cell. */
+  compact?: boolean;
+  className?: string;
+}) {
   return (
-    <div className="flex h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-gray-200 bg-gray-50 text-center">
-      <p className="text-sm font-semibold text-gray-900">{title}</p>
-      <p className="text-xs text-gray-500">{description}</p>
-      {actionLabel && (
-        <button className="mt-2 rounded-md bg-lime-300 px-4 py-1.5 text-xs font-semibold text-black">
-          {actionLabel}
-        </button>
-      )}
+    <div role="status" className={cn("ui_empty_state", compact && "is_compact", className)}>
+      {Icon ? (
+        <span className="ui_empty_state_icon" aria-hidden>
+          <Icon />
+        </span>
+      ) : null}
+      <p className="ui_empty_state_title">{title}</p>
+      {description ? <p className="ui_empty_state_description">{description}</p> : null}
+      {action ? <div className="ui_empty_state_action">{action}</div> : null}
     </div>
   );
 }

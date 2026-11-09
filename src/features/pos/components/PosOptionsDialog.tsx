@@ -17,6 +17,7 @@ import {
 } from "@/lib/drinkOptions";
 import { cn, titleCase } from "@/lib/utils";
 import type { IceLevel, MilkType, ProductResponse, ProductVariantResponse, SugarLevel, UUID } from "@/store/api/types";
+import { Button } from "@/components/common/Button";
 
 export type PosExtra = { extraId: UUID; name: string; price: number };
 
@@ -190,12 +191,12 @@ export function PosOptionsDialog({
             <span>{t("pos.options.each", "Each")}</span>
             <strong>{money(unitPrice)}</strong>
           </p>
-          <button type="button" className="btn_outline_black" onClick={onClose}>
+          <Button variant="outline" onClick={onClose}>
             {t("actions.cancel", "Cancel")}
-          </button>
-          <button ref={confirmRef} type="button" className="btn_primary_yellow" onClick={confirm} disabled={!variant}>
+          </Button>
+          <Button ref={confirmRef} variant="accent" onClick={confirm} disabled={!variant}>
             {mode === "edit" ? t("pos.options.update", "Update item") : t("pos.options.add", "Add to order")}
-          </button>
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

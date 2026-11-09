@@ -4,7 +4,7 @@ import { CircleAlert } from "lucide-react";
 export function AuthFieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
   return (
-    <p id={id} role="alert" className="mt-1.5 flex items-start gap-1.5 text-[13px] font-medium text-[#b42318] dark:text-[#fca5a5]">
+    <p id={id} role="alert" className="mt-1.5 flex items-start gap-1.5 text-[13px] font-medium text-(--color-danger)">
       <CircleAlert aria-hidden className="mt-px size-4 shrink-0" />
       {message}
     </p>

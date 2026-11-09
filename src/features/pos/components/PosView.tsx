@@ -56,6 +56,8 @@ import { useInventoryAlerts } from "@/hooks/useInventoryAlerts";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useStaffOrderAlerts } from "@/hooks/useStaffOrderAlerts";
 import { useI18n } from "@/contexts/I18nContext";
+import { Button } from "@/components/common/Button";
+import { EmptyState } from "@/components/common/EmptyState";
 
 const BAKONG_POLL_MS = 4000;
 // The API's ValidationPatterns.MAX_ITEM_QUANTITY: the most of one item a single line can hold.
@@ -661,19 +663,21 @@ export default function PosView() {
                 <ErrorState error={products.error} fallback={t("pos.catalog.load_error", "Could not load products.")} onRetry={refetch} isRetrying={productsQuery.isFetching} />
               </div>
             ) : visibleProducts.length === 0 ? (
-              <div className="pos_catalog_empty">
-                <Search aria-hidden />
-                {search.trim() ? (
-                  <>
-                    <p>{t("pos.catalog.no_match", "No products match “{term}”.", { term: search.trim() })}</p>
-                    <button type="button" className="btn_outline_black" onClick={() => setSearch("")}>
+              <EmptyState
+                icon={Search}
+                title={
+                  search.trim()
+                    ? t("pos.catalog.no_match", "No products match “{term}”.", { term: search.trim() })
+                    : t("pos.catalog.empty", "No active products in this category.")
+                }
+                action={
+                  search.trim() ? (
+                    <Button variant="outline" onClick={() => setSearch("")}>
                       {t("pos.catalog.clear_search", "Clear search")}
-                    </button>
-                  </>
-                ) : (
-                  <p>{t("pos.catalog.empty", "No active products in this category.")}</p>
-                )}
-              </div>
+                    </Button>
+                  ) : undefined
+                }
+              />
             ) : (
               <div className="pos_product_grid">
                 {visibleProducts.map((product) => (
@@ -815,18 +819,18 @@ export default function PosView() {
           </dl>
 
           <div className="pos_order_ctas">
-            <button
-              type="button"
-              className="btn_outline_black"
+            <Button
+             
+              variant="outline"
               onClick={clearCart}
               disabled={cart.length === 0}
             >
               <ShoppingBag />
               {t("actions.clear", "Clear")}
-            </button>
-            <button
-              type="button"
-              className="btn_primary_yellow"
+            </Button>
+            <Button
+             
+              variant="accent"
               onClick={() => setPaymentOpen(true)}
               disabled={cart.length === 0 || (!isAdmin && !isBarista)}
             >
@@ -834,7 +838,7 @@ export default function PosView() {
               <span aria-hidden className="pos_cta_arrow">
                 →
               </span>
-            </button>
+            </Button>
           </div>
         </aside>
       </div>

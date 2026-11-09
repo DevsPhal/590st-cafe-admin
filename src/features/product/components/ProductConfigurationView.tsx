@@ -31,6 +31,7 @@ import { allowedVariantLabels, isIngredient, isPackLabel, variantDisplayName } f
 import RecipeSection from "./RecipeSection";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { IMAGE_ACCEPT, imageFileProblem } from "@/lib/imageFile";
+import { Button } from "@/components/common/Button";
 
 const discountTypes: Record<DiscountType, string> = { PERCENTAGE: "Percentage", FIXED: "Amount in USD" };
 
@@ -79,8 +80,8 @@ function DiscountForm({ product }: { product: ProductResponse }) {
       <FormInput label={t("products.config.discount.starts_at", "Starts at (optional)")} type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} error={validation.errors.start} />
       <FormInput label={t("products.config.discount.ends_at", "Ends at (optional)")} type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} error={validation.errors.end} />
     </div>
-    <div className="flex gap-3"><button className="btn_primary_black" disabled={busy}>{busy ? t("states.saving", "Saving...") : t("products.config.discount.save", "Save discount")}</button>
-      {product.discountType && <button className="btn_outline_black" type="button" disabled={busy} onClick={remove}>{t("products.config.discount.remove", "Remove discount")}</button>}</div>
+    <div className="flex gap-3"><Button type="submit" variant="primary" disabled={busy}>{busy ? t("states.saving", "Saving...") : t("products.config.discount.save", "Save discount")}</Button>
+      {product.discountType && <Button variant="outline" disabled={busy} onClick={remove}>{t("products.config.discount.remove", "Remove discount")}</Button>}</div>
   </form>;
 }
 
@@ -147,9 +148,9 @@ function VariantForm({ product, variant, takenLabels }: { product: ProductRespon
         <span className="mt-1 block text-xs text-muted-foreground">{t("products.config.variant.units_per_sale_hint", "How many {unit} one {pack} takes from stock.", { unit: sellUnit, pack: packName })}</span>
       </div>}
     </div>
-    <div className="flex flex-wrap gap-3"><button className="btn_primary_black" disabled={busy}>{busy ? t("states.saving", "Saving...") : variant ? t("products.config.variant.save", "Save variant") : t("products.config.variant.add", "Add variant")}</button>
-      {variant && <><button className="btn_outline_black" type="button" disabled={busy} onClick={toggleStatus}>{variant.status === "ACTIVE" ? t("products.config.variant.disable", "Disable") : t("products.config.variant.enable", "Enable")}</button>
-        <button className="btn_outline_black" type="button" disabled={busy} onClick={deleteVariant}>{t("actions.delete", "Delete")}</button></>}
+    <div className="flex flex-wrap gap-3"><Button type="submit" variant="primary" disabled={busy}>{busy ? t("states.saving", "Saving...") : variant ? t("products.config.variant.save", "Save variant") : t("products.config.variant.add", "Add variant")}</Button>
+      {variant && <><Button variant="outline" disabled={busy} onClick={toggleStatus}>{variant.status === "ACTIVE" ? t("products.config.variant.disable", "Disable") : t("products.config.variant.enable", "Enable")}</Button>
+        <Button variant="outline" disabled={busy} onClick={deleteVariant}>{t("actions.delete", "Delete")}</Button></>}
     </div>
     {confirmDialog}
   </form>;
@@ -236,8 +237,8 @@ function ExtraCatalogForm({ extra }: { extra?: ExtraResponse }) {
         <p className="text-xs text-muted-foreground">{t("products.config.extra.save_first", "Save the extra first, then you can add a photo.")}</p>
       )}
     </div>
-    <div className="flex flex-wrap gap-3"><button className="btn_primary_black" disabled={busy}>{busy ? t("states.saving", "Saving...") : extra ? t("products.config.extra.save", "Save extra") : t("products.config.extra.add", "Add extra")}</button>
-      {extra && <button className="btn_outline_black" type="button" disabled={busy} onClick={deleteExtra}>{t("actions.delete", "Delete")}</button>}
+    <div className="flex flex-wrap gap-3"><Button type="submit" variant="primary" disabled={busy}>{busy ? t("states.saving", "Saving...") : extra ? t("products.config.extra.save", "Save extra") : t("products.config.extra.add", "Add extra")}</Button>
+      {extra && <Button variant="outline" disabled={busy} onClick={deleteExtra}>{t("actions.delete", "Delete")}</Button>}
     </div>
     {confirmDialog}
   </form>;
@@ -271,8 +272,8 @@ function ProductExtraRow({ productId, productExtra }: { productId: string; produ
       </div>
     </div>
     <div className="flex gap-3">
-      <button className="btn_outline_black" type="button" disabled={busy} onClick={toggleStatus}>{productExtra.status === "ACTIVE" ? t("products.config.extra.hide", "Hide") : t("products.config.extra.offer", "Offer")}</button>
-      <button className="btn_outline_black" type="button" disabled={busy} onClick={remove}>{t("actions.remove", "Remove")}</button>
+      <Button variant="outline" disabled={busy} onClick={toggleStatus}>{productExtra.status === "ACTIVE" ? t("products.config.extra.hide", "Hide") : t("products.config.extra.offer", "Offer")}</Button>
+      <Button variant="outline" disabled={busy} onClick={remove}>{t("actions.remove", "Remove")}</Button>
     </div>
     {confirmDialog}
   </div>;
@@ -317,7 +318,7 @@ function ExtrasSection({ productId }: { productId: string }) {
         <FormSelect label={t("products.config.extras_on_product.offer_label", "Offer an extra")} placeholder={t("products.config.extras_on_product.offer_placeholder", "Select an extra")} value={selectedExtraId} onChange={(event) => setSelectedExtraId(event.target.value)} error={validation.errors.extraId}>
           {attachable.map((extra) => <option key={extra.id} value={extra.id}>{titleCase(extra.name)} — ${Number(extra.price).toFixed(2)}</option>)}
         </FormSelect>
-        <button className="btn_primary_black" disabled={attachState.isLoading || !attachable.length}>{attachState.isLoading ? t("products.config.extras_on_product.adding", "Adding...") : t("products.config.extras_on_product.offer_submit", "Offer on this product")}</button>
+        <Button type="submit" variant="primary" disabled={attachState.isLoading || !attachable.length}>{attachState.isLoading ? t("products.config.extras_on_product.adding", "Adding...") : t("products.config.extras_on_product.offer_submit", "Offer on this product")}</Button>
         {!catalog.data?.length && <p className="text-sm text-muted-foreground">{t("products.config.extras_on_product.no_catalog", "No extras exist yet — add one to the shop-wide catalog below first.")}</p>}
       </form>
     </div>

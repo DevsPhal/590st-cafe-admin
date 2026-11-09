@@ -62,6 +62,7 @@ import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
 import { staffCreateSchema, staffInviteSchema, staffUpdateSchema } from "@/lib/formSchemas";
 import { useI18n } from "@/contexts/I18nContext";
 import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
 
 type StaffKind = "ADMIN" | "BARISTA";
 
@@ -646,9 +647,9 @@ export default function Staff() {
               {t("staff.invite_result.hint", "Share this link with the invitee. After they open it and share their phone number in Telegram, the account is active and they sign in on the login page under")}{" "}
               <span className="font-semibold">{t("staff.invite_result.phone_tab", "Phone number")}</span>{t("staff.invite_result.hint_end", " — the code arrives in Telegram.")}
             </p>
-            <button
-              type="button"
-              className="btn_outline_black mt-3"
+            <Button
+             
+              variant="outline" className="mt-3"
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(inviteResult.deepLink);
@@ -659,7 +660,7 @@ export default function Staff() {
               }}
             >
               {t("staff.invite_result.copy_link", "Copy Link")}
-            </button>
+            </Button>
           </div>
         )}
       </DetailModal>

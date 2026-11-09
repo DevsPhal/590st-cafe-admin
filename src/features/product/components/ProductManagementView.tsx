@@ -71,6 +71,7 @@ import { usePersistentState } from "@/hooks/usePersistentState";
 import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
 import { productSchema, SKU_MAX_LENGTH } from "@/lib/formSchemas";
 import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
 
 const STOCK_UNITS: StockUnit[] = ["PACK", "BOX", "CARTON", "PIECE", "BAG", "BOTTLE", "KILOGRAM", "LITER"];
 const SELL_UNITS: SellUnit[] = [
@@ -613,16 +614,16 @@ export default function Products() {
                 aria-describedby={validation.errors.sku ? "product-sku-error" : undefined}
                 className="form_field_control min-w-0 flex-1"
               />
-              <button
-                type="button"
+              <Button
+               
                 onClick={handleGenerateSku}
                 disabled={isGeneratingSku}
-                className="btn_outline_black shrink-0"
+                variant="outline" className="shrink-0"
                 title={t("products.form.sku_generate_title", "Generate from category and name (GROUP-CATEGORY-NAME-###)")}
               >
                 {selected ? t("products.form.regenerate", "Regenerate") : t("products.form.generate", "Generate")}
                 <RefreshCw className={isGeneratingSku ? "animate-spin" : undefined} />
-              </button>
+              </Button>
             </div>
             <FieldError id="product-sku-error" error={validation.errors.sku} />
             <span className="text-xs text-muted-foreground">

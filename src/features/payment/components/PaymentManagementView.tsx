@@ -52,6 +52,7 @@ import { usePersistentState } from "@/hooks/usePersistentState";
 import { useNow } from "@/hooks/useNow";
 import { useI18n } from "@/contexts/I18nContext";
 import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
 
 const money = (value: number | null | undefined) =>
   value == null ? "-" : `$${Number(value).toFixed(2)}`;
@@ -340,14 +341,14 @@ export default function PaymentManagementView() {
                 </Cell>
                 <Cell>{formatDateTime(order.createdAt)}</Cell>
                 <Cell>
-                  <button
-                    type="button"
-                    className="btn_primary_yellow text-xs"
+                  <Button
+                   
+                    variant="accent" className="text-xs"
                     onClick={() => openFeeModal(order)}
                     disabled={isSettingFee}
                   >
                     {t("payments.actions.set_fee", "Set Fee")}
-                  </button>
+                  </Button>
                 </Cell>
               </Row>
             ))}
@@ -390,14 +391,14 @@ export default function PaymentManagementView() {
                 </Cell>
                 <Cell>{formatDateTime(order.createdAt)}</Cell>
                 <Cell>
-                  <button
-                    type="button"
-                    className="btn_primary_yellow text-xs"
+                  <Button
+                   
+                    variant="accent" className="text-xs"
                     onClick={() => openCashModal(order)}
                     disabled={isCollecting}
                   >
                     {t("payments.actions.collect_cash", "Collect Cash")}
-                  </button>
+                  </Button>
                 </Cell>
               </Row>
             ))}
@@ -484,14 +485,14 @@ export default function PaymentManagementView() {
                   </Cell>
                   <Cell>{formatDateTime(order.dispatchedAt)}</Cell>
                   <Cell>
-                    <button
-                      type="button"
-                      className="btn_primary_yellow text-xs"
+                    <Button
+                     
+                      variant="accent" className="text-xs"
                       onClick={() => (needsCash ? openCashModal(order) : handleMarkDelivered(order))}
                       disabled={needsCash ? isCollecting : isMarkingDelivered}
                     >
                       {needsCash ? t("payments.actions.collect_cash", "Collect Cash") : t("payments.actions.mark_delivered", "Mark Delivered")}
-                    </button>
+                    </Button>
                   </Cell>
                 </Row>
               );

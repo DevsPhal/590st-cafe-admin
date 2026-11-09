@@ -42,6 +42,7 @@ import { formatAmount } from "@/lib/moneyInput";
 import { exchangeRateSchema } from "@/lib/formSchemas";
 import { formatLocalDate } from "@/lib/dateFormat";
 import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
 
 // Same languages as the header selector, listed English first here.
 const LANGUAGES = (["en", "kh"] as const).map(localeInfo);
@@ -189,17 +190,14 @@ export default function Settings() {
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   {LANGUAGES.map((language) => (
-                    <button
+                    <Button
                       key={language.code}
-                      type="button"
                       onClick={() => setLocale(language.code)}
                       aria-pressed={locale === language.code}
-                      className={
-                        locale === language.code ? "btn_primary_black" : "btn_outline_black"
-                      }
+                      variant={locale === language.code ? "primary" : "outline"}
                     >
                       {language.label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -219,19 +217,14 @@ export default function Settings() {
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   {PAGE_SIZE_OPTIONS.map((option) => (
-                    <button
+                    <Button
                       key={option}
-                      type="button"
                       onClick={() => setPreferences({ pageSize: option })}
                       aria-pressed={preferences.pageSize === option}
-                      className={
-                        preferences.pageSize === option
-                          ? "btn_primary_black"
-                          : "btn_outline_black"
-                      }
+                      variant={preferences.pageSize === option ? "primary" : "outline"}
                     >
                       {option}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -251,19 +244,14 @@ export default function Settings() {
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   {REFRESH_SECONDS_OPTIONS.map((option) => (
-                    <button
+                    <Button
                       key={option}
-                      type="button"
                       onClick={() => setPreferences({ refreshSeconds: option })}
                       aria-pressed={preferences.refreshSeconds === option}
-                      className={
-                        preferences.refreshSeconds === option
-                          ? "btn_primary_black"
-                          : "btn_outline_black"
-                      }
+                      variant={preferences.refreshSeconds === option ? "primary" : "outline"}
                     >
                       {refreshLabel(option, t)}
-                    </button>
+                    </Button>
                   ))}
                 </div>
 
@@ -292,9 +280,9 @@ export default function Settings() {
               </div>
 
               <div className="flex justify-end border-t border-gray-100 pt-6">
-                <button
-                  type="button"
-                  className="btn_outline_black"
+                <Button
+                 
+                  variant="outline"
                   onClick={() => {
                     resetPreferences();
                     toast.success(t("settings.display.reset_toast", "Preferences reset to defaults"));
@@ -303,7 +291,7 @@ export default function Settings() {
                 >
                   <RotateCcw />
                   {t("settings.display.reset", "Reset to defaults")}
-                </button>
+                </Button>
               </div>
             </div>
           </DataCard>
@@ -371,15 +359,15 @@ export default function Settings() {
                   ) : null}
 
                   <div className="flex justify-end border-t border-gray-100 pt-6">
-                    <button
-                      type="button"
+                    <Button
+                     
                       onClick={handleSaveRate}
                       disabled={isSavingRate}
-                      className="btn_primary_black"
+                      variant="primary"
                     >
                       {isSavingRate ? <Loader2 className="animate-spin" /> : null}
                       {isSavingRate ? t("states.saving", "Saving...") : t("settings.exchange.save", "Save Rate")}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}

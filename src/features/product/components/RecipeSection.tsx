@@ -17,6 +17,7 @@ import { useCatalogAlerts } from "@/hooks/useCatalogAlerts";
 import { recipeSchema } from "@/lib/formSchemas";
 import { isIngredient } from "@/features/product/productKinds";
 import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
 
 // A gram of beans or a millilitre of milk costs a fraction of a cent, so tiny amounts keep four decimals.
 const money = (value: number) => `$${value.toFixed(value !== 0 && Math.abs(value) < 0.01 ? 4 : 2)}`;
@@ -142,18 +143,18 @@ function RecipeCard({ productId, recipe, ingredients, copySources, needsRecipe }
             ? <span className="mt-1 block font-semibold">{money(Number(savedItem.lineCost))}</span>
             : <span className="mt-1 block text-muted-foreground">{t("products.recipe.line_cost_after_save", "Shown after saving")}</span>}
         </div>
-        <button className="btn_outline_black self-end" type="button" disabled={busy} onClick={() => removeRow(row.key)}>{t("actions.remove", "Remove")}</button>
+        <Button variant="outline" className="self-end" disabled={busy} onClick={() => removeRow(row.key)}>{t("actions.remove", "Remove")}</Button>
       </div>;
     })}
     {dirty && <p className="text-sm text-amber-700" role="status">{t("products.recipe.unsaved", "Unsaved changes. Save to update the cost and margin.")}</p>}
 
     <div className="flex flex-wrap items-center gap-3">
-      <button className="btn_outline_black" type="button" disabled={busy || options.length === 0} onClick={addRow}>{t("products.recipe.add_row", "Add ingredient")}</button>
-      <button className="btn_primary_black" disabled={busy || rows.length === 0 || !dirty}>{busy ? t("states.saving", "Saving...") : t("products.recipe.save", "Save recipe")}</button>
-      {hasRecipe && <button className="btn_outline_black" type="button" disabled={busy} onClick={removeRecipe}>{t("products.recipe.remove", "Remove recipe")}</button>}
-      {copySources.map((source) => <button key={source.variantId} className="btn_outline_black" type="button" disabled={busy} onClick={() => setRows(rowsOf(source))}>
+      <Button variant="outline" disabled={busy || options.length === 0} onClick={addRow}>{t("products.recipe.add_row", "Add ingredient")}</Button>
+      <Button type="submit" variant="primary" disabled={busy || rows.length === 0 || !dirty}>{busy ? t("states.saving", "Saving...") : t("products.recipe.save", "Save recipe")}</Button>
+      {hasRecipe && <Button variant="outline" disabled={busy} onClick={removeRecipe}>{t("products.recipe.remove", "Remove recipe")}</Button>}
+      {copySources.map((source) => <Button key={source.variantId} variant="outline" disabled={busy} onClick={() => setRows(rowsOf(source))}>
         {t("products.recipe.copy_from", "Copy from {size}", { size: enumLabel(t, "variant", source.variantName) })}
-      </button>)}
+      </Button>)}
     </div>
     {confirmDialog}
   </form>;

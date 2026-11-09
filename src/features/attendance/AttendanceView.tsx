@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import { History, LogIn, LogOut } from "lucide-react";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
-import { AdminTopActions, FormModal, FormInput, FormSelect, StatusBadge } from "@/components/common/AdminKit";
+import { AdminTopActions, FormModal, FormInput, FormSelect, StatusBadge, TableState } from "@/components/common/AdminKit";
 import { DatePickerInput } from "@/components/forms/DatePickerInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCurrentRole } from "@/store/api/useCurrentRole";
@@ -25,6 +25,7 @@ import { CheckOutForm } from "./CheckOutForm";
 import { MyShiftDialog } from "./MyShiftDialog";
 import { formatShiftTime, shiftWorkedMinutes } from "./shiftTime";
 import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
 
 const emptyForm: AttendanceInput = { baristaId: "", checkInAt: "", checkOutAt: "", note: "" };
 
@@ -98,7 +99,7 @@ export default function AttendanceView() {
   return <PageShell>
     <PageHeader title={t("attendance.title", "Staff attendance")} breadcrumbs={[{ label: t("breadcrumb.home", "Home"), href: "/" }, { label: t("attendance.title", "Staff attendance") }]} rightSlot={<AdminTopActions />} />
     <p className="text-sm text-gray-500">{t("attendance.description", "Work shifts for shop staff. Times are shown in Cambodia time.")}</p>
-    {isBarista && <section className="my-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-5">
+    {isBarista && <section className="ui_card is_padded my-4 flex flex-wrap items-center justify-between gap-3">
       <div className="min-w-0"><h2 className="font-semibold">{t("attendance.my_shift.title", "My shift")}</h2>
         {currentShift.isLoading ? <p role="status">{t("attendance.my_shift.loading", "Loading shift...")}</p> : currentShift.error ?
           <p role="alert" className="text-red-600">{apiErrorMessage(currentShift.error as never, t("attendance.my_shift.load_failed", "Could not load shift."))}</p> :
@@ -107,23 +108,23 @@ export default function AttendanceView() {
           {t("attendance.my_shift.note", "Note: {note}", { note: currentShift.data.note })}</p>}
       </div>
       {currentShift.error ? <button type="button" onClick={() => { void currentShift.refetch(); }} className="underline">{t("actions.retry", "Retry")}</button> :
-        <button type="button" className="btn_primary_yellow" disabled={currentShift.isLoading} onClick={openMyShift}>
+        <Button variant="accent" disabled={currentShift.isLoading} onClick={openMyShift}>
           {currentShift.data ? <LogOut aria-hidden /> : <LogIn aria-hidden />}
           {currentShift.data ? t("attendance.actions.check_out", "Check out") : t("attendance.actions.check_in", "Check in")}
-        </button>}
+        </Button>}
     </section>}
     {isAdmin && <div className="mt-4 flex flex-wrap items-center gap-3">
-      <button type="button" className="btn_primary_yellow" onClick={() => openShiftDialog("check-in")}>
+      <Button variant="accent" onClick={() => openShiftDialog("check-in")}>
         <LogIn aria-hidden />{t("attendance.actions.check_in", "Check in")}
-      </button>
-      <button type="button" className="btn_primary_black" onClick={() => openShiftDialog("check-out")}>
+      </Button>
+      <Button variant="primary" onClick={() => openShiftDialog("check-out")}>
         <LogOut aria-hidden />{t("attendance.actions.check_out", "Check out")}
-      </button>
-      <button type="button" className="btn_outline_black sm:ml-auto" onClick={() => openForm()}>
+      </Button>
+      <Button variant="outline" className="sm:ml-auto" onClick={() => openForm()}>
         <History aria-hidden />{t("attendance.actions.add_missed_attendance", "Add missed attendance")}
-      </button>
+      </Button>
     </div>}
-    {isAdmin && <div className="my-4 grid grid-cols-1 items-end gap-4 rounded-xl border bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
+    {isAdmin && <div className="ui_card is_padded my-4 grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <label className="form_field">
         <span className="form_field_label">{t("attendance.filters.staff", "Staff")}</span>
         <Select value={staffId || "__all__"} onValueChange={(next) => { setStaffId(next === "__all__" ? "" : next); setPage(1); }}>
@@ -145,14 +146,12 @@ export default function AttendanceView() {
       <label className="form_field"><span className="form_field_label">{t("attendance.filters.to", "To")}</span>
         <DatePickerInput type="date" value={to} min={from || undefined} onChange={(next) => { setTo(next); setPage(1); }} aria-label={t("attendance.filters.to", "To")} /></label>
     </div>}
-    {records.error && <div role="alert" className="my-3 text-red-600"><p>{apiErrorMessage(records.error as never, t("attendance.errors.load_failed", "Could not load attendance."))}</p>
-      <button type="button" onClick={() => { void records.refetch(); }} className="underline">{t("actions.retry", "Retry")}</button></div>}
-    <div className="mt-4 overflow-x-auto overflow-y-hidden rounded-xl border bg-white">
+    <div className="ui_card mt-4 overflow-x-auto overflow-y-hidden">
       <table className="w-full min-w-[860px] text-left text-sm"><thead><tr className="border-b bg-gray-50">
         {[t("attendance.table.staff", "Staff"), t("attendance.table.check_in", "Check in"), t("attendance.table.check_out", "Check out"), t("attendance.table.status", "Status"), t("attendance.table.worked", "Worked"), t("fields.note", "Note"), ...(isAdmin ? [t("table.action", "Action")] : [])].map((label) => <th key={label} className="whitespace-nowrap p-3">{label}</th>)}
       </tr></thead><tbody>
-        {records.isLoading && <tr><td colSpan={columnCount} className="p-5" role="status">{t("attendance.table.loading", "Loading attendance...")}</td></tr>}
-        {!records.isLoading && !records.error && records.data?.content.length === 0 && <tr><td colSpan={columnCount} className="p-5 text-center text-gray-500">{t("attendance.empty.no_records", "No attendance records.")}</td></tr>}
+        <TableState colSpan={columnCount} isLoading={records.isLoading} error={records.error} onRetry={() => { void records.refetch(); }}
+          isEmpty={!records.isLoading && !records.error && records.data?.content.length === 0} emptyLabel={t("attendance.empty.no_records", "No attendance records.")} />
         {records.data?.content.map((record) => <tr key={record.id} className="border-b last:border-0">
           <td className="whitespace-nowrap p-3">{titleCase(record.baristaName)}</td><td className="whitespace-nowrap p-3">{formatShiftTime(record.checkInAt)}</td>
           <td className="whitespace-nowrap p-3">{formatShiftTime(record.checkOutAt)}</td>
@@ -163,8 +162,8 @@ export default function AttendanceView() {
           <td className="min-w-[220px] max-w-xs whitespace-pre-wrap wrap-break-word p-3">{record.note?.trim() || "—"}</td>
           {isAdmin && <td className="p-3">
             <div className="flex items-center gap-3 whitespace-nowrap">
-              {record.open && <button type="button" className="btn_primary_yellow px-3 py-1 text-xs"
-                onClick={() => openShiftDialog("check-out", record.baristaId)}>{t("attendance.actions.check_out", "Check out")}</button>}
+              {record.open && <Button variant="accent" className="px-3 py-1 text-xs"
+                onClick={() => openShiftDialog("check-out", record.baristaId)}>{t("attendance.actions.check_out", "Check out")}</Button>}
               <button type="button" onClick={() => openForm(record)} className="underline">{t("attendance.actions.correct", "Correct")}</button>
             </div>
           </td>}

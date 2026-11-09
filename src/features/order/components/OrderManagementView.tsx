@@ -51,6 +51,7 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useI18n } from "@/contexts/I18nContext";
 import { optionSummary } from "@/lib/drinkOptions";
+import { Button } from "@/components/common/Button";
 
 type Translate = ReturnType<typeof useI18n>["t"];
 
@@ -427,14 +428,14 @@ export default function Orders() {
                     <p className="text-sm font-semibold text-gray-900">{t("orders.progress.title", "Order progress")}</p>
                     <p className="text-xs text-muted-foreground">{step.hint}</p>
                   </div>
-                  <button
-                    type="button"
+                  <Button
+                   
                     onClick={() => handleAdvance(selected)}
                     disabled={isAdvancing}
-                    className="btn_primary_black w-full shrink-0 justify-center text-xs font-medium disabled:opacity-50 sm:w-auto"
+                    variant="primary" className="w-full shrink-0 justify-center text-xs font-medium disabled:opacity-50 sm:w-auto"
                   >
                     {isAdvancing ? t("states.updating", "Updating...") : step.label}
-                  </button>
+                  </Button>
                 </div>
               );
             })()}

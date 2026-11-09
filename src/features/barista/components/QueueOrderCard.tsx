@@ -30,6 +30,7 @@ import { formatPhone } from "@/lib/phone";
 import { cn, fulfillmentLabel, timeAgo, titleCase } from "@/lib/utils";
 import type { OrderResponse, OrderStatus } from "@/store/api/types";
 import { STATUS_TONE, TONE_CLASSES, formatShopDateTime, money } from "../queue";
+import { Button } from "@/components/common/Button";
 
 type Translate = ReturnType<typeof useI18n>["t"];
 
@@ -209,7 +210,7 @@ export function QueueOrderCard({
         </button>
         {/* Icon buttons get a thumb-sized hit area on touch screens; the icons themselves stay small. */}
         <div className="-mr-1.5 flex shrink-0 items-center pointer-coarse:-mt-1 pointer-coarse:-mr-2">
-          <PrintInvoiceIconButton order={order} className="pointer-coarse:h-9 pointer-coarse:w-9" />
+          <PrintInvoiceIconButton order={order} className="pointer-coarse:size-11" />
           {onCancel ? (
             <button
               type="button"
@@ -217,7 +218,7 @@ export function QueueOrderCard({
               disabled={isBusy}
               aria-label={t("barista.card.cancel_order", "Cancel order")}
               title={t("barista.card.cancel_order", "Cancel order")}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 pointer-coarse:h-9 pointer-coarse:w-9"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 pointer-coarse:size-11"
             >
               <X className="h-4 w-4" />
             </button>
@@ -293,19 +294,19 @@ export function QueueOrderCard({
         {primary ? (
           <div className="mt-2.5 flex flex-wrap gap-2">
             {secondary ? (
-              <button
-                type="button"
+              <Button
+               
                 onClick={secondary.onClick}
                 disabled={isBusy}
-                className="btn_outline_black grow basis-30"
+                variant="outline" className="grow basis-30"
               >
                 {secondary.label}
-              </button>
+              </Button>
             ) : null}
-            <button type="button" onClick={primary.onClick} disabled={isBusy} className="btn_primary_black grow basis-30">
+            <Button onClick={primary.onClick} disabled={isBusy} variant="primary" className="grow basis-30">
               {PrimaryIcon ? <PrimaryIcon aria-hidden /> : null}
               {primary.label}
-            </button>
+            </Button>
           </div>
         ) : hint ? (
           <p className="mt-2.5 rounded-lg bg-gray-50 px-3 py-2 text-center text-xs text-gray-500">{hint}</p>

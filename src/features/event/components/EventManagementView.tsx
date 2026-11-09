@@ -54,6 +54,7 @@ import { usePersistentState } from "@/hooks/usePersistentState";
 import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
 import { eventSchema } from "@/lib/formSchemas";
 import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
 
 type EventFormFields = {
   title: string;
@@ -406,16 +407,15 @@ export default function EventManagementView() {
           <div className="form_field md:col-span-3">
             <span className="form_field_label">{t("venue.label", "Venue")}</span>
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
+              <Button
+               
                 onClick={() => setMapPickerOpen(true)}
-                className="btn_outline_black inline-flex items-center gap-2 text-xs"
+                variant="outline" className="inline-flex items-center gap-2 text-xs"
               >
                 <MapPin className="h-3.5 w-3.5" />
                 {hasVenue ? t("venue.change_pin", "Change Pin on Map") : t("venue.pin_on_map", "Pin on Map")}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
                 onClick={() =>
                   setForm((prev) => ({
                     ...prev,
@@ -424,15 +424,11 @@ export default function EventManagementView() {
                   }))
                 }
                 aria-pressed={venueIsShop}
-                className={
-                  venueIsShop
-                    ? "btn_primary_yellow inline-flex items-center gap-2 text-xs"
-                    : "btn_outline_black inline-flex items-center gap-2 text-xs"
-                }
+                variant={venueIsShop ? "accent" : "outline"} className="inline-flex items-center gap-2 text-xs"
               >
                 <Store className="h-3.5 w-3.5" />
                 {t("venue.use_shop", "Use Shop Location")}
-              </button>
+              </Button>
               {hasVenue ? (
                 <>
                   <span className="text-xs text-gray-600">

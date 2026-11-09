@@ -23,6 +23,7 @@ import type { InvoiceLanguage } from "@/store/api/types";
 import { localeInfo } from "@/contexts/locales";
 import { useI18n } from "@/contexts/I18nContext";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/common/Button";
 
 const OPTIONS: {
   value: InvoiceLanguage;
@@ -170,21 +171,21 @@ export function InvoicePrintDialog() {
         </div>
 
         <DialogFooter className="admin_modal_footer">
-          <button type="button" onClick={close} disabled={printing} className="btn_outline_black">
+          <Button onClick={close} disabled={printing} variant="outline">
             {t("actions.cancel", "Cancel")}
-          </button>
-          <button
+          </Button>
+          <Button
             ref={printButton}
-            type="button"
+           
             onClick={print}
             disabled={printing}
-            className="btn_primary_black"
+            variant="primary"
           >
             {printing ? <Loader2 className="animate-spin" /> : <Printer />}
             {printing
               ? t("states.preparing", "Preparing...")
               : t("invoice.print_selected", "Print Selected Invoice")}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

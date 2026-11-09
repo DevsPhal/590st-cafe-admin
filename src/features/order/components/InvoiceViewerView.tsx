@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Download, Loader2, Printer, ShieldAlert } from "lucide-react";
+import { Download, Printer, ShieldAlert } from "lucide-react";
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import { apiErrorMessage } from "@/store/api/baseApi";
 import { useDownloadOrderInvoiceMutation } from "@/store/api/orderApi";
@@ -15,6 +15,8 @@ import {
 } from "@/hooks/useOrderInvoice";
 import { cn, downloadBlob } from "@/lib/utils";
 import { translate, useI18n } from "@/contexts/I18nContext";
+import { Button } from "@/components/common/Button";
+import { Loader } from "@/components/common/Loader";
 
 const LANGUAGES: { value: InvoiceLanguage; label: string; htmlLang: string }[] = [
   { value: "EN", label: "English", htmlLang: "en" },
@@ -71,7 +73,7 @@ export default function InvoiceViewerView({ orderId }: { orderId: string }) {
   }, [orderId, language, isAdmin, adminDownload, baristaDownload]);
 
   return (
-    <div className="flex h-dvh flex-col bg-[#525659]">
+    <div className="flex h-dvh flex-col bg-(--zinc-600)">
       <header className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-3 shadow-sm">
         <h1 className="text-base font-bold text-gray-900">{title}</h1>
         <div className="flex flex-wrap items-center gap-2">
@@ -93,24 +95,24 @@ export default function InvoiceViewerView({ orderId }: { orderId: string }) {
               </button>
             ))}
           </div>
-          <button
-            type="button"
+          <Button
+           
             disabled={!pdf}
             onClick={() => frameRef.current?.contentWindow?.print()}
-            className="btn_primary_black"
+            variant="primary"
           >
             <Printer />
             {t("actions.print", "Print")}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+           
             disabled={!pdf}
             onClick={() => pdf && downloadBlob(pdf.blob, invoiceFilename(orderId, language))}
-            className="btn_outline_black"
+            variant="outline"
           >
             <Download />
             {t("actions.download", "Download")}
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -129,7 +131,7 @@ export default function InvoiceViewerView({ orderId }: { orderId: string }) {
               <p className="text-sm">{error}</p>
             </>
           ) : (
-            <Loader2 className="h-6 w-6 animate-spin" />
+            <Loader className="text-white" />
           )}
         </div>
       )}

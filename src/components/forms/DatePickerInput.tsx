@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/contexts/I18nContext";
+import { Button } from "@/components/common/Button";
 
 // Same string formats the native <input type="..."> used, so callers keep their state as-is.
 const VALUE_FORMAT = {
@@ -279,9 +280,9 @@ export function DatePickerInput({
               {type === "datetime-local" ? t("date_picker.now", "Now") : type === "month" ? t("date_picker.this_month", "This month") : t("date_picker.today", "Today")}
             </button>
             {type === "datetime-local" ? (
-              <button type="button" className="btn_primary_black date_picker_done" onClick={() => setOpen(false)}>
+              <Button variant="primary" className="date_picker_done" onClick={() => setOpen(false)}>
                 {t("date_picker.done", "Done")}
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>

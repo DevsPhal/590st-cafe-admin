@@ -32,6 +32,7 @@ import {
 } from "@/store/api/reportApi";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useI18n } from "@/contexts/I18nContext";
+import { Button } from "@/components/common/Button";
 
 type Period = "DAILY" | "MONTHLY" | "YEARLY";
 
@@ -204,10 +205,10 @@ function AdminReportView() {
         title={t("reports.barista_takings.title", "Barista Takings")}
         meta={t("reports.barista_takings.meta", "Daily report for {date}", { date })}
         actions={
-          <button type="button" onClick={handleExport} disabled={isExporting} className="btn_outline_black">
+          <Button onClick={handleExport} disabled={isExporting} variant="outline">
             {isExporting ? t("reports.exporting", "Exporting...") : t("reports.export", "Export Excel")}
             <Download />
-          </button>
+          </Button>
         }
       >
         <SimpleTable headers={baristaHeaders}>

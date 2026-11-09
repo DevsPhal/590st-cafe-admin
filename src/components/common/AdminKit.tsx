@@ -21,6 +21,7 @@ import {
   Eye,
   Printer,
   Filter,
+  Inbox,
   Loader2,
   Pencil,
   Plus,
@@ -72,6 +73,8 @@ import { UserAvatar } from "./UserAvatar";
 import { MoneyInput, type MoneyInputProps } from "@/components/forms/MoneyInput";
 import { DATE_PICKER_TYPES, DatePickerInput, type DatePickerType } from "@/components/forms/DatePickerInput";
 import { IMAGE_ACCEPT, imageFileProblem } from "@/lib/imageFile";
+import { Button } from "@/components/common/Button";
+import { EmptyState } from "@/components/common/EmptyState";
 
 export type FieldOption = {
   label: string;
@@ -514,10 +517,10 @@ export function FilterActions({ onClear, onSearch }: { onClear: () => void; onSe
   const { t } = useI18n();
   return (
     <div className="flex items-end justify-end gap-3 xl:col-span-4">
-      <button type="button" onClick={onClear} className="btn_outline_black">
+      <Button onClick={onClear} variant="outline">
         {t("actions.clear", "Clear")}
-      </button>
-      <button
+      </Button>
+      <Button
         type="submit"
         onClick={(event) => {
           event.preventDefault();
@@ -525,11 +528,11 @@ export function FilterActions({ onClear, onSearch }: { onClear: () => void; onSe
           const button = event.currentTarget;
           window.requestAnimationFrame(() => revealResults(button));
         }}
-        className="btn_primary_black"
+        variant="primary"
       >
         {t("actions.search", "Search")}
         <Search />
-      </button>
+      </Button>
     </div>
   );
 }
@@ -548,15 +551,15 @@ export function TableActions({
   const { t } = useI18n();
   return (
     <div className="flex flex-wrap items-center gap-3">
-      {onExport && <button type="button" onClick={onExport} className="btn_outline_black">
+      {onExport && <Button onClick={onExport} variant="outline">
         {t("actions.download_excel", "Download Excel")}
         <Download />
-      </button>}
+      </Button>}
       {showRegister && onRegister && (
-        <button type="button" onClick={onRegister} className="btn_primary_black">
+        <Button onClick={onRegister} variant="primary">
           {primaryLabel ?? t("actions.register", "Register")}
           <Plus />
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -619,26 +622,26 @@ export function ExcelImportButton({
   return (
     <>
       {template && (
-        <button
-          type="button"
+        <Button
+         
           onClick={handleDownloadTemplate}
           disabled={isDownloading}
-          className="btn_outline_black"
+          variant="outline"
           title={t("excel.sample_title", "Excel sample with the expected columns: {columns}", { columns: columnsHint })}
         >
           {isDownloading ? t("states.downloading", "Downloading...") : t("excel.download_sample", "Download Sample")}
           <Download />
-        </button>
+        </Button>
       )}
-      <button
-        type="button"
+      <Button
+       
         onClick={() => inputRef.current?.click()}
         disabled={isBusy}
-        className="btn_outline_black"
+        variant="outline"
       >
         {isBusy ? t("states.importing", "Importing...") : label ?? t("actions.import_excel", "Import Excel")}
         <Upload />
-      </button>
+      </Button>
       <input
         ref={inputRef}
         type="file"
@@ -678,9 +681,9 @@ export function ExcelImportButton({
             )}
           </div>
           <DialogFooter className="admin_modal_footer">
-            <button type="button" onClick={() => setResult(null)} className="btn_primary_yellow">
+            <Button onClick={() => setResult(null)} variant="accent">
               {t("actions.close", "Close")}
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -914,7 +917,7 @@ export function RowActions({
             type="button"
             onClick={onClick}
             disabled={isLoading}
-            className="grid h-7 w-7 place-items-center rounded-full bg-(--brand-ink) text-(--brand-lime) transition hover:bg-(--brand-ink-hover) disabled:opacity-50"
+            className="grid h-7 w-7 place-items-center rounded-full pointer-coarse:size-11 bg-(--brand-ink) text-(--brand-lime) transition hover:bg-(--brand-ink-hover) disabled:opacity-50"
             aria-label={label}
             title={label}
           >
@@ -1068,10 +1071,10 @@ export function ErrorState({
       <TriangleAlert className="h-6 w-6 text-red-500" />
       <p className="text-sm text-red-600">{apiErrorMessage(error as never, fallback ?? t("errors.load_failed", "Could not load this data."))}</p>
       {onRetry ? (
-        <button type="button" className="btn_outline_black" onClick={onRetry} disabled={isRetrying}>
+        <Button variant="outline" onClick={onRetry} disabled={isRetrying}>
           {isRetrying ? <Loader2 className="animate-spin" /> : <RotateCcw />}
           {isRetrying ? t("states.retrying", "Retrying...") : t("actions.try_again", "Try again")}
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -1124,18 +1127,18 @@ export function TableState({
 
   return (
     <tr>
-      <td colSpan={colSpan} className="py-10 text-center text-sm text-muted-foreground">
+      <td colSpan={colSpan} className={error ? "py-10 text-center text-sm text-muted-foreground" : "p-0"}>
         {error ? (
-          <span className="inline-flex flex-col items-center gap-2">
+          <span role="alert" className="inline-flex flex-col items-center gap-2">
             <span className="text-destructive">{apiErrorMessage(error as never)}</span>
             {onRetry ? (
-              <button type="button" className="pagination_btn" onClick={onRetry}>
+              <Button variant="outline" onClick={onRetry}>
                 {t("actions.retry", "Retry")}
-              </button>
+              </Button>
             ) : null}
           </span>
         ) : (
-          emptyLabel ?? t("table.no_records", "No records found.")
+          <EmptyState compact icon={Inbox} title={emptyLabel ?? t("table.no_records", "No records found.")} />
         )}
       </td>
     </tr>
@@ -1239,31 +1242,30 @@ export function AdminStatusAlert({
         <DialogFooter className="admin_status_alert_footer">
           {variant === "confirm" ? (
             <>
-              <button
-                type="button"
-                className="btn_outline_black"
+              <Button
+               
+                variant="outline"
                 onClick={() => onOpenChange(false)}
                 disabled={isLoading}
               >
                 {cancelLabel}
-              </button>
-              <button
-                type="button"
-                className="btn_primary_black admin_status_alert_confirm_btn"
+              </Button>
+              <Button
+               
+                variant="primary" className="admin_status_alert_confirm_btn"
                 onClick={handleConfirm}
                 disabled={isLoading}
               >
                 {isLoading ? t("states.processing", "Processing...") : confirmLabel}
-              </button>
+              </Button>
             </>
           ) : (
-            <button
-              type="button"
-              className="btn_primary_yellow_lg admin_status_alert_okay_btn"
+            <Button
+              variant="accent" size="lg" className="admin_status_alert_okay_btn"
               onClick={() => onOpenChange(false)}
             >
               {confirmLabel}
-            </button>
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>
@@ -1308,22 +1310,22 @@ export function FormModal({
         </DialogHeader>
         <div className="admin_modal_body">{children}</div>
         <DialogFooter className="admin_modal_footer">
-          <button
-            type="button"
+          <Button
+           
             onClick={() => onOpenChange(false)}
             disabled={isLoading}
-            className="btn_outline_black"
+            variant="outline"
           >
             {t("actions.cancel", "Cancel")}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+           
             onClick={handleSubmit}
             disabled={isLoading || submitDisabled}
-            className="btn_primary_yellow"
+            variant="accent"
           >
             {isLoading ? t("states.processing", "Processing...") : submitLabel ?? t("actions.submit", "Submit")}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1353,9 +1355,9 @@ export function DetailModal({
         <div className="admin_modal_body">{children}</div>
         {onEdit && (
           <DialogFooter className="admin_modal_footer">
-            <button type="button" onClick={onEdit} className="btn_primary_yellow">
+            <Button onClick={onEdit} variant="accent">
               {t("actions.edit", "Edit")}
-            </button>
+            </Button>
           </DialogFooter>
         )}
       </DialogContent>
@@ -1400,17 +1402,16 @@ export function ConfirmDialog({
           {description && <p className="confirm_modal_description">{description}</p>}
         </div>
         <DialogFooter className="confirm_modal_footer">
-          <button type="button" onClick={onCancel} disabled={isLoading} className="btn_outline_black">
+          <Button onClick={onCancel} disabled={isLoading} variant="outline">
             {cancelLabel ?? t("actions.cancel", "Cancel")}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={onConfirm}
             disabled={isLoading}
-            className={tone === "danger" ? "btn_danger" : "btn_primary_yellow"}
+            variant={tone === "danger" ? "danger" : "accent"}
           >
             {isLoading ? t("states.working", "Working...") : confirmLabel ?? t("actions.confirm", "Confirm")}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1982,14 +1983,14 @@ export function FormImageUpload({
             if (!reason) onChange?.(selectedFile);
           }}
         />
-        <button
-          type="button"
+        <Button
+         
           disabled={disabled}
-          className="btn_outline_black form_field_upload_btn"
+          variant="outline" className="form_field_upload_btn"
           onClick={() => inputRef.current?.click()}
         >
           {t("actions.upload_image", "Upload Image")}
-        </button>
+        </Button>
       </div>
       <FieldError id={errorId} error={problem ?? undefined} />
     </div>

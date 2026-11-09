@@ -35,6 +35,7 @@ import { useCurrentRole } from "@/store/api/useCurrentRole";
 import type { ReportPeriod, WasteReason } from "@/store/api/types";
 import { formatUsd, matchesKind, stockLevel, type ItemKind } from "../stock";
 import { ItemKindField } from "./ItemKindField";
+import { Button } from "@/components/common/Button";
 
 const PERIODS: ReportPeriod[] = ["DAY", "MONTH", "YEAR"];
 const WASTE_REASONS: WasteReason[] = ["EXPIRED", "DAMAGED", "SPILLED", "QUALITY", "OTHER"];
@@ -244,10 +245,10 @@ function AdminInventoryReport() {
             : undefined
         }
         actions={
-          <button type="button" onClick={handleExport} disabled={isExporting} className="btn_outline_black">
+          <Button onClick={handleExport} disabled={isExporting} variant="outline">
             {isExporting ? t("inventory.expense.exporting", "Exporting...") : t("inventory.reports.export", "Export Excel")}
             <Download />
-          </button>
+          </Button>
         }
       >
         <SimpleTable headers={productHeaders}>

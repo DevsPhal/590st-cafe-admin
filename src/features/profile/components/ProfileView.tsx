@@ -45,6 +45,7 @@ import { enumLabel } from "@/lib/enumLabel";
 import { formatPhoneInput, samePhone } from "@/lib/phone";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { IMAGE_ACCEPT, imageFileProblem } from "@/lib/imageFile";
+import { Button } from "@/components/common/Button";
 
 const GENDERS: Gender[] = ["MALE", "FEMALE", "OTHER"];
 
@@ -240,9 +241,9 @@ export default function ProfileView() {
                 onChange={(e) => handlePickAvatar(e.target.files?.[0] ?? null)}
               />
               <div className="flex flex-wrap items-center justify-center gap-2">
-                <button
-                  type="button"
-                  className="btn_primary_black"
+                <Button
+                 
+                  variant="primary"
                   disabled={avatarBusy}
                   onClick={() => fileInputRef.current?.click()}
                 >
@@ -250,17 +251,17 @@ export default function ProfileView() {
                   {user.avatarUrl
                     ? t("profile.photo.replace", "Replace")
                     : t("profile.photo.upload", "Upload")}
-                </button>
+                </Button>
                 {user.avatarUrl ? (
-                  <button
-                    type="button"
-                    className="btn_outline_black"
+                  <Button
+                   
+                    variant="outline"
                     disabled={avatarBusy}
                     onClick={handleRemoveAvatar}
                   >
                     <Trash2 />
                     {t("actions.remove", "Remove")}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             </div>
@@ -354,23 +355,23 @@ export default function ProfileView() {
               </p>
 
               <div className="flex flex-wrap justify-end gap-3 border-t border-gray-100 pt-6">
-                <button
-                  type="button"
-                  className="btn_outline_black"
+                <Button
+                 
+                  variant="outline"
                   onClick={handleResetForm}
                   disabled={!isDirty || isSaving}
                 >
                   {t("actions.reset", "Reset")}
-                </button>
-                <button
-                  type="button"
-                  className="btn_primary_black"
+                </Button>
+                <Button
+                 
+                  variant="primary"
                   onClick={handleSaveProfile}
                   disabled={!isDirty || isSaving}
                 >
                   {isSaving ? <Loader2 className="animate-spin" /> : <Check />}
                   {isSaving ? t("states.saving", "Saving...") : t("actions.save_changes", "Save Changes")}
-                </button>
+                </Button>
               </div>
             </div>
           </DataCard>
@@ -437,9 +438,9 @@ export default function ProfileView() {
                 </p>
 
                 <div className="flex justify-end border-t border-gray-100 pt-6">
-                  <button
-                    type="button"
-                    className="btn_primary_black"
+                  <Button
+                   
+                    variant="primary"
                     onClick={handleChangePassword}
                     disabled={
                       isChangingPassword ||
@@ -452,7 +453,7 @@ export default function ProfileView() {
                     {isChangingPassword
                       ? t("profile.password.changing", "Changing...")
                       : t("profile.password.change", "Change Password")}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
