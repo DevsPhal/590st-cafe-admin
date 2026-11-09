@@ -42,8 +42,8 @@ import type { OrderResponse, OrderStatus, TableActivityResponse, TableResponse, 
 import { cn, timeAgo, titleCase } from "@/lib/utils";
 import { staffCallReasonLabel } from "@/lib/staffCall";
 import { enumLabel } from "@/lib/enumLabel";
-import { parseForm } from "@/lib/validation";
 import { tableSchema } from "@/lib/formSchemas";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 const STATUS_LABEL: Record<TableStatus, string> = {
   AVAILABLE: "Available",
@@ -95,6 +95,7 @@ export default function TableManagementView() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TableResponse | null>(null);
   const [form, setForm] = useState<TableForm>(EMPTY_FORM);
+  const validation = useFormErrors(tableSchema, form);
   const [qrTarget, setQrTarget] = useState<QrTarget | null>(null);
   const { data: menuLink } = useGetMenuLinkQuery(undefined, { skip: !isAdmin });
 
@@ -142,11 +143,12 @@ export default function TableManagementView() {
   const openForm = (table?: TableResponse) => {
     setEditing(table ?? null);
     setForm(table ? { tableNumber: table.tableNumber, size: table.size, capacity: String(table.capacity) } : EMPTY_FORM);
+    validation.reset();
     setFormOpen(true);
   };
 
   const saveTable = async () => {
-    const parsed = parseForm(tableSchema, form);
+    const parsed = validation.validate();
     if (!parsed) return;
     const { tableNumber, capacity } = parsed;
     try {
@@ -160,7 +162,7 @@ export default function TableManagementView() {
       }
       setFormOpen(false);
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("tables.toast.save_error", "Could not save the table.")));
+      validation.showServerError(err, t("tables.toast.save_error", "Could not save the table."));
     }
   };
 
@@ -343,11 +345,13 @@ export default function TableManagementView() {
             placeholder={t("tables.form.table_number_placeholder", "e.g. 01")}
             maxLength={20}
             value={form.tableNumber}
+            error={validation.errors.tableNumber}
             onChange={(e) => setForm({ ...form, tableNumber: e.target.value.toUpperCase() })}
           />
           <FormSelect
             label={t("tables.form.size", "Size")}
             value={form.size}
+            error={validation.errors.size}
             onChange={(e) => setForm({ ...form, size: e.target.value as TableSize })}
           >
             {(Object.keys(SIZE_LABEL) as TableSize[]).map((size) => (
@@ -359,6 +363,7 @@ export default function TableManagementView() {
             inputMode="numeric"
             placeholder={t("tables.form.seats_placeholder", "Uses the size default")}
             value={form.capacity}
+            error={validation.errors.capacity}
             onChange={(e) => setForm({ ...form, capacity: e.target.value.replace(/\D/g, "") })}
           />
         </div>

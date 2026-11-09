@@ -1721,6 +1721,19 @@ body {
   }
 }
 
+// Inline validation: the message sits under its field, and the field's border turns red.
+.form_field_error {
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--danger-text);
+}
+.form_field_control[aria-invalid="true"],
+.form_field_control[data-invalid="true"],
+.form_field_select_trigger[aria-invalid="true"] {
+  border-color: var(--danger-text) !important;
+}
+
 .form_field {
   display: flex;
   flex-direction: column;

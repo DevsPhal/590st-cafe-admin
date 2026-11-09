@@ -58,6 +58,8 @@ import { useStaffOrderAlerts } from "@/hooks/useStaffOrderAlerts";
 import { useI18n } from "@/contexts/I18nContext";
 
 const BAKONG_POLL_MS = 4000;
+// The API's ValidationPatterns.MAX_ITEM_QUANTITY: the most of one item a single line can hold.
+const MAX_LINE_QUANTITY = 999;
 
 type CartLine = {
   key: string;
@@ -217,6 +219,10 @@ export default function PosView() {
       return;
     }
     const key = lineKey(product.id, options);
+    if ((cart.find((line) => line.key === key)?.quantity ?? 0) >= MAX_LINE_QUANTITY) {
+      toast.error(t("pos.toast.line_limit", "One line can hold at most {max}.", { max: MAX_LINE_QUANTITY }));
+      return;
+    }
 
     setCart((current) => {
       const existing = current.find((line) => line.key === key);
@@ -265,6 +271,11 @@ export default function PosView() {
       return;
     }
     const key = lineKey(product.id, options);
+    const twinQuantity = cart.find((line) => line.key === key && line.key !== editKey)?.quantity ?? 0;
+    if (editing && twinQuantity + editing.quantity > MAX_LINE_QUANTITY) {
+      toast.error(t("pos.toast.line_limit", "One line can hold at most {max}.", { max: MAX_LINE_QUANTITY }));
+      return;
+    }
     setCart((current) => {
       const edited = current.find((line) => line.key === editKey);
       if (!edited) return current;
@@ -282,6 +293,10 @@ export default function PosView() {
     if (pendingOrder || confirmingRef.current) return;
     const item = cart.find((line) => line.key === key);
     if (item && delta > 0) {
+      if (item.quantity + delta > MAX_LINE_QUANTITY) {
+        toast.error(t("pos.toast.line_limit", "One line can hold at most {max}.", { max: MAX_LINE_QUANTITY }));
+        return;
+      }
       if (!hasStockFor(item.product, item.variant, cart, delta)) {
         toast.error(t("pos.toast.not_enough_stock", "{name} does not have enough stock.", { name: item.product.name }));
         return;

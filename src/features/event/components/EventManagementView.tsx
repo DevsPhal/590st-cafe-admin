@@ -52,8 +52,8 @@ import { enumLabel } from "@/lib/enumLabel";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
-import { parseForm } from "@/lib/validation";
 import { eventSchema } from "@/lib/formSchemas";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 type EventFormFields = {
   title: string;
@@ -127,7 +127,7 @@ export default function EventManagementView() {
 
   const [createEvent, { isLoading: isCreating }] = useCreateEventMutation();
   const [updateEvent, { isLoading: isUpdating }] = useUpdateEventMutation();
-  const [deleteEvent] = useDeleteEventMutation();
+  const [deleteEvent, { isLoading: isDeleting }] = useDeleteEventMutation();
   const [uploadImage, { isLoading: isUploading }] = useUploadEventImageMutation();
 
   const [formOpen, setFormOpen] = usePersistentState("events:formOpen", false);
@@ -136,6 +136,7 @@ export default function EventManagementView() {
   const { t } = useI18n();
   const [selected, setSelected] = usePersistentState<EventResponse | null>("events:selected", null);
   const [form, setForm] = usePersistentState<EventFormFields>("events:form", EMPTY_FORM);
+  const validation = useFormErrors(eventSchema, form);
   const hasVenue = Boolean(form.latitude.trim() && form.longitude.trim());
   const venueIsShop = hasVenue && isShopLocation(Number(form.latitude), Number(form.longitude));
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -185,11 +186,12 @@ export default function EventManagementView() {
           }
         : EMPTY_FORM
     );
+    validation.reset();
     setFormOpen(true);
   };
 
   const handleSubmit = async () => {
-    const parsed = parseForm(eventSchema, form);
+    const parsed = validation.validate();
     if (!parsed) return;
     const { title, description, startAt, endAt, latitude, longitude } = parsed;
 
@@ -231,7 +233,7 @@ export default function EventManagementView() {
       setForm(EMPTY_FORM);
       setImageFile(null);
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("events.errors.save", "Could not save the event.")));
+      validation.showServerError(err, t("events.errors.save", "Could not save the event."));
     }
   };
 
@@ -364,7 +366,7 @@ export default function EventManagementView() {
                       }}
                       onEdit={() => handleOpenForm(event)}
                       onDelete={() => handleDelete(event)}
-                      isLoading={isSaving}
+                      isLoading={isSaving || isDeleting}
                     />
                   </Cell>
                 </Row>
@@ -397,6 +399,7 @@ export default function EventManagementView() {
             label={t("fields.title", "Title")}
             placeholder={t("events.form.title_placeholder", "e.g. Latte Art Workshop")}
             value={form.title}
+            error={validation.errors.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
             required
           />
@@ -465,6 +468,7 @@ export default function EventManagementView() {
             label={t("events.form.starts_at", "Starts At")}
             type="datetime-local"
             value={form.startAt}
+            error={validation.errors.startAt}
             onChange={(e) => setForm({ ...form, startAt: e.target.value })}
             required
           />
@@ -472,6 +476,7 @@ export default function EventManagementView() {
             label={t("events.form.ends_at", "Ends At")}
             type="datetime-local"
             value={form.endAt}
+            error={validation.errors.endAt}
             onChange={(e) => setForm({ ...form, endAt: e.target.value })}
             required
           />
@@ -490,6 +495,7 @@ export default function EventManagementView() {
             label={t("fields.description", "Description")}
             placeholder={t("events.form.description_placeholder", "What is happening?")}
             value={form.description}
+            error={validation.errors.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
           <div className="md:col-span-3">

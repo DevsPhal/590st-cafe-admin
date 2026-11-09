@@ -11,9 +11,10 @@ import {
 } from "@/lib/estimate";
 import { useNow } from "@/hooks/useNow";
 import type { OrderResponse } from "@/store/api/types";
-import { parseForm } from "@/lib/validation";
 import { estimateMinutesSchema } from "@/lib/formSchemas";
 import { useI18n, type TranslationParams } from "@/contexts/I18nContext";
+import { FieldError } from "@/components/common/AdminKit";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 type EstimateOrder = Pick<OrderResponse, "status" | "estimatedReadyAt">;
 
@@ -66,11 +67,12 @@ export function OrderEstimateEditor({
   const { t } = useI18n();
   const now = useNow(REFRESH_MS);
   const [custom, setCustom] = useState("");
+  const validation = useFormErrors(estimateMinutesSchema, { minutes: custom });
   const estimate = getOrderEstimate(order, now);
   if (estimate.state === "finished") return null;
 
   const submitCustom = () => {
-    const parsed = parseForm(estimateMinutesSchema, { minutes: custom });
+    const parsed = validation.validate();
     if (!parsed) return;
     onSave(parsed.minutes);
     setCustom("");
@@ -134,6 +136,8 @@ export function OrderEstimateEditor({
             }}
             className="h-7 w-20 rounded-full border border-gray-300 px-3 text-xs outline-none focus:border-gray-900"
             aria-label={t("estimate.custom_label", "Custom estimated minutes")}
+            aria-invalid={validation.errors.minutes ? true : undefined}
+            aria-describedby={validation.errors.minutes ? "estimate-minutes-error" : undefined}
           />
           <button
             type="button"
@@ -145,6 +149,7 @@ export function OrderEstimateEditor({
           </button>
         </div>
       </div>
+      <FieldError id="estimate-minutes-error" error={validation.errors.minutes} />
     </section>
   );
 }

@@ -92,7 +92,8 @@
     "finish_payment_first": "Finish or cancel the payment before editing the order.",
     "not_enough_stock": "{name} does not have enough stock.",
     "out_of_stock": "{name} is out of stock.",
-    "order_cancelled": "Order #{id} was cancelled. The cart is kept — take payment again to start a new order."
+    "order_cancelled": "Order #{id} was cancelled. The cart is kept — take payment again to start a new order.",
+    "line_limit": "One line can hold at most {max}."
   },
   "errors": {
     "cancel_pending": "Could not cancel the pending order. Check its payment status.",

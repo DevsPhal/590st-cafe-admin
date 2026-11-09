@@ -82,7 +82,7 @@ import { enumLabel } from "@/lib/enumLabel";
 import { shopDate } from "@/lib/shopDate";
 import { InvoiceActions, toastPaidWithInvoice } from "@/components/common/InvoiceActions";
 import { orderCode, useOrderInvoice } from "@/hooks/useOrderInvoice";
-import { buildCashPaymentSchema, parseForm } from "@/lib/validation";
+import { buildCashPaymentSchema } from "@/lib/validation";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useNow } from "@/hooks/useNow";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -108,6 +108,7 @@ import {
 import { QueueStatusTabs } from "./QueueStatusTabs";
 import { QueueFilterBar } from "./QueueFilterBar";
 import { QueueOrderCard, QueueStatusBadge, type CardAction } from "./QueueOrderCard";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 type Roles = { isAdmin: boolean; isBarista: boolean };
 
@@ -355,6 +356,7 @@ export default function BaristaQueueView() {
 
   const openCashModal = (order: OrderResponse) => {
     setCashOrder(order);
+    cashValidation.reset();
     setCashCurrency("USD");
     setAmountTendered(exactAmountFor(order, "USD"));
   };
@@ -365,6 +367,7 @@ export default function BaristaQueueView() {
   };
 
   const cashDue = cashOrder ? payableDue(cashOrder, cashCurrency) : 0;
+  const cashValidation = useFormErrors(buildCashPaymentSchema(cashDue), { currency: cashCurrency, amountTendered });
 
   const overallTotals = overallSummary.data ? statusTotals(overallSummary.data) : undefined;
   const awaitingCount = overallTotals?.count(["PENDING"]);
@@ -404,10 +407,7 @@ export default function BaristaQueueView() {
 
   const handlePayCash = async () => {
     if (!cashOrder) return;
-    const parsed = parseForm(buildCashPaymentSchema(cashDue), {
-      currency: cashCurrency,
-      amountTendered,
-    });
+    const parsed = cashValidation.validate();
     if (!parsed) return;
     try {
       const updated = await cashMutationFor(cashOrder)({
@@ -425,7 +425,7 @@ export default function BaristaQueueView() {
       );
       setCashOrder(null);
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("barista.errors.record_payment", "Could not record the payment.")));
+      cashValidation.showServerError(err, t("barista.errors.record_payment", "Could not record the payment."));
     }
   };
 
@@ -794,6 +794,7 @@ export default function BaristaQueueView() {
             label={t("barista.cash.amount_tendered", "Amount Tendered")}
             currency={cashCurrency}
             value={amountTendered}
+            error={cashValidation.errors.amountTendered}
             onValueChange={setAmountTendered}
             required
           />

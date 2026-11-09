@@ -71,6 +71,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { UserAvatar } from "./UserAvatar";
 import { MoneyInput, type MoneyInputProps } from "@/components/forms/MoneyInput";
 import { DATE_PICKER_TYPES, DatePickerInput, type DatePickerType } from "@/components/forms/DatePickerInput";
+import { IMAGE_ACCEPT, imageFileProblem } from "@/lib/imageFile";
 
 export type FieldOption = {
   label: string;
@@ -226,20 +227,37 @@ function pickerChangeEvent(value: string) {
   return { target: { value }, currentTarget: { value } } as React.ChangeEvent<HTMLInputElement>;
 }
 
+/** The message under a field that failed validation; the control points at it with aria-describedby. */
+export function FieldError({ id, error }: { id: string; error?: string }) {
+  return error ? (
+    <span id={id} role="alert" className="form_field_error">
+      {error}
+    </span>
+  ) : null;
+}
+
+/** aria props that mark a control invalid and link it to its FieldError. */
+function invalidProps(errorId: string, error?: string) {
+  return error ? { "aria-invalid": true as const, "aria-describedby": errorId } : {};
+}
+
 export function TextField({
   label,
   placeholder,
   value,
   onChange,
   type = "text",
+  error,
 }: {
   label: string;
   placeholder?: string;
   value?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   type?: string;
+  error?: string;
 }) {
   const { t } = useI18n();
+  const errorId = useId();
   return (
     <label className="form_field">
       <span className="form_field_label">{label}</span>
@@ -249,6 +267,7 @@ export function TextField({
           value={value}
           onChange={(next) => onChange?.(pickerChangeEvent(next))}
           aria-label={label}
+          {...invalidProps(errorId, error)}
         />
       ) : (
         <input
@@ -257,8 +276,10 @@ export function TextField({
           onChange={onChange}
           className="form_field_control"
           placeholder={placeholder ?? t("form.placeholder", "Placeholder")}
+          {...invalidProps(errorId, error)}
         />
       )}
+      <FieldError id={errorId} error={error} />
     </label>
   );
 }
@@ -290,16 +311,19 @@ export function SelectField({
   value,
   onChange,
   children,
+  error,
 }: {
   label: string;
   placeholder?: string;
   value?: string | number;
   onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   children?: React.ReactNode;
+  error?: string;
 }) {
   const { t } = useI18n();
   const placeholder = placeholderProp ?? t("form.select_method", "Select Method");
   const id = useId();
+  const errorId = useId();
   const rawOptions = children
     ? optionsFromChildren(children)
     : optionsFromChildren(
@@ -322,7 +346,12 @@ export function SelectField({
           onChange?.({ target: { value: next === UNSET ? "" : next } } as React.ChangeEvent<HTMLSelectElement>)
         }
       >
-        <SelectTrigger id={id} className="form_field_select_trigger" data-unset={selected === UNSET || undefined}>
+        <SelectTrigger
+          id={id}
+          className="form_field_select_trigger"
+          data-unset={selected === UNSET || undefined}
+          {...invalidProps(errorId, error)}
+        >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent className="form_field_select_content">
@@ -338,6 +367,7 @@ export function SelectField({
           ))}
         </SelectContent>
       </Select>
+      <FieldError id={errorId} error={error} />
     </div>
   );
 }
@@ -1450,6 +1480,7 @@ export function FormInput({
   step,
   inputMode,
   autoComplete,
+  error,
 }: {
   label: string;
   value?: string | number;
@@ -1466,7 +1497,9 @@ export function FormInput({
   step?: string | number;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   autoComplete?: string;
+  error?: string;
 }) {
+  const errorId = useId();
   return (
     <label className="form_field">
       <span className={cn("form_field_label", active && "text-green-600")}>
@@ -1485,6 +1518,7 @@ export function FormInput({
           disabled={disabled}
           aria-label={label}
           className={cn(active && "is_active")}
+          {...invalidProps(errorId, error)}
         />
       ) : (
         <input
@@ -1507,8 +1541,10 @@ export function FormInput({
             readOnly && "is_readonly",
             disabled && "is_disabled"
           )}
+          {...invalidProps(errorId, error)}
         />
       )}
+      <FieldError id={errorId} error={error} />
     </label>
   );
 }
@@ -1518,8 +1554,10 @@ export function MoneyField({
   required = false,
   readOnly = false,
   disabled = false,
+  error,
   ...props
-}: { label: string } & MoneyInputProps) {
+}: { label: string; error?: string } & MoneyInputProps) {
+  const errorId = useId();
   return (
     <label className="form_field">
       <span className="form_field_label">
@@ -1532,7 +1570,9 @@ export function MoneyField({
         readOnly={readOnly}
         disabled={disabled}
         className={cn("form_field_control", readOnly && "is_readonly", disabled && "is_disabled")}
+        {...invalidProps(errorId, error)}
       />
+      <FieldError id={errorId} error={error} />
     </label>
   );
 }
@@ -1544,6 +1584,7 @@ export function FormPhoneInput({
   required = false,
   readOnly = false,
   disabled = false,
+  error,
 }: {
   label?: string;
   value?: string | null;
@@ -1551,6 +1592,7 @@ export function FormPhoneInput({
   required?: boolean;
   readOnly?: boolean;
   disabled?: boolean;
+  error?: string;
 }) {
   const { t } = useI18n();
   return (
@@ -1566,6 +1608,7 @@ export function FormPhoneInput({
       required={required}
       readOnly={readOnly}
       disabled={disabled}
+      error={error}
     />
   );
 }
@@ -1578,6 +1621,7 @@ export function FormSelect({
   required = false,
   placeholder: placeholderProp,
   disabled = false,
+  error,
 }: {
   label: string;
   value?: string | number;
@@ -1586,10 +1630,12 @@ export function FormSelect({
   required?: boolean;
   placeholder?: string;
   disabled?: boolean;
+  error?: string;
 }) {
   const { t } = useI18n();
   const placeholder = placeholderProp ?? t("form.select_method", "Select Method");
   const id = useId();
+  const errorId = useId();
   const options = withUnsetOption(optionsFromChildren(children), placeholder);
   const selected = value ? String(value) : UNSET;
   return (
@@ -1609,6 +1655,7 @@ export function FormSelect({
           id={id}
           className={cn("form_field_select_trigger", disabled && "is_disabled")}
           data-unset={selected === UNSET || undefined}
+          {...invalidProps(errorId, error)}
         >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
@@ -1625,6 +1672,7 @@ export function FormSelect({
           ))}
         </SelectContent>
       </Select>
+      <FieldError id={errorId} error={error} />
     </div>
   );
 }
@@ -1644,6 +1692,7 @@ export function FormProductSelect({
   value,
   onChange,
   searchPlaceholder,
+  error,
 }: {
   label: string;
   required?: boolean;
@@ -1651,11 +1700,13 @@ export function FormProductSelect({
   value?: ProductSelectOption | null;
   onChange?: (product: ProductSelectOption | null) => void;
   searchPlaceholder?: string;
+  error?: string;
 }) {
   const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const listId = useId();
+  const errorId = useId();
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -1704,6 +1755,7 @@ export function FormProductSelect({
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
+          {...invalidProps(errorId, error)}
           value={inputValue}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -1756,6 +1808,7 @@ export function FormProductSelect({
           )}
         </div>
       )}
+      <FieldError id={errorId} error={error} />
     </div>
   );
 }
@@ -1846,6 +1899,7 @@ export function FormTextarea({
   required = false,
   rows = 4,
   maxLength,
+  error,
 }: {
   label: string;
   value?: string;
@@ -1854,7 +1908,9 @@ export function FormTextarea({
   required?: boolean;
   rows?: number;
   maxLength?: number;
+  error?: string;
 }) {
+  const errorId = useId();
   return (
     <label className="form_field">
       <span className="form_field_label">
@@ -1869,7 +1925,9 @@ export function FormTextarea({
         rows={rows}
         maxLength={maxLength}
         className="form_field_control form_field_textarea"
+        {...invalidProps(errorId, error)}
       />
+      <FieldError id={errorId} error={error} />
     </label>
   );
 }
@@ -1878,7 +1936,7 @@ export function FormImageUpload({
   label,
   file,
   onChange,
-  accept = "image/*",
+  accept = IMAGE_ACCEPT,
   emptyLabel,
   disabled = false,
 }: {
@@ -1891,6 +1949,9 @@ export function FormImageUpload({
 }) {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
+  const errorId = useId();
+  // Checked here, against the API's own rules, so every upload field refuses a bad file the same way.
+  const [problem, setProblem] = useState<string | null>(null);
   const displayName = file?.name || emptyLabel || t("image.no_file", "No File Chosen");
 
   return (
@@ -1916,7 +1977,9 @@ export function FormImageUpload({
           onChange={(e) => {
             const selectedFile = e.target.files?.[0] ?? null;
             e.target.value = "";
-            onChange?.(selectedFile);
+            const reason = selectedFile ? imageFileProblem(selectedFile) : null;
+            setProblem(reason);
+            if (!reason) onChange?.(selectedFile);
           }}
         />
         <button
@@ -1928,6 +1991,7 @@ export function FormImageUpload({
           {t("actions.upload_image", "Upload Image")}
         </button>
       </div>
+      <FieldError id={errorId} error={problem ?? undefined} />
     </div>
   );
 }

@@ -62,6 +62,8 @@ export function DatePickerInput({
   className,
   id,
   "aria-label": ariaLabel,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
 }: {
   type: DatePickerType;
   value?: string | number;
@@ -74,6 +76,8 @@ export function DatePickerInput({
   className?: string;
   id?: string;
   "aria-label"?: string;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
 }) {
   const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
@@ -143,6 +147,9 @@ export function DatePickerInput({
           type="button"
           disabled={disabled}
           aria-label={ariaLabel}
+          // A button can't carry aria-invalid; the description still announces the error.
+          data-invalid={ariaInvalid ? "true" : undefined}
+          aria-describedby={ariaDescribedBy}
           className={cn(
             "form_field_control form_field_date",
             !selected && "is_placeholder",

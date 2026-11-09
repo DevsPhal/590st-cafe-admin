@@ -5,11 +5,20 @@ export interface ApiEnvelope<T> {
   timeStamp: string;
 }
 
+/** One invalid request field, e.g. { field: "fullName", message: "Full name is required" }. */
+export interface ApiFieldError {
+  field: string;
+  message: string;
+}
+
+/** The API's single error shape (ErrorResponse). */
 export interface ApiErrorBody {
   status: string;
   message: string;
   path: string;
   timeStamp: string;
+  /** Present only when specific request fields are invalid. */
+  errors?: ApiFieldError[];
 }
 
 export interface PageResponse<T> {

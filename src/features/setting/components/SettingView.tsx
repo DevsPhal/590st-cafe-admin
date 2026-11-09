@@ -18,10 +18,10 @@ import {
   AdminTopActions,
   DataCard,
   ErrorState,
+  MoneyField,
   SkeletonBlock,
   StatusBadge,
 } from "@/components/common/AdminKit";
-import { apiErrorMessage } from "@/store/api/baseApi";
 import { useGetCurrentUserQuery } from "@/store/api/authApi";
 import { useCurrentRole } from "@/store/api/useCurrentRole";
 import {
@@ -38,11 +38,10 @@ import {
   useAdminPreferences,
 } from "@/contexts/AdminPreferencesContext";
 import { statusTone } from "@/features/user/components/UserManagementView";
-import { MoneyInput } from "@/components/forms/MoneyInput";
 import { formatAmount } from "@/lib/moneyInput";
-import { parseForm } from "@/lib/validation";
 import { exchangeRateSchema } from "@/lib/formSchemas";
 import { formatLocalDate } from "@/lib/dateFormat";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 // Same languages as the header selector, listed English first here.
 const LANGUAGES = (["en", "kh"] as const).map(localeInfo);
@@ -72,6 +71,7 @@ export default function Settings() {
   const rate = rateQuery.data;
   const [khrPerUsd, setKhrPerUsd] = useState("");
   const [marketRate, setMarketRate] = useState("");
+  const validation = useFormErrors(exchangeRateSchema, { khrPerUsd, marketRate });
 
   const [seededFrom, setSeededFrom] = useState<typeof rate>(undefined);
   if (rate && rate !== seededFrom) {
@@ -81,14 +81,14 @@ export default function Settings() {
   }
 
   const handleSaveRate = async () => {
-    const parsed = parseForm(exchangeRateSchema, { khrPerUsd, marketRate });
+    const parsed = validation.validate();
     if (!parsed) return;
 
     try {
       await updateRate({ khrPerUsdRate: parsed.khrPerUsd, marketRate: parsed.marketRate }).unwrap();
       toast.success(t("settings.exchange.updated", "Exchange rate updated"));
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("settings.exchange.update_failed", "Could not update the exchange rate.")));
+      validation.showServerError(err, t("settings.exchange.update_failed", "Could not update the exchange rate."));
     }
   };
 
@@ -338,32 +338,23 @@ export default function Settings() {
               ) : (
                 <div className="space-y-6 p-2 pb-4">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <label className="block">
-                      <span className="text-sm font-medium text-gray-700">
-                        {t("settings.exchange.applied", "KHR per USD (applied)")}
-                      </span>
-                      <MoneyInput
-                        currency="KHR"
-                        value={khrPerUsd}
-                        onValueChange={setKhrPerUsd}
-                        wrapperClassName="mt-2"
-                        className="h-10 w-full rounded-md border border-gray-300 pr-3 text-sm outline-none"
-                        placeholder="4100"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-sm font-medium text-gray-700">
-                        {t("settings.exchange.market", "Market rate (reference only)")}
-                      </span>
-                      <MoneyInput
-                        currency="KHR"
-                        value={marketRate}
-                        onValueChange={setMarketRate}
-                        wrapperClassName="mt-2"
-                        className="h-10 w-full rounded-md border border-gray-300 pr-3 text-sm outline-none"
-                        placeholder="4050"
-                      />
-                    </label>
+                    <MoneyField
+                      label={t("settings.exchange.applied", "KHR per USD (applied)")}
+                      currency="KHR"
+                      value={khrPerUsd}
+                      onValueChange={setKhrPerUsd}
+                      placeholder="4100"
+                      required
+                      error={validation.errors.khrPerUsd}
+                    />
+                    <MoneyField
+                      label={t("settings.exchange.market", "Market rate (reference only)")}
+                      currency="KHR"
+                      value={marketRate}
+                      onValueChange={setMarketRate}
+                      placeholder="4050"
+                      error={validation.errors.marketRate}
+                    />
                   </div>
 
                   {rate ? (

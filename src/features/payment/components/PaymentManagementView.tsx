@@ -45,12 +45,13 @@ import {
 import type { Currency, OrderResponse } from "@/store/api/types";
 import { formatByCurrency, titleCase } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/dateFormat";
-import { buildCashPaymentSchema, deliveryFeeSchema, parseForm } from "@/lib/validation";
+import { buildCashPaymentSchema, deliveryFeeSchema } from "@/lib/validation";
 import { useDefaultPageSize, useRefreshOptions } from "@/contexts/AdminPreferencesContext";
 import { useStaffOrderAlerts } from "@/hooks/useStaffOrderAlerts";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useNow } from "@/hooks/useNow";
 import { useI18n } from "@/contexts/I18nContext";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 const money = (value: number | null | undefined) =>
   value == null ? "-" : `$${Number(value).toFixed(2)}`;
@@ -140,22 +141,24 @@ export default function PaymentManagementView() {
 
   const [feeOrder, setFeeOrder] = useState<OrderResponse | null>(null);
   const [feeInput, setFeeInput] = useState("");
+  const feeValidation = useFormErrors(deliveryFeeSchema, { fee: feeInput });
 
   const openFeeModal = (order: OrderResponse) => {
     setFeeOrder(order);
     setFeeInput("");
+    feeValidation.reset();
   };
 
   const handleSetDeliveryFee = async () => {
     if (!feeOrder) return;
-    const parsed = parseForm(deliveryFeeSchema, { fee: feeInput });
+    const parsed = feeValidation.validate();
     if (!parsed) return;
     try {
       await setDeliveryFee({ id: feeOrder.id, body: parsed }).unwrap();
       toast.success(t("payments.toast.fee_set", "Delivery fee set — the customer can now choose how to pay."));
       setFeeOrder(null);
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("payments.errors.fee", "Could not save the delivery fee.")));
+      feeValidation.showServerError(err, t("payments.errors.fee", "Could not save the delivery fee."));
     }
   };
 
@@ -179,6 +182,7 @@ export default function PaymentManagementView() {
     setCashOrder(order);
     setCurrency("USD");
     setAmountTendered(exactAmountFor(order, "USD"));
+    cashValidation.reset();
   };
 
   const handleCashCurrencyChange = (next: Currency) => {
@@ -187,13 +191,11 @@ export default function PaymentManagementView() {
   };
 
   const cashDue = cashOrder ? payableDue(cashOrder, currency) : 0;
+  const cashValidation = useFormErrors(buildCashPaymentSchema(cashDue), { currency, amountTendered });
 
   const handleCollectCash = async () => {
     if (!cashOrder) return;
-    const parsed = parseForm(buildCashPaymentSchema(cashDue), {
-      currency,
-      amountTendered,
-    });
+    const parsed = cashValidation.validate();
     if (!parsed) return;
 
     try {
@@ -208,7 +210,7 @@ export default function PaymentManagementView() {
       );
       setCashOrder(null);
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("payments.errors.cash", "Could not record the cash payment.")));
+      cashValidation.showServerError(err, t("payments.errors.cash", "Could not record the cash payment."));
     }
   };
 
@@ -526,6 +528,7 @@ export default function PaymentManagementView() {
           <MoneyField
             label={t("payments.fee_modal.delivery_fee", "Delivery Fee (USD)")}
             value={feeInput}
+            error={feeValidation.errors.fee}
             onValueChange={setFeeInput}
             required
           />
@@ -581,6 +584,7 @@ export default function PaymentManagementView() {
             label={t("payments.cash_modal.amount_tendered", "Amount Tendered")}
             currency={currency}
             value={amountTendered}
+            error={cashValidation.errors.amountTendered}
             onValueChange={setAmountTendered}
             required
           />

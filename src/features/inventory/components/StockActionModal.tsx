@@ -18,7 +18,7 @@ import { translate } from "@/contexts/translate";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { enumLabel } from "@/lib/enumLabel";
 import { baseQuantity, formatStock, stockUnitSize, unitsPerStock } from "@/lib/stockUnits";
-import { message, numberField, optionalText, parseForm, requiredChoice } from "@/lib/validation";
+import { message, numberField, optionalText, requiredChoice } from "@/lib/validation";
 import { apiErrorMessage } from "@/store/api/baseApi";
 import {
   useCountStockMutation,
@@ -32,6 +32,7 @@ import { useCurrentRole } from "@/store/api/useCurrentRole";
 import type { InventoryResponse, QuantityUnit, StockStrategy, WasteReason } from "@/store/api/types";
 import { formatUsd, isWhole, sellQuantity, stockUnitsOf } from "../stock";
 import { useStockProducts } from "../useStockProducts";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 export type StockAction = "STOCK_IN" | "WASTE" | "RETURN" | "COUNT" | "STOCK_CUT";
 
@@ -140,6 +141,13 @@ export function StockActionModal({
   const isSaving = isStockingIn || isWasting || isReturning || isCounting || isCutting || isFindingOrder;
 
   const update = (patch: Partial<StockActionForm>) => setForm((current) => ({ ...current, ...patch }));
+  const validation = useFormErrors(stockActionSchema(form.action), {
+    productId: form.productId,
+    quantity: form.quantity,
+    unitCost: form.unitCost,
+    wasteReason: form.wasteReason,
+    note: form.note,
+  });
 
   const item = byId.get(form.productId) ?? (form.snapshot?.productId === form.productId ? form.snapshot : null);
   const units = item ? stockUnitsOf(item) : null;
@@ -262,13 +270,7 @@ export function StockActionModal({
 
   const handleSubmit = async () => {
     if (!isAdmin) return;
-    const parsed = parseForm(stockActionSchema(form.action), {
-      productId: form.productId,
-      quantity: form.quantity,
-      unitCost: form.unitCost,
-      wasteReason: form.wasteReason,
-      note: form.note,
-    });
+    const parsed = validation.validate();
     if (!parsed || !item || !units || base === null) return;
     if (problem) {
       toast.error(problem);
@@ -306,7 +308,7 @@ export function StockActionModal({
       }
       update({ open: false });
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("inventory.errors.record_movement", "Could not record the stock movement.")));
+      validation.showServerError(err, t("inventory.errors.record_movement", "Could not record the stock movement."));
     }
   };
 
@@ -318,7 +320,10 @@ export function StockActionModal({
   return (
     <FormModal
       open={isAdmin && form.open}
-      onOpenChange={(open) => update({ open })}
+      onOpenChange={(open) => {
+        if (!open) validation.reset();
+        update({ open });
+      }}
       title={actionLabel[form.action]}
       submitLabel={t("actions.submit", "Submit")}
       onSubmit={handleSubmit}
@@ -331,6 +336,7 @@ export function StockActionModal({
             required
             options={options}
             value={selectedOption}
+            error={validation.errors.productId}
             onChange={(option) => {
               const next = option ? byId.get(option.id) ?? null : null;
               update({
@@ -364,6 +370,7 @@ export function StockActionModal({
           min={0}
           placeholder="0"
           value={form.quantity}
+          error={validation.errors.quantity}
           onChange={(e) => update({ quantity: e.target.value })}
           required
         />
@@ -390,6 +397,7 @@ export function StockActionModal({
                 : t("inventory.form.unit_cost", "Unit Cost (USD)")
             }
             value={form.unitCost}
+            error={validation.errors.unitCost}
             onValueChange={(unitCost) => update({ unitCost })}
             required
           />
@@ -399,6 +407,7 @@ export function StockActionModal({
             label={t("inventory.stock_action.fields.waste_reason", "Waste Reason")}
             placeholder={t("inventory.stock_action.fields.select_waste_reason", "Select reason")}
             value={form.wasteReason}
+            error={validation.errors.wasteReason}
             onChange={(e) => update({ wasteReason: e.target.value as WasteReason | "" })}
             required
           >
@@ -436,6 +445,7 @@ export function StockActionModal({
             label={t("fields.note", "Note")}
             placeholder={t("inventory.form.note_placeholder", "Optional reason or reference")}
             value={form.note}
+            error={validation.errors.note}
             onChange={(e) => update({ note: e.target.value })}
             maxLength={255}
           />

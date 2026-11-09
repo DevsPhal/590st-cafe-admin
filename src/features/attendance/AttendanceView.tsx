@@ -17,7 +17,6 @@ import {
 } from "@/store/api/attendanceApi";
 import { titleCase } from "@/lib/utils";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { parseForm } from "@/lib/validation";
 import { attendanceSchema } from "@/lib/formSchemas";
 import { shopDateTimeInput } from "@/lib/shopDate";
 import { useI18n } from "@/contexts/I18nContext";
@@ -25,6 +24,7 @@ import { CheckInForm } from "./CheckInForm";
 import { CheckOutForm } from "./CheckOutForm";
 import { MyShiftDialog } from "./MyShiftDialog";
 import { formatShiftTime, shiftWorkedMinutes } from "./shiftTime";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 const emptyForm: AttendanceInput = { baristaId: "", checkInAt: "", checkOutAt: "", note: "" };
 
@@ -77,21 +77,23 @@ export default function AttendanceView() {
     setEditing(record ?? null);
     setForm(record ? { baristaId: record.baristaId, checkInAt: record.checkInAt,
       checkOutAt: record.checkOutAt ?? "", note: record.note ?? "" } : emptyForm);
+    validation.reset();
     setFormOpen(true);
   };
 
+  const validation = useFormErrors(
+    attendanceSchema({ now: shopDateTimeInput(), requireCheckOut }),
+    { ...form, checkOutAt: form.checkOutAt ?? "", note: form.note ?? "" },
+  );
   const save = async () => {
-    const parsed = parseForm(
-      attendanceSchema({ now: shopDateTimeInput(), requireCheckOut }),
-      { ...form, checkOutAt: form.checkOutAt ?? "", note: form.note ?? "" },
-    );
+    const parsed = validation.validate();
     if (!parsed) return;
     const body = { checkInAt: parsed.checkInAt, checkOutAt: parsed.checkOutAt, note: parsed.note ?? "" };
     try {
       if (editing) await update({ id: editing.id, body }).unwrap();
       else await create({ ...body, baristaId: parsed.baristaId }).unwrap();
       toast.success(t("attendance.toast.saved", "Attendance saved")); setFormOpen(false);
-    } catch (error) { toast.error(apiErrorMessage(error as never, t("attendance.toast.save_failed", "Could not save attendance."))); }
+    } catch (error) { validation.showServerError(error, t("attendance.toast.save_failed", "Could not save attendance.")); }
   };
   return <PageShell>
     <PageHeader title={t("attendance.title", "Staff attendance")} breadcrumbs={[{ label: t("breadcrumb.home", "Home"), href: "/" }, { label: t("attendance.title", "Staff attendance") }]} rightSlot={<AdminTopActions />} />
@@ -183,12 +185,12 @@ export default function AttendanceView() {
       submitLabel={t("attendance.form.submit", "Save attendance")} onSubmit={save} isLoading={createState.isLoading || updateState.isLoading}>
       {!editing && <p className="px-4 text-sm text-gray-500">{t("attendance.form.missed_hint", "For a past shift that was never recorded. Enter both check-in and check-out times — use Check in for a shift that is still running.")}</p>}
       <div className="grid gap-4 p-4 md:grid-cols-2">
-        <FormSelect label={t("attendance.form.staff_member", "Staff member")} placeholder={t("attendance.form.staff_placeholder", "Select staff")} value={form.baristaId} disabled={Boolean(editing)} onChange={(event) => setForm({ ...form, baristaId: event.target.value })}>
+        <FormSelect label={t("attendance.form.staff_member", "Staff member")} placeholder={t("attendance.form.staff_placeholder", "Select staff")} value={form.baristaId} disabled={Boolean(editing)} onChange={(event) => setForm({ ...form, baristaId: event.target.value })} error={validation.errors.baristaId}>
           {staff.data?.content.map((member) => <option key={member.id} value={member.id}>{titleCase(member.fullName)}</option>)}
         </FormSelect>
-        <FormInput label={t("attendance.form.check_in", "Check in (Cambodia time)")} type="datetime-local" max={latestAllowed} value={form.checkInAt} onChange={(event) => setForm({ ...form, checkInAt: event.target.value })} />
-        <FormInput label={requireCheckOut ? t("attendance.form.check_out_required", "Check out (Cambodia time)") : t("attendance.form.check_out", "Check out (leave empty if still on shift)")} type="datetime-local" min={form.checkInAt || undefined} max={latestAllowed} value={form.checkOutAt} onChange={(event) => setForm({ ...form, checkOutAt: event.target.value })} />
-        <FormInput label={t("attendance.form.note", "Correction note")} maxLength={255} value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} />
+        <FormInput label={t("attendance.form.check_in", "Check in (Cambodia time)")} type="datetime-local" max={latestAllowed} value={form.checkInAt} onChange={(event) => setForm({ ...form, checkInAt: event.target.value })} error={validation.errors.checkInAt} />
+        <FormInput label={requireCheckOut ? t("attendance.form.check_out_required", "Check out (Cambodia time)") : t("attendance.form.check_out", "Check out (leave empty if still on shift)")} type="datetime-local" min={form.checkInAt || undefined} max={latestAllowed} value={form.checkOutAt} onChange={(event) => setForm({ ...form, checkOutAt: event.target.value })} error={validation.errors.checkOutAt} />
+        <FormInput label={t("attendance.form.note", "Correction note")} maxLength={255} value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} error={validation.errors.note} />
       </div>
     </FormModal>
   </PageShell>;

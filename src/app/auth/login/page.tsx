@@ -28,7 +28,6 @@ import {
   useVerifyLoginOtpMutation,
 } from "@/store/api/authApi";
 import { formatPhoneInput, PHONE_MAX_LENGTH, PHONE_PLACEHOLDER } from "@/lib/phone";
-import { parseForm } from "@/lib/validation";
 import { emailLoginSchema, otpSchema, phoneLoginSchema } from "@/lib/formSchemas";
 import { cn } from "@/lib/utils";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
@@ -42,6 +41,8 @@ import {
   AUTH_FIELD_CLASS as FIELD_CLASS,
   AUTH_SUBMIT_CLASS as SUBMIT_CLASS,
 } from "@/features/auth/authStyles";
+import { AuthFieldError, authInvalidProps } from "@/features/auth/components/AuthFieldError";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 function resolveNextPath(): string {
   if (typeof window === "undefined") return "/";
@@ -83,15 +84,6 @@ function focusFirstInvalid(errors: FieldErrors) {
   if (first) document.getElementById(FIELD_IDS[first])?.focus();
 }
 
-function FieldError({ id, message }: { id: string; message?: string }) {
-  if (!message) return null;
-  return (
-    <p id={id} className="mt-1.5 flex items-start gap-1.5 text-[13px] font-medium text-[#b42318] dark:text-[#fca5a5]">
-      <CircleAlert aria-hidden className="mt-px size-4 shrink-0" />
-      {message}
-    </p>
-  );
-}
 
 function FieldIcon({ icon: Icon }: { icon: LucideIcon }) {
   return (
@@ -168,6 +160,7 @@ export default function AuthPage() {
 
   const [loginTicket, setLoginTicket] = useState<string | null>(null);
   const [otp, setOtp] = useState("");
+  const otpValidation = useFormErrors(otpSchema, { otp });
 
   const [login, { isLoading: isLoggingIn }] = useLoginMutation();
   const [loginPhone, { isLoading: isSendingPhoneCode }] =
@@ -268,7 +261,7 @@ export default function AuthPage() {
   const handleOtp = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!loginTicket) return;
-    const parsed = parseForm(otpSchema, { otp });
+    const parsed = otpValidation.validate();
     if (!parsed) return;
 
     try {
@@ -430,7 +423,7 @@ export default function AuthPage() {
                   />
                   <FieldIcon icon={Phone} />
                 </div>
-                <FieldError id={errorId("phoneNumber")} message={fieldErrors.phoneNumber} />
+                <AuthFieldError id={errorId("phoneNumber")} message={fieldErrors.phoneNumber} />
                 <p id="login-phone-help" className="mt-2 text-xs leading-relaxed text-(--cafe-muted)">
                   {t(
                     "auth.login.phone_help",
@@ -478,7 +471,7 @@ export default function AuthPage() {
                   />
                   <FieldIcon icon={Mail} />
                 </div>
-                <FieldError id={errorId("email")} message={fieldErrors.email} />
+                <AuthFieldError id={errorId("email")} message={fieldErrors.email} />
 
                 <label htmlFor={FIELD_IDS.password} className="mt-5 short:mt-4 block text-sm font-medium">
                   {t("fields.password", "Password")}
@@ -518,7 +511,7 @@ export default function AuthPage() {
                     )}
                   </button>
                 </div>
-                <FieldError id={errorId("password")} message={fieldErrors.password} />
+                <AuthFieldError id={errorId("password")} message={fieldErrors.password} />
 
                 {rememberRow}
                 {formAlert}
@@ -581,7 +574,9 @@ export default function AuthPage() {
                 autoComplete="one-time-code"
                 autoFocus
                 required
+                {...authInvalidProps("login-otp-error", otpValidation.errors.otp)}
               />
+              <AuthFieldError id="login-otp-error" message={otpValidation.errors.otp} />
             </label>
 
             <button

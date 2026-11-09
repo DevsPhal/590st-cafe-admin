@@ -35,6 +35,19 @@ export function apiErrorMessage(
   return body?.message ?? fallback;
 }
 
+/**
+ * The API's per-field messages, keyed by request field path ("fullName", "items[0].quantity"),
+ * so a form can show each one under its input. Empty when the error isn't about specific fields.
+ */
+export function apiFieldErrors(error: unknown): Record<string, string> {
+  const body = (error as { data?: Partial<ApiErrorBody> } | undefined)?.data;
+  const fields: Record<string, string> = {};
+  for (const entry of Array.isArray(body?.errors) ? body.errors : []) {
+    if (entry?.field && entry.message && !(entry.field in fields)) fields[entry.field] = entry.message;
+  }
+  return fields;
+}
+
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: API_URL,
   prepareHeaders: (headers) => {

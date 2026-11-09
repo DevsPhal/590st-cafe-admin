@@ -7,10 +7,10 @@ import { FormInput, FormModal, FormTextarea } from "@/components/common/AdminKit
 import { useI18n } from "@/contexts/I18nContext";
 import { useNow } from "@/hooks/useNow";
 import { shopDateTimeInput } from "@/lib/shopDate";
-import { optionalText, parseForm } from "@/lib/validation";
+import { optionalText } from "@/lib/validation";
 import { useCheckInMutation, useCheckOutMutation, type AttendanceResponse } from "@/store/api/attendanceApi";
-import { apiErrorMessage } from "@/store/api/baseApi";
 import { formatShiftTime, minutesSoFar } from "./shiftTime";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 // Matches the API's @Size(max = 255) on the attendance note.
 const NOTE_MAX = 255;
@@ -29,11 +29,12 @@ export function MyShiftDialog({ open, onClose, shift }: {
   const [checkIn, checkInState] = useCheckInMutation();
   const [checkOut, checkOutState] = useCheckOutMutation();
   const [note, setNote] = useState(() => shift?.note ?? "");
+  const validation = useFormErrors(noteSchema, { note });
   const now = useNow(30000);
   const elapsed = shift ? minutesSoFar(shift.checkInAt, shopDateTimeInput(new Date(now))) : null;
 
   const save = async () => {
-    const parsed = parseForm(noteSchema, { note });
+    const parsed = validation.validate();
     if (!parsed) return;
     const body = parsed.note ? { note: parsed.note } : undefined;
     try {
@@ -46,7 +47,7 @@ export function MyShiftDialog({ open, onClose, shift }: {
       }
       onClose();
     } catch (error) {
-      toast.error(apiErrorMessage(error as never, t("attendance.toast.record_failed", "Could not record attendance.")));
+      validation.showServerError(error, t("attendance.toast.record_failed", "Could not record attendance."));
     }
   };
 
@@ -78,7 +79,7 @@ export function MyShiftDialog({ open, onClose, shift }: {
             placeholder={shift
               ? t("attendance.my_shift_form.check_out_placeholder", "e.g. Leaving early — feeling unwell")
               : t("attendance.my_shift_form.check_in_placeholder", "e.g. Arrived late because of traffic")}
-            value={note} onChange={(event) => setNote(event.target.value)} />
+            value={note} onChange={(event) => setNote(event.target.value)} error={validation.errors.note} />
           <p className="mt-1 flex justify-between gap-3 text-xs text-gray-500">
             <span>{shift?.note
               ? t("attendance.my_shift_form.note_from_check_in", "This is the note from your check-in. Edit it if anything changed — leaving it empty keeps it.")
