@@ -260,6 +260,8 @@
   },
   "fulfillment": {
     "pickup": "មកយកផ្ទាល់",
+    "take_away": "ខ្ចប់យកទៅ",
+    "pickup_or_take_away": "មកយកផ្ទាល់ / ខ្ចប់យកទៅ",
     "delivery": "ដឹកជញ្ជូន",
     "dine_in": "ញ៉ាំនៅហាង",
     "table": "តុ {number}",

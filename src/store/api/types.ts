@@ -51,6 +51,8 @@ export type OrderStatus =
   | "CANCELLED";
 export type PaymentMethod = "CASH" | "BAKONG";
 export type FulfillmentMethod = "PICKUP" | "DELIVERY" | "DINE_IN";
+// How a POS (walk-in) order leaves the counter. Online orders have none and use FulfillmentMethod.
+export type OrderType = "DINE_IN" | "TAKE_AWAY";
 export type DiscountType = "PERCENTAGE" | "FIXED";
 export type Currency = "USD" | "KHR";
 // The language an invoice PDF is printed in; both carry the same order and amounts.
@@ -631,6 +633,8 @@ export interface OrderResponse {
   items: OrderItemResponse[];
   totalAmount: Numeric;
   fulfillmentMethod: FulfillmentMethod | null;
+  /** POS orders only; null for online orders. */
+  orderType?: OrderType | null;
   tableNumber: string | null;
   deliveryAddress: string | null;
   contactName: string | null;
@@ -769,9 +773,12 @@ export interface OrderItemRequest {
   extraIds?: UUID[];
 }
 
+/** A POS sale: always dine-in or take-away, never delivery. */
 export interface CreateOrderRequest {
   items: OrderItemRequest[];
+  orderType: OrderType;
   note?: string;
+  /** Dine-in only, and optional there (a counter seat has no table). */
   tableNumber?: string;
 }
 

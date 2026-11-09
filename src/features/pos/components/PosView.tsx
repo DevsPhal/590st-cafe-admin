@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import QRCode from "qrcode";
-import { Minus, Pencil, Plus, Search, ShoppingBag, X } from "lucide-react";
+import { Minus, Pencil, Plus, Search, ShoppingBag, UtensilsCrossed, X } from "lucide-react";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
 import { AdminTopActions, ErrorState, FormSelect, SkeletonBlock, Thumbnail, listLoadState } from "@/components/common/AdminKit";
@@ -43,6 +43,7 @@ import type {
   MilkType,
   OrderItemRequest,
   OrderResponse,
+  OrderType,
   ProductResponse,
   ProductVariantResponse,
   SugarLevel,
@@ -131,9 +132,11 @@ export default function PosView() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PosPaymentMethod>("cash");
   const [cart, setCart] = usePersistentState<CartLine[]>("pos:cart", []);
-  const [note, setNote] = usePersistentState("pos:note", "");
+  const [storedOrderType, setOrderType] = usePersistentState<OrderType>("pos:orderType", "DINE_IN");
+  // Dine in unless take-away was picked (also covers a stale or missing saved value).
+  const orderType: OrderType = storedOrderType === "TAKE_AWAY" ? "TAKE_AWAY" : "DINE_IN";
   const [tableNumber, setTableNumber] = usePersistentState("pos:tableNumber", "");
-  const isDineIn = note === "Dine in";
+  const isDineIn = orderType === "DINE_IN";
   const { data: tables } = useListPublicTablesQuery(undefined, { skip: !isDineIn });
   const [pendingOrder, setPendingOrder] = usePersistentState<OrderResponse | null>("pos:pendingOrder", null);
   const confirmingRef = useRef(false);
@@ -342,7 +345,7 @@ export default function PosView() {
   const resetCart = () => {
     setPendingOrder(null);
     setCart([]);
-    setNote("");
+    setOrderType("DINE_IN");
     setTableNumber("");
     setPaymentMethod("cash");
     setCashCurrency("USD");
@@ -412,10 +415,20 @@ export default function PosView() {
   const grossTotal = cart.reduce((sum, line) => sum + lineUnitOriginal(line) * line.quantity, 0);
   const discount = Math.max(grossTotal - total, 0);
 
-  const noteLabels: Record<string, string> = {
-    "Dine in": t("pos.order.note_dine_in", "Dine in"),
-    Takeaway: t("pos.order.note_takeaway", "Takeaway"),
-    Delivery: t("pos.order.note_delivery", "Delivery"),
+  const orderTypeLabels: Record<OrderType, string> = {
+    DINE_IN: t("pos.order.type_dine_in", "Dine in"),
+    TAKE_AWAY: t("pos.order.type_take_away", "Take away"),
+  };
+  const orderTypeSummary =
+    isDineIn && tableNumber
+      ? t("pos.order.table_option", "Table {number}", { number: tableNumber })
+      : orderTypeLabels[orderType];
+  // The type is part of the order once it's created, so it can't change mid-payment.
+  const isOrderLocked = pendingOrder != null;
+  const chooseOrderType = (next: OrderType) => {
+    if (isOrderLocked || confirmingRef.current) return;
+    setOrderType(next);
+    if (next === "TAKE_AWAY") setTableNumber("");
   };
 
   const paymentItems: PosCartItem[] = cart.map((line) => ({
@@ -442,7 +455,7 @@ export default function PosView() {
     }));
     const order = await createOrder({
       items,
-      note: note.trim() || undefined,
+      orderType,
       tableNumber: isDineIn && tableNumber ? tableNumber : undefined,
     }).unwrap();
     setPendingOrder(order);
@@ -676,21 +689,32 @@ export default function PosView() {
           </div>
 
           <div className="pos_order_selects">
-            <FormSelect
-              label={t("pos.order.note_label", "Order note")}
-              value={note}
-              onChange={(event) => { if (!pendingOrder && !confirmingRef.current) setNote(event.target.value); }}
-              placeholder={t("pos.order.note_placeholder", "No note")}
-            >
-              <option value="Dine in">{noteLabels["Dine in"]}</option>
-              <option value="Takeaway">{noteLabels.Takeaway}</option>
-              <option value="Delivery">{noteLabels.Delivery}</option>
-            </FormSelect>
+            <div className="form_field pos_order_type">
+              <span id="pos-order-type-label" className="form_field_label">
+                {t("pos.order.type_label", "Order type")}
+              </span>
+              <div className="pos_order_type_options" role="radiogroup" aria-labelledby="pos-order-type-label">
+                {(["DINE_IN", "TAKE_AWAY"] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    role="radio"
+                    aria-checked={orderType === type}
+                    disabled={isOrderLocked}
+                    onClick={() => chooseOrderType(type)}
+                    className="pos_order_type_option"
+                  >
+                    {type === "DINE_IN" ? <UtensilsCrossed aria-hidden /> : <ShoppingBag aria-hidden />}
+                    {orderTypeLabels[type]}
+                  </button>
+                ))}
+              </div>
+            </div>
             {isDineIn ? (
               <FormSelect
                 label={t("pos.order.table_label", "Table")}
                 value={tableNumber}
-                onChange={(event) => { if (!pendingOrder && !confirmingRef.current) setTableNumber(event.target.value); }}
+                onChange={(event) => { if (!isOrderLocked && !confirmingRef.current) setTableNumber(event.target.value); }}
                 placeholder={t("pos.order.table_placeholder", "No table")}
               >
                 {(tables ?? []).map((table) => (
@@ -830,7 +854,7 @@ export default function PosView() {
         }}
         items={paymentItems}
         total={Number(pendingOrder?.totalAmount ?? total)}
-        orderTable={note ? noteLabels[note] ?? note : t("pos.order.walk_in", "Walk-in")}
+        orderTable={orderTypeSummary}
         orderId={
           pendingOrder
             ? `#${pendingOrder.id.slice(0, 8)}`

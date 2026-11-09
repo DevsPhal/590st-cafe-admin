@@ -16,7 +16,7 @@ function orderSummary(order: OrderResponse): string {
   const count = order.items.reduce((sum, item) => sum + item.quantity, 0);
   const method =
     order.fulfillmentMethod === "DELIVERY" ? " · Delivery"
-    : order.fulfillmentMethod === "DINE_IN" ? ` · ${fulfillmentLabel(order)}`
+    : order.fulfillmentMethod === "DINE_IN" || order.orderType === "TAKE_AWAY" ? ` · ${fulfillmentLabel(order)}`
     : "";
   const items = count === 1 ? translate("notices.items_one", "{count} item", { count }) : translate("notices.items_other", "{count} items", { count });
   return `${shortId(order.id)} · ${items} · ${money(order.totalAmount)}${method}`;

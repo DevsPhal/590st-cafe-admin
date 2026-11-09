@@ -390,7 +390,7 @@ export function QueueFilterBar({
             <SelectGroup>
               <SelectLabel>{t("barista.filters.served_as", "Served as")}</SelectLabel>
               <SelectItem value="DINE_IN">{t("fulfillment.dine_in", "Dine-in")}</SelectItem>
-              <SelectItem value="PICKUP">{t("fulfillment.pickup", "Pickup")}</SelectItem>
+              <SelectItem value="PICKUP">{t("fulfillment.pickup_or_take_away", "Pickup / Take away")}</SelectItem>
               <SelectItem value="DELIVERY">{t("fulfillment.delivery", "Delivery")}</SelectItem>
             </SelectGroup>
           </FilterSelect>

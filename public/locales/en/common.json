@@ -260,6 +260,8 @@
   },
   "fulfillment": {
     "pickup": "Pickup",
+    "take_away": "Take away",
+    "pickup_or_take_away": "Pickup / Take away",
     "delivery": "Delivery",
     "dine_in": "Dine-in",
     "table": "Table {number}",
