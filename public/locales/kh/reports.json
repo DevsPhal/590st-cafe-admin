@@ -1,5 +1,7 @@
 {
   "title": "របាយការណ៍",
+  "export": "នាំចេញ Excel",
+  "exporting": "កំពុងនាំចេញ...",
   "filters": {
     "finance_period": "រយៈពេលហិរញ្ញវត្ថុ",
     "daily": "ប្រចាំថ្ងៃ",
@@ -9,7 +11,8 @@
     "month": "ខែ"
   },
   "errors": {
-    "finance_load_failed": "មិនអាចផ្ទុកសេចក្តីសង្ខេបហិរញ្ញវត្ថុបានទេ។"
+    "finance_load_failed": "មិនអាចផ្ទុកសេចក្តីសង្ខេបហិរញ្ញវត្ថុបានទេ។",
+    "export_failed": "មិនអាចទាញយករបាយការណ៍បានទេ។"
   },
   "stats": {
     "unavailable": "មិនមាន",

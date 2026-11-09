@@ -7,8 +7,10 @@ import {
   Bike,
   CircleHelp,
   Clock,
+  ExternalLink,
   Globe,
   MapPin,
+  MapPinned,
   MessageSquareText,
   Phone,
   QrCode,
@@ -28,6 +30,7 @@ import { formatPhone } from "@/lib/phone";
 import { cn, fulfillmentLabel, timeAgo, titleCase } from "@/lib/utils";
 import type { OrderResponse, OrderStatus } from "@/store/api/types";
 import { STATUS_TONE, TONE_CLASSES, formatShopDateTime, money } from "../queue";
+import { Button } from "@/components/common/Button";
 
 type Translate = ReturnType<typeof useI18n>["t"];
 
@@ -137,10 +140,18 @@ function ContactDetails({ order }: { order: OrderResponse }) {
           href={`https://www.google.com/maps?q=${order.deliveryLatitude},${order.deliveryLongitude}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-block font-medium underline"
+          className="mt-1 flex w-full items-center gap-2 rounded-lg border border-gray-200 bg-white py-1.5 pr-2.5 pl-1.5 font-semibold text-gray-900 shadow-xs transition-colors hover:border-gray-300 hover:bg-gray-100 pointer-coarse:py-2"
         >
-          {t("fulfillment.view_pin", "View pinned location on map")}
-          {order.distanceMeters != null ? ` · ${formatDistance(Number(order.distanceMeters))}` : ""}
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-600">
+            <MapPinned className="h-4 w-4" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1 leading-snug">{t("fulfillment.view_pin", "View pinned location on map")}</span>
+          {order.distanceMeters != null ? (
+            <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600 tabular-nums">
+              {formatDistance(Number(order.distanceMeters))}
+            </span>
+          ) : null}
+          <ExternalLink className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden />
         </a>
       ) : null}
     </div>
@@ -199,7 +210,7 @@ export function QueueOrderCard({
         </button>
         {/* Icon buttons get a thumb-sized hit area on touch screens; the icons themselves stay small. */}
         <div className="-mr-1.5 flex shrink-0 items-center pointer-coarse:-mt-1 pointer-coarse:-mr-2">
-          <PrintInvoiceIconButton order={order} className="pointer-coarse:h-9 pointer-coarse:w-9" />
+          <PrintInvoiceIconButton order={order} className="pointer-coarse:size-11" />
           {onCancel ? (
             <button
               type="button"
@@ -207,7 +218,7 @@ export function QueueOrderCard({
               disabled={isBusy}
               aria-label={t("barista.card.cancel_order", "Cancel order")}
               title={t("barista.card.cancel_order", "Cancel order")}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 pointer-coarse:h-9 pointer-coarse:w-9"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 pointer-coarse:size-11"
             >
               <X className="h-4 w-4" />
             </button>
@@ -283,19 +294,19 @@ export function QueueOrderCard({
         {primary ? (
           <div className="mt-2.5 flex flex-wrap gap-2">
             {secondary ? (
-              <button
-                type="button"
+              <Button
+               
                 onClick={secondary.onClick}
                 disabled={isBusy}
-                className="btn_outline_black grow basis-30"
+                variant="outline" className="grow basis-30"
               >
                 {secondary.label}
-              </button>
+              </Button>
             ) : null}
-            <button type="button" onClick={primary.onClick} disabled={isBusy} className="btn_primary_black grow basis-30">
+            <Button onClick={primary.onClick} disabled={isBusy} variant="primary" className="grow basis-30">
               {PrimaryIcon ? <PrimaryIcon aria-hidden /> : null}
               {primary.label}
-            </button>
+            </Button>
           </div>
         ) : hint ? (
           <p className="mt-2.5 rounded-lg bg-gray-50 px-3 py-2 text-center text-xs text-gray-500">{hint}</p>

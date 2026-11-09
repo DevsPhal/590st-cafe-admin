@@ -51,8 +51,8 @@ import { enumLabel } from "@/lib/enumLabel";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
-import { parseForm } from "@/lib/validation";
 import { bannerSchema } from "@/lib/formSchemas";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 type BannerFormFields = {
   title: string;
@@ -101,7 +101,7 @@ export default function BannerManagementView() {
 
   const [createBanner, { isLoading: isCreating }] = useCreateBannerMutation();
   const [updateBanner, { isLoading: isUpdating }] = useUpdateBannerMutation();
-  const [deleteBanner] = useDeleteBannerMutation();
+  const [deleteBanner, { isLoading: isDeleting }] = useDeleteBannerMutation();
   const [uploadImage, { isLoading: isUploading }] = useUploadBannerImageMutation();
   const [removeImage, { isLoading: isRemovingImage }] = useRemoveBannerImageMutation();
 
@@ -109,6 +109,7 @@ export default function BannerManagementView() {
   const [detailOpen, setDetailOpen] = usePersistentState("banners:detailOpen", false);
   const [selected, setSelected] = usePersistentState<BannerResponse | null>("banners:selected", null);
   const [form, setForm] = usePersistentState<BannerFormFields>("banners:form", EMPTY_FORM);
+  const validation = useFormErrors(bannerSchema, form);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   const bannerTableHeaders = [
@@ -154,11 +155,12 @@ export default function BannerManagementView() {
           }
         : EMPTY_FORM
     );
+    validation.reset();
     setFormOpen(true);
   };
 
   const handleSubmit = async () => {
-    const parsed = parseForm(bannerSchema, form);
+    const parsed = validation.validate();
     if (!parsed) return;
     const { title, linkUrl, sortOrder } = parsed;
 
@@ -194,7 +196,7 @@ export default function BannerManagementView() {
       setForm(EMPTY_FORM);
       setImageFile(null);
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("banners.errors.save", "Could not save the banner.")));
+      validation.showServerError(err, t("banners.errors.save", "Could not save the banner."));
     }
   };
 
@@ -337,7 +339,7 @@ export default function BannerManagementView() {
                     }}
                     onEdit={() => handleOpenForm(banner)}
                     onDelete={() => handleDelete(banner)}
-                    isLoading={isSaving}
+                    isLoading={isSaving || isDeleting}
                   />
                 </Cell>
               </Row>
@@ -369,6 +371,7 @@ export default function BannerManagementView() {
             label={t("fields.title", "Title")}
             placeholder={t("banners.form.title_placeholder", "e.g. New Iced Latte Menu")}
             value={form.title}
+            error={validation.errors.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
             required
           />
@@ -376,6 +379,7 @@ export default function BannerManagementView() {
             label={t("banners.fields.link", "Link")}
             placeholder={t("banners.form.link_placeholder", "/menu or https://...")}
             value={form.linkUrl}
+            error={validation.errors.linkUrl}
             onChange={(e) => setForm({ ...form, linkUrl: e.target.value })}
           />
           <FormInput
@@ -386,6 +390,7 @@ export default function BannerManagementView() {
             inputMode="numeric"
             placeholder="0"
             value={form.sortOrder}
+            error={validation.errors.sortOrder}
             onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
           />
           {selected ? (

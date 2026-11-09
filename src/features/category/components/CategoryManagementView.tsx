@@ -48,8 +48,8 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useCatalogAlerts } from "@/hooks/useCatalogAlerts";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
-import { parseForm } from "@/lib/validation";
 import { categorySchema } from "@/lib/formSchemas";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 const CATEGORY_GROUPS: CategoryGroup[] = ["FRESH_DRINK", "BEVERAGE", "SNACK"];
 
@@ -113,12 +113,13 @@ export default function Categories() {
 
   const [createCategory, { isLoading: isCreating }] = useCreateCategoryMutation();
   const [updateCategory, { isLoading: isUpdating }] = useUpdateCategoryMutation();
-  const [deleteCategory] = useDeleteCategoryMutation();
+  const [deleteCategory, { isLoading: isDeleting }] = useDeleteCategoryMutation();
 
   const [formOpen, setFormOpen] = usePersistentState("categories:formOpen", false);
   const [detailOpen, setDetailOpen] = usePersistentState("categories:detailOpen", false);
   const [selected, setSelected] = usePersistentState<CategoryResponse | null>("categories:selected", null);
   const [formFields, setFormFields] = usePersistentState<CategoryFormFields>("categories:formFields", EMPTY_FORM);
+  const validation = useFormErrors(categorySchema, formFields);
 
   const categories = useMemo(() => categoryPage?.content ?? [], [categoryPage]);
 
@@ -170,6 +171,7 @@ export default function Categories() {
           }
         : EMPTY_FORM
     );
+    validation.reset();
     setFormOpen(true);
   };
 
@@ -177,11 +179,12 @@ export default function Categories() {
     setFormOpen(false);
     setSelected(null);
     setFormFields(EMPTY_FORM);
+    validation.reset();
   };
 
   const handleSubmitForm = async () => {
     if (!isAdmin) return;
-    const parsed = parseForm(categorySchema, formFields);
+    const parsed = validation.validate();
     if (!parsed) return;
     const { name, description } = parsed;
     const categoryGroup = formFields.categoryGroup || undefined;
@@ -199,7 +202,7 @@ export default function Categories() {
       }
       handleCloseForm();
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("categories.errors.save", "Could not save the category.")));
+      validation.showServerError(err, t("categories.errors.save", "Could not save the category."));
     }
   };
 
@@ -300,7 +303,7 @@ export default function Categories() {
                     onView={() => handleViewDetail(category)}
                     onEdit={isAdmin ? () => handleOpenForm(category) : undefined}
                     onDelete={isAdmin ? () => handleDelete(category) : undefined}
-                    isLoading={isCreating || isUpdating}
+                    isLoading={isCreating || isUpdating || isDeleting}
                   />
                 </Cell>
               </Row>
@@ -332,6 +335,7 @@ export default function Categories() {
             label={t("categories.fields.category_name", "Category Name")}
             placeholder={t("categories.form.category_name_placeholder", "e.g. Coffee")}
             value={formFields.name}
+            error={validation.errors.name}
             onChange={(e) => setFormFields({ ...formFields, name: e.target.value })}
             required
           />
@@ -339,6 +343,7 @@ export default function Categories() {
             label={t("fields.description", "Description")}
             placeholder={t("categories.form.description_placeholder", "Short description")}
             value={formFields.description}
+            error={validation.errors.description}
             onChange={(e) =>
               setFormFields({ ...formFields, description: e.target.value })
             }
@@ -347,6 +352,7 @@ export default function Categories() {
             label={t("categories.fields.menu_group", "Menu Group")}
             placeholder={t("categories.form.menu_group_internal", "Internal (not on the customer menu)")}
             value={formFields.categoryGroup}
+            error={validation.errors.categoryGroup}
             onChange={(e) =>
               setFormFields({ ...formFields, categoryGroup: e.target.value as CategoryGroup })
             }
@@ -362,6 +368,7 @@ export default function Categories() {
               label={t("fields.status", "Status")}
               placeholder={t("categories.form.select_status", "Select status")}
               value={formFields.status}
+              error={validation.errors.status}
               onChange={(e) =>
                 setFormFields({ ...formFields, status: e.target.value as Status })
               }

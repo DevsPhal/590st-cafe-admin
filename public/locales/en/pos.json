@@ -40,15 +40,12 @@
     "aria_label": "Order summary",
     "title": "Order Summary",
     "clear_aria_label": "Clear order",
-    "note_label": "Order note",
-    "note_placeholder": "No note",
-    "note_dine_in": "Dine in",
-    "note_takeaway": "Takeaway",
-    "note_delivery": "Delivery",
+    "type_label": "Order type",
+    "type_dine_in": "Dine in",
+    "type_take_away": "Take away",
     "table_label": "Table",
     "table_placeholder": "No table",
     "table_option": "Table {number}",
-    "walk_in": "Walk-in",
     "item_count_one": "{count} item",
     "item_count_other": "{count} items"
   },
@@ -89,13 +86,15 @@
     "credit": "Credit:",
     "balance": "Balance:",
     "confirm": "Confirm Payment",
-    "total": "Total:"
+    "total": "Total:",
+    "generating_qr": "Generating QR..."
   },
   "toast": {
     "finish_payment_first": "Finish or cancel the payment before editing the order.",
     "not_enough_stock": "{name} does not have enough stock.",
     "out_of_stock": "{name} is out of stock.",
-    "order_cancelled": "Order #{id} was cancelled. The cart is kept — take payment again to start a new order."
+    "order_cancelled": "Order #{id} was cancelled. The cart is kept — take payment again to start a new order.",
+    "line_limit": "One line can hold at most {max}."
   },
   "errors": {
     "cancel_pending": "Could not cancel the pending order. Check its payment status.",

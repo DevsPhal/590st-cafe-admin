@@ -14,6 +14,7 @@ import {
   DetailImage,
   DetailItem,
   DetailModal,
+  FieldError,
   ExcelImportButton,
   FilterActions,
   FilterPanel,
@@ -68,8 +69,9 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useCatalogAlerts } from "@/hooks/useCatalogAlerts";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
-import { parseForm } from "@/lib/validation";
 import { productSchema, SKU_MAX_LENGTH } from "@/lib/formSchemas";
+import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
 
 const STOCK_UNITS: StockUnit[] = ["PACK", "BOX", "CARTON", "PIECE", "BAG", "BOTTLE", "KILOGRAM", "LITER"];
 const SELL_UNITS: SellUnit[] = [
@@ -173,7 +175,7 @@ export default function Products() {
   const [createProduct, { isLoading: isCreating }] = useCreateProductMutation();
   const [createVariant, { isLoading: isCreatingVariant }] = useCreateVariantMutation();
   const [updateProduct, { isLoading: isUpdating }] = useUpdateProductMutation();
-  const [deleteProduct] = useDeleteProductMutation();
+  const [deleteProduct, { isLoading: isDeleting }] = useDeleteProductMutation();
   const [uploadImage, { isLoading: isUploading }] = useUploadProductImageMutation();
   const [importProducts] = useImportProductsMutation();
   const [downloadProductTemplate] = useDownloadProductImportTemplateMutation();
@@ -225,6 +227,10 @@ export default function Products() {
   );
   const startingVariant: VariantLabel | "" =
     formFields.variantName && startingVariantLabels.includes(formFields.variantName) ? formFields.variantName : "";
+  const validation = useFormErrors(
+    productSchema({ isCreate: !selected, hasNoCategories, isIngredient: isIngredientForm }),
+    { ...formFields, sku: formatSku(formFields.sku.trim()), variantName: startingVariant }
+  );
   const purchaseUnitLabel = enumLabel(t, "unit", formFields.stockUnit);
   const sellUnitLabel = enumLabel(t, "unit", formFields.sellUnit);
 
@@ -251,6 +257,7 @@ export default function Products() {
           }
         : { ...EMPTY_FORM, categoryId: firstCategoryId, ...ingredientDefaults(firstCategoryId, "") }
     );
+    validation.reset();
     setFormOpen(true);
   };
 
@@ -291,11 +298,7 @@ export default function Products() {
   const handleSubmitForm = async () => {
     if (!isAdmin) return;
     const manualSku = formatSku(formFields.sku.trim());
-    const parsed = parseForm(productSchema({ isCreate: !selected, hasNoCategories, isIngredient: isIngredientForm }), {
-      ...formFields,
-      sku: manualSku,
-      variantName: startingVariant,
-    });
+    const parsed = validation.validate();
     if (!parsed) return;
     const { name, description, stockUnit, sellUnit, variantName, unitsPerStock, reorderLevel } = parsed;
     const isManualSku = formFields.skuMode === "MANUAL" && Boolean(manualSku);
@@ -353,7 +356,7 @@ export default function Products() {
       toast.success(selected ? t("products.toast.updated", "Product updated") : t("products.toast.created", "Product created"));
       handleCloseForm();
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("products.errors.save", "Could not save the product.")));
+      validation.showServerError(err, t("products.errors.save", "Could not save the product."));
     }
   };
 
@@ -541,7 +544,7 @@ export default function Products() {
                     }}
                     onEdit={isAdmin ? () => handleOpenForm(product) : undefined}
                     onDelete={isAdmin ? () => handleDelete(product) : undefined}
-                    isLoading={isSaving}
+                    isLoading={isSaving || isDeleting}
                   />
                 </Cell>
               </Row>
@@ -588,6 +591,7 @@ export default function Products() {
             label={t("products.form.name", "Product Name")}
             placeholder={t("products.form.name_placeholder", "e.g. Iced Latte")}
             value={formFields.name}
+            error={validation.errors.name}
             onChange={(e) => updateSkuSource({ name: e.target.value })}
             required
           />
@@ -606,19 +610,22 @@ export default function Products() {
                 }
                 maxLength={SKU_MAX_LENGTH}
                 aria-label={t("fields.sku", "SKU")}
+                aria-invalid={validation.errors.sku ? true : undefined}
+                aria-describedby={validation.errors.sku ? "product-sku-error" : undefined}
                 className="form_field_control min-w-0 flex-1"
               />
-              <button
-                type="button"
+              <Button
+               
                 onClick={handleGenerateSku}
                 disabled={isGeneratingSku}
-                className="btn_outline_black shrink-0"
+                variant="outline" className="shrink-0"
                 title={t("products.form.sku_generate_title", "Generate from category and name (GROUP-CATEGORY-NAME-###)")}
               >
                 {selected ? t("products.form.regenerate", "Regenerate") : t("products.form.generate", "Generate")}
                 <RefreshCw className={isGeneratingSku ? "animate-spin" : undefined} />
-              </button>
+              </Button>
             </div>
+            <FieldError id="product-sku-error" error={validation.errors.sku} />
             <span className="text-xs text-muted-foreground">
               {formFields.skuMode === "GENERATE"
                 ? t("products.form.sku_generated_hint", "Generated from category and name. Type to enter your own.")
@@ -629,6 +636,7 @@ export default function Products() {
             label={t("fields.category", "Category")}
             placeholder={t("products.form.category_placeholder", "Select category")}
             value={formFields.categoryId}
+            error={validation.errors.categoryId}
             onChange={(e) =>
               updateSkuSource({ categoryId: e.target.value, ...ingredientDefaults(e.target.value, formFields.sellUnit) })
             }
@@ -645,6 +653,7 @@ export default function Products() {
               label={t("products.fields.purchase_unit", "Purchase Unit")}
               placeholder={t("products.form.purchase_unit_placeholder", "Select purchase unit")}
               value={formFields.stockUnit}
+              error={validation.errors.stockUnit}
               onChange={(e) => setFormFields({ ...formFields, stockUnit: e.target.value as StockUnit })}
               required
             >
@@ -660,6 +669,7 @@ export default function Products() {
               label={t("products.fields.sell_unit", "Sell Unit")}
               placeholder={t("products.form.sell_unit_placeholder", "Select sell unit")}
               value={formFields.sellUnit}
+              error={validation.errors.sellUnit}
               onChange={(e) => setFormFields({ ...formFields, sellUnit: e.target.value as SellUnit })}
               required
             >
@@ -688,6 +698,7 @@ export default function Products() {
               step={1}
               placeholder={t("products.form.units_per_purchase_placeholder", "e.g. 24 cans per carton, 1000 g per kg")}
               value={formFields.unitsPerStock}
+              error={validation.errors.unitsPerStock}
               onChange={(e) => setFormFields({ ...formFields, unitsPerStock: e.target.value })}
             />
           </WithHint>
@@ -703,6 +714,7 @@ export default function Products() {
               step={1}
               placeholder={t("products.form.reorder_level_placeholder", "e.g. 10")}
               value={formFields.reorderLevel}
+              error={validation.errors.reorderLevel}
               onChange={(e) =>
                 setFormFields({ ...formFields, reorderLevel: e.target.value })
               }
@@ -713,6 +725,7 @@ export default function Products() {
               label={t("products.fields.variant", "Variant")}
               placeholder={t("products.form.variant_placeholder", "Select variant")}
               value={startingVariant}
+              error={validation.errors.variantName}
               onChange={(e) => setFormFields({ ...formFields, variantName: e.target.value as VariantLabel })}
               required
             >
@@ -727,6 +740,7 @@ export default function Products() {
             <MoneyField
               label={t("products.form.starting_price", "Starting Price (USD)")}
               value={formFields.variantPrice}
+              error={validation.errors.variantPrice}
               onValueChange={(variantPrice) => setFormFields({ ...formFields, variantPrice })}
               required
             />
@@ -795,6 +809,7 @@ export default function Products() {
             label={t("fields.description", "Description")}
             placeholder={t("products.form.description_placeholder", "Short description")}
             value={formFields.description}
+            error={validation.errors.description}
             onChange={(e) =>
               setFormFields({ ...formFields, description: e.target.value })
             }

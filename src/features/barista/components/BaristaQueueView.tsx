@@ -82,7 +82,7 @@ import { enumLabel } from "@/lib/enumLabel";
 import { shopDate } from "@/lib/shopDate";
 import { InvoiceActions, toastPaidWithInvoice } from "@/components/common/InvoiceActions";
 import { orderCode, useOrderInvoice } from "@/hooks/useOrderInvoice";
-import { buildCashPaymentSchema, parseForm } from "@/lib/validation";
+import { buildCashPaymentSchema } from "@/lib/validation";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useNow } from "@/hooks/useNow";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -108,6 +108,10 @@ import {
 import { QueueStatusTabs } from "./QueueStatusTabs";
 import { QueueFilterBar } from "./QueueFilterBar";
 import { QueueOrderCard, QueueStatusBadge, type CardAction } from "./QueueOrderCard";
+import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
+import { EmptyState } from "@/components/common/EmptyState";
+import { Card } from "@/components/common/Card";
 
 type Roles = { isAdmin: boolean; isBarista: boolean };
 
@@ -171,18 +175,21 @@ function QueueSkeleton({ cards }: { cards: number }) {
 
 function QueueEmpty({ title, hint, onClear }: { title: string; hint?: string; onClear?: () => void }) {
   const { t } = useI18n();
-  const Icon = onClear ? SearchX : ClipboardList;
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
-      <Icon className="h-8 w-8 text-gray-400" aria-hidden />
-      <p className="text-sm font-semibold text-gray-900">{title}</p>
-      {hint ? <p className="max-w-sm text-xs text-gray-500">{hint}</p> : null}
-      {onClear ? (
-        <button type="button" onClick={onClear} className="btn_outline_black mt-2">
-          {t("barista.filters.clear", "Clear filters")}
-        </button>
-      ) : null}
-    </div>
+    <Card padded={false} className="border-dashed">
+      <EmptyState
+        icon={onClear ? SearchX : ClipboardList}
+        title={title}
+        description={hint}
+        action={
+          onClear ? (
+            <Button onClick={onClear} variant="outline">
+              {t("barista.filters.clear", "Clear filters")}
+            </Button>
+          ) : undefined
+        }
+      />
+    </Card>
   );
 }
 
@@ -355,6 +362,7 @@ export default function BaristaQueueView() {
 
   const openCashModal = (order: OrderResponse) => {
     setCashOrder(order);
+    cashValidation.reset();
     setCashCurrency("USD");
     setAmountTendered(exactAmountFor(order, "USD"));
   };
@@ -365,6 +373,7 @@ export default function BaristaQueueView() {
   };
 
   const cashDue = cashOrder ? payableDue(cashOrder, cashCurrency) : 0;
+  const cashValidation = useFormErrors(buildCashPaymentSchema(cashDue), { currency: cashCurrency, amountTendered });
 
   const overallTotals = overallSummary.data ? statusTotals(overallSummary.data) : undefined;
   const awaitingCount = overallTotals?.count(["PENDING"]);
@@ -404,10 +413,7 @@ export default function BaristaQueueView() {
 
   const handlePayCash = async () => {
     if (!cashOrder) return;
-    const parsed = parseForm(buildCashPaymentSchema(cashDue), {
-      currency: cashCurrency,
-      amountTendered,
-    });
+    const parsed = cashValidation.validate();
     if (!parsed) return;
     try {
       const updated = await cashMutationFor(cashOrder)({
@@ -425,7 +431,7 @@ export default function BaristaQueueView() {
       );
       setCashOrder(null);
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("barista.errors.record_payment", "Could not record the payment.")));
+      cashValidation.showServerError(err, t("barista.errors.record_payment", "Could not record the payment."));
     }
   };
 
@@ -734,7 +740,7 @@ export default function BaristaQueueView() {
                 disabled={isLoadingRole || (!isAdmin && !isBarista) || listQuery.isFetching}
                 aria-label={t("barista.results.refresh", "Refresh the queue")}
                 title={t("barista.results.refresh", "Refresh the queue")}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full pointer-coarse:size-11 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60"
               >
                 {listQuery.isFetching ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -794,6 +800,7 @@ export default function BaristaQueueView() {
             label={t("barista.cash.amount_tendered", "Amount Tendered")}
             currency={cashCurrency}
             value={amountTendered}
+            error={cashValidation.errors.amountTendered}
             onValueChange={setAmountTendered}
             required
           />

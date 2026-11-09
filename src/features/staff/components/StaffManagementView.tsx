@@ -59,9 +59,10 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { formatPhone, formatPhoneInput } from "@/lib/phone";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
-import { parseForm } from "@/lib/validation";
 import { staffCreateSchema, staffInviteSchema, staffUpdateSchema } from "@/lib/formSchemas";
 import { useI18n } from "@/contexts/I18nContext";
+import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
 
 type StaffKind = "ADMIN" | "BARISTA";
 
@@ -113,8 +114,9 @@ export default function Staff() {
   const [createBarista, { isLoading: isCreatingBarista }] = useCreateBaristaMutation();
   const [updateAdmin, { isLoading: isUpdatingAdmin }] = useUpdateAdminMutation();
   const [updateBarista, { isLoading: isUpdatingBarista }] = useUpdateBaristaMutation();
-  const [deleteAdmin] = useDeleteAdminMutation();
-  const [deleteBarista] = useDeleteBaristaMutation();
+  const [deleteAdmin, { isLoading: isDeletingAdmin }] = useDeleteAdminMutation();
+  const [deleteBarista, { isLoading: isDeletingBarista }] = useDeleteBaristaMutation();
+  const isDeleting = isDeletingAdmin || isDeletingBarista;
   const [uploadAvatar, { isLoading: isUploadingAvatar }] = useUploadStaffAvatarMutation();
   const [inviteAdmin, { isLoading: isInvitingAdmin }] = useInviteAdminViaTelegramMutation();
   const [inviteBarista, { isLoading: isInvitingBarista }] = useInviteBaristaViaTelegramMutation();
@@ -127,6 +129,12 @@ export default function Staff() {
   const [selected, setSelected] = usePersistentState<UserResponse | null>("staff:selected", null);
   const [form, setForm] = usePersistentState<StaffFormFields>("staff:form", EMPTY_FORM);
   const [creationMode, setCreationMode] = usePersistentState<CreationMode>("staff:creationMode", "PASSWORD");
+  // One check per mode, so each submit keeps its exact shape; the open mode's messages are shown.
+  const inviteValidation = useFormErrors(staffInviteSchema, form);
+  const updateValidation = useFormErrors(staffUpdateSchema, form);
+  const createValidation = useFormErrors(staffCreateSchema, form);
+  const isInviteMode = !selected && creationMode === "TELEGRAM";
+  const validation = isInviteMode ? inviteValidation : selected ? updateValidation : createValidation;
   const [imageFile, setImageFile] = useState<File | null>(null);
   const imagePreview = useMemo(() => (imageFile ? URL.createObjectURL(imageFile) : undefined), [imageFile]);
   const [inviteResult, setInviteResult] = usePersistentState<TelegramLinkCodeResponse | null>("staff:inviteResult", null);
@@ -139,14 +147,6 @@ export default function Staff() {
 
   const handlePickImage = (file: File | null) => {
     if (submitting.current) return;
-    if (file && !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
-      toast.error(t("staff.toast.invalid_image_type", "Choose a JPEG, PNG, WebP, or GIF image."));
-      return;
-    }
-    if (file && (file.size === 0 || file.size > 5 * 1024 * 1024)) {
-      toast.error(t("staff.toast.invalid_image_size", "Choose a non-empty image of 5 MB or smaller."));
-      return;
-    }
     setImageFile(file);
   };
 
@@ -200,6 +200,9 @@ export default function Staff() {
           }
         : EMPTY_FORM
     );
+    inviteValidation.reset();
+    updateValidation.reset();
+    createValidation.reset();
     setFormOpen(true);
   };
 
@@ -213,7 +216,7 @@ export default function Staff() {
     const isInvite = !selected && Boolean(formKind) && creationMode === "TELEGRAM";
 
     if (isInvite) {
-      const invite = parseForm(staffInviteSchema, form);
+      const invite = inviteValidation.validate();
       if (!invite) return;
       submitting.current = true;
       try {
@@ -226,15 +229,15 @@ export default function Staff() {
         setInviteResult(result);
         setInviteResultOpen(true);
       } catch (err) {
-        toast.error(apiErrorMessage(err as never, t("staff.toast.invite_failed", "Could not send the Telegram invite.")));
+        inviteValidation.showServerError(err, t("staff.toast.invite_failed", "Could not send the Telegram invite."));
       } finally {
         submitting.current = false;
       }
       return;
     }
 
-    const updates = selected ? parseForm(staffUpdateSchema, form) : null;
-    const created = selected ? null : parseForm(staffCreateSchema, form);
+    const updates = selected ? updateValidation.validate() : null;
+    const created = selected ? null : createValidation.validate();
     if (!updates && !created) return;
 
     submitting.current = true;
@@ -274,11 +277,13 @@ export default function Staff() {
       setForm(EMPTY_FORM);
       setImageFile(null);
     } catch (err) {
-      toast.error(detailsSaved
-        ? t("staff.toast.photo_upload_failed", "Staff details saved, but the photo was not uploaded. {error} Submit again to retry.", {
-            error: apiErrorMessage(err as never, t("staff.toast.please_try_again", "Please try again.")),
-          })
-        : apiErrorMessage(err as never, t("staff.toast.save_failed", "Could not save the staff member.")));
+      if (detailsSaved) {
+        toast.error(t("staff.toast.photo_upload_failed", "Staff details saved, but the photo was not uploaded. {error} Submit again to retry.", {
+          error: apiErrorMessage(err as never, t("staff.toast.please_try_again", "Please try again.")),
+        }));
+      } else {
+        validation.showServerError(err, t("staff.toast.save_failed", "Could not save the staff member."));
+      }
     } finally {
       submitting.current = false;
     }
@@ -425,7 +430,7 @@ export default function Staff() {
                     }}
                     onEdit={() => handleOpenForm(member)}
                     onDelete={() => handleDelete(member)}
-                    isLoading={isSaving}
+                    isLoading={isSaving || isDeleting}
                   />
                 </Cell>
               </Row>
@@ -486,7 +491,7 @@ export default function Staff() {
             <div className="md:col-span-3">
               {(imagePreview || selected?.avatarUrl) && <DetailImage src={imagePreview || selected?.avatarUrl || undefined} alt={t("staff.form.photo_alt", "Staff profile photo")} />}
               <FormImageUpload label={t("staff.form.profile_photo", "Profile Photo")} file={imageFile} onChange={handlePickImage} disabled={isSaving}
-                accept="image/jpeg,image/png,image/webp,image/gif" emptyLabel={selected?.avatarUrl ? t("staff.form.photo_replace", "Choose a photo to replace the current one") : t("staff.form.photo_none", "No photo selected")} />
+                emptyLabel={selected?.avatarUrl ? t("staff.form.photo_replace", "Choose a photo to replace the current one") : t("staff.form.photo_none", "No photo selected")} />
               <p className="mt-2 text-sm text-muted-foreground">{t("staff.form.photo_hint", "Optional. JPEG, PNG, WebP, or GIF, up to 5 MB. Saved when you submit.")}</p>
               {imageFile && <button type="button" className="mt-2 text-sm underline" disabled={isSaving} onClick={() => setImageFile(null)}>{t("staff.form.clear_photo", "Clear selected photo")}</button>}
             </div>
@@ -495,6 +500,7 @@ export default function Staff() {
             label={t("fields.full_name", "Full Name")}
             placeholder={t("staff.form.full_name_placeholder", "e.g. Sophal Nem")}
             value={form.fullName}
+            error={validation.errors.fullName}
             onChange={(e) => setForm({ ...form, fullName: e.target.value })}
             required
           />
@@ -504,6 +510,7 @@ export default function Staff() {
               type="email"
               placeholder="user@gmail.com"
               value={form.email}
+              error={validation.errors.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               readOnly={Boolean(selected)}
               required={!selected}
@@ -515,12 +522,14 @@ export default function Staff() {
               type="password"
               placeholder={t("staff.form.password_placeholder", "Min 8 chars, mixed case, digit + symbol")}
               value={form.password}
+              error={validation.errors.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               required
             />
           )}
           <FormPhoneInput
             value={form.phoneNumber}
+            error={validation.errors.phoneNumber}
             onChange={(phoneNumber) => setForm({ ...form, phoneNumber })}
             required={!selected && creationMode === "TELEGRAM"}
           />
@@ -638,9 +647,9 @@ export default function Staff() {
               {t("staff.invite_result.hint", "Share this link with the invitee. After they open it and share their phone number in Telegram, the account is active and they sign in on the login page under")}{" "}
               <span className="font-semibold">{t("staff.invite_result.phone_tab", "Phone number")}</span>{t("staff.invite_result.hint_end", " — the code arrives in Telegram.")}
             </p>
-            <button
-              type="button"
-              className="btn_outline_black mt-3"
+            <Button
+             
+              variant="outline" className="mt-3"
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(inviteResult.deepLink);
@@ -651,7 +660,7 @@ export default function Staff() {
               }}
             >
               {t("staff.invite_result.copy_link", "Copy Link")}
-            </button>
+            </Button>
           </div>
         )}
       </DetailModal>

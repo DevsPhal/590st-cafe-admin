@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/contexts/I18nContext";
+import { Button } from "@/components/common/Button";
 
 // Same string formats the native <input type="..."> used, so callers keep their state as-is.
 const VALUE_FORMAT = {
@@ -62,6 +63,8 @@ export function DatePickerInput({
   className,
   id,
   "aria-label": ariaLabel,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
 }: {
   type: DatePickerType;
   value?: string | number;
@@ -74,6 +77,8 @@ export function DatePickerInput({
   className?: string;
   id?: string;
   "aria-label"?: string;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
 }) {
   const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
@@ -143,6 +148,9 @@ export function DatePickerInput({
           type="button"
           disabled={disabled}
           aria-label={ariaLabel}
+          // A button can't carry aria-invalid; the description still announces the error.
+          data-invalid={ariaInvalid ? "true" : undefined}
+          aria-describedby={ariaDescribedBy}
           className={cn(
             "form_field_control form_field_date",
             !selected && "is_placeholder",
@@ -272,9 +280,9 @@ export function DatePickerInput({
               {type === "datetime-local" ? t("date_picker.now", "Now") : type === "month" ? t("date_picker.this_month", "This month") : t("date_picker.today", "Today")}
             </button>
             {type === "datetime-local" ? (
-              <button type="button" className="btn_primary_black date_picker_done" onClick={() => setOpen(false)}>
+              <Button variant="primary" className="date_picker_done" onClick={() => setOpen(false)}>
                 {t("date_picker.done", "Done")}
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>

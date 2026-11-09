@@ -260,6 +260,8 @@
   },
   "fulfillment": {
     "pickup": "Pickup",
+    "take_away": "Take away",
+    "pickup_or_take_away": "Pickup / Take away",
     "delivery": "Delivery",
     "dine_in": "Dine-in",
     "table": "Table {number}",
@@ -351,7 +353,10 @@
       "market_rate": "market rate",
       "number_of_minutes": "number of minutes",
       "units_per_sale": "units per sale"
-    }
+    },
+    "image_type": "Choose a JPEG, PNG, WebP or GIF image.",
+    "image_size": "Choose an image of 5 MB or smaller.",
+    "password_too_long": "Password must be 72 characters or fewer."
   },
   "toast": {
     "dismiss": "Dismiss notification",

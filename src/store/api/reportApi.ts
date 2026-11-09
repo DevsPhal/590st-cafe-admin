@@ -52,6 +52,18 @@ export const reportApi = baseApi.injectEndpoints({
       providesTags: [{ type: "Report", id: "DAILY" }],
     }),
 
+    downloadReport: builder.mutation<
+      Blob,
+      { date: string; period: "DAY" | "MONTH" | "YEAR"; year: number; month: number }
+    >({
+      query: (params) => ({
+        url: "/api/admin/reports/export",
+        params,
+        responseHandler: (response: Response) =>
+          response.ok ? response.blob() : response.json(),
+      }),
+    }),
+
     getDailyFinance: builder.query<
       FinanceSummaryResponse,
       { date?: string } | void
@@ -120,6 +132,7 @@ export const {
   useGetOwnDailyReportQuery,
   useGetWeeklyReportsQuery,
   useGetDailyReportQuery,
+  useDownloadReportMutation,
   useGetDailyFinanceQuery,
   useGetMonthlyFinanceQuery,
   useGetYearlyFinanceQuery,

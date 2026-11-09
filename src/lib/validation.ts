@@ -51,9 +51,23 @@ export const STRONG_PASSWORD_HINT =
 
 export const OTP_PATTERN = /^\d{6}$/;
 
+/** Field path ("name", "items.0.quantity") -> first message for it. "" holds a problem with no field. */
+export type FieldErrors = Record<string, string>;
+
+/** Every field's first issue, keyed like the values object, so each can be shown under its input. */
+export function zodFieldErrors(error: z.ZodError): FieldErrors {
+  const errors: FieldErrors = {};
+  for (const issue of error.issues) {
+    const key = issue.path.map(String).join(".");
+    if (!(key in errors)) errors[key] = issue.message;
+  }
+  return errors;
+}
+
 /**
- * Validates form values against a schema. On failure it shows the first issue as an
- * error toast and returns null, so every admin form reports problems the same way.
+ * Validates values that have no visible form field to show an error under (a single
+ * confirmation step, for example): shows the first issue as an error toast and returns null.
+ * Forms with fields use useFormErrors().validate instead, which shows each message inline.
  */
 export function parseForm<S extends z.ZodType>(schema: S, values: z.input<S>): z.output<S> | null {
   const result = schema.safeParse(values);
@@ -112,6 +126,8 @@ export const requiredPhoneField = (requiredMessage = message("phone_required", "
 export const strongPasswordField = z
   .string()
   .min(1, message("password_required", "Password is required."))
+  // The API's PASSWORD_MAX_LENGTH: BCrypt only reads the first 72 bytes.
+  .max(72, message("password_too_long", "Password must be 72 characters or fewer."))
   .regex(STRONG_PASSWORD_PATTERN, message("password_hint", STRONG_PASSWORD_HINT));
 
 export const otpField = z

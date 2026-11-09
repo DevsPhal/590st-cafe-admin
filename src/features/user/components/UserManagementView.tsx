@@ -41,8 +41,8 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { formatPhone, formatPhoneInput } from "@/lib/phone";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
-import { parseForm } from "@/lib/validation";
 import { userAccountSchema } from "@/lib/formSchemas";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 export { humanise };
 
@@ -121,6 +121,7 @@ export default function UserManagementView({
   const [phoneNumber, setPhoneNumber] = usePersistentState(`users-${role ?? "all"}:phoneNumber`, "");
   const [gender, setGender] = usePersistentState<Gender | "">(`users-${role ?? "all"}:gender`, "");
   const [selected, setSelected] = usePersistentState<UserResponse | null>(`users-${role ?? "all"}:selected`, null);
+  const validation = useFormErrors(userAccountSchema, { fullName, phoneNumber });
   const [nextStatus, setNextStatus] = usePersistentState<UserStatus>(`users-${role ?? "all"}:nextStatus`, "ACTIVE");
 
   const users = useMemo(() => userPage?.content ?? [], [userPage]);
@@ -145,7 +146,7 @@ export default function UserManagementView({
 
   const handleSaveProfile = async () => {
     if (!selected) return;
-    const parsed = parseForm(userAccountSchema, { fullName, phoneNumber });
+    const parsed = validation.validate();
     if (!parsed) return;
     try {
       await updateUser({ id: selected.id, body: {
@@ -155,7 +156,7 @@ export default function UserManagementView({
       setEditOpen(false);
       setSelected(null);
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("users.toast.update_failed", "Could not update the account.")));
+      validation.showServerError(err, t("users.toast.update_failed", "Could not update the account."));
     }
   };
 
@@ -294,6 +295,7 @@ export default function UserManagementView({
                       setFullName(user.fullName);
                       setPhoneNumber(formatPhoneInput(user.phoneNumber));
                       setGender(user.gender ?? "");
+                      validation.reset();
                       setEditOpen(true);
                     }}
                     onDelete={user.status !== "DELETED" ? () => handleDelete(user) : undefined}
@@ -318,8 +320,8 @@ export default function UserManagementView({
 
       <FormModal open={editOpen} onOpenChange={setEditOpen} title={t("users.form.edit_title", "Edit Account")} submitLabel={t("actions.save", "Save")} onSubmit={handleSaveProfile} isLoading={isSavingProfile}>
         <ModalGrid>
-          <FormInput label={t("fields.full_name", "Full Name")} value={fullName} onChange={(event) => setFullName(event.target.value)} required />
-          <FormPhoneInput value={phoneNumber} onChange={setPhoneNumber} />
+          <FormInput label={t("fields.full_name", "Full Name")} value={fullName} onChange={(event) => setFullName(event.target.value)} required error={validation.errors.fullName} />
+          <FormPhoneInput value={phoneNumber} onChange={setPhoneNumber} error={validation.errors.phoneNumber} />
           <FormSelect label={t("users.fields.gender", "Gender")} value={gender} onChange={(event) => setGender(event.target.value as Gender | "")}>
             <option value="MALE">Male</option>
             <option value="FEMALE">Female</option>

@@ -52,8 +52,9 @@ import { enumLabel } from "@/lib/enumLabel";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
-import { parseForm } from "@/lib/validation";
 import { eventSchema } from "@/lib/formSchemas";
+import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
 
 type EventFormFields = {
   title: string;
@@ -127,7 +128,7 @@ export default function EventManagementView() {
 
   const [createEvent, { isLoading: isCreating }] = useCreateEventMutation();
   const [updateEvent, { isLoading: isUpdating }] = useUpdateEventMutation();
-  const [deleteEvent] = useDeleteEventMutation();
+  const [deleteEvent, { isLoading: isDeleting }] = useDeleteEventMutation();
   const [uploadImage, { isLoading: isUploading }] = useUploadEventImageMutation();
 
   const [formOpen, setFormOpen] = usePersistentState("events:formOpen", false);
@@ -136,6 +137,7 @@ export default function EventManagementView() {
   const { t } = useI18n();
   const [selected, setSelected] = usePersistentState<EventResponse | null>("events:selected", null);
   const [form, setForm] = usePersistentState<EventFormFields>("events:form", EMPTY_FORM);
+  const validation = useFormErrors(eventSchema, form);
   const hasVenue = Boolean(form.latitude.trim() && form.longitude.trim());
   const venueIsShop = hasVenue && isShopLocation(Number(form.latitude), Number(form.longitude));
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -185,11 +187,12 @@ export default function EventManagementView() {
           }
         : EMPTY_FORM
     );
+    validation.reset();
     setFormOpen(true);
   };
 
   const handleSubmit = async () => {
-    const parsed = parseForm(eventSchema, form);
+    const parsed = validation.validate();
     if (!parsed) return;
     const { title, description, startAt, endAt, latitude, longitude } = parsed;
 
@@ -231,7 +234,7 @@ export default function EventManagementView() {
       setForm(EMPTY_FORM);
       setImageFile(null);
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("events.errors.save", "Could not save the event.")));
+      validation.showServerError(err, t("events.errors.save", "Could not save the event."));
     }
   };
 
@@ -364,7 +367,7 @@ export default function EventManagementView() {
                       }}
                       onEdit={() => handleOpenForm(event)}
                       onDelete={() => handleDelete(event)}
-                      isLoading={isSaving}
+                      isLoading={isSaving || isDeleting}
                     />
                   </Cell>
                 </Row>
@@ -397,22 +400,22 @@ export default function EventManagementView() {
             label={t("fields.title", "Title")}
             placeholder={t("events.form.title_placeholder", "e.g. Latte Art Workshop")}
             value={form.title}
+            error={validation.errors.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
             required
           />
           <div className="form_field md:col-span-3">
             <span className="form_field_label">{t("venue.label", "Venue")}</span>
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
+              <Button
+               
                 onClick={() => setMapPickerOpen(true)}
-                className="btn_outline_black inline-flex items-center gap-2 text-xs"
+                variant="outline" className="inline-flex items-center gap-2 text-xs"
               >
                 <MapPin className="h-3.5 w-3.5" />
                 {hasVenue ? t("venue.change_pin", "Change Pin on Map") : t("venue.pin_on_map", "Pin on Map")}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
                 onClick={() =>
                   setForm((prev) => ({
                     ...prev,
@@ -421,15 +424,11 @@ export default function EventManagementView() {
                   }))
                 }
                 aria-pressed={venueIsShop}
-                className={
-                  venueIsShop
-                    ? "btn_primary_yellow inline-flex items-center gap-2 text-xs"
-                    : "btn_outline_black inline-flex items-center gap-2 text-xs"
-                }
+                variant={venueIsShop ? "accent" : "outline"} className="inline-flex items-center gap-2 text-xs"
               >
                 <Store className="h-3.5 w-3.5" />
                 {t("venue.use_shop", "Use Shop Location")}
-              </button>
+              </Button>
               {hasVenue ? (
                 <>
                   <span className="text-xs text-gray-600">
@@ -465,6 +464,7 @@ export default function EventManagementView() {
             label={t("events.form.starts_at", "Starts At")}
             type="datetime-local"
             value={form.startAt}
+            error={validation.errors.startAt}
             onChange={(e) => setForm({ ...form, startAt: e.target.value })}
             required
           />
@@ -472,6 +472,7 @@ export default function EventManagementView() {
             label={t("events.form.ends_at", "Ends At")}
             type="datetime-local"
             value={form.endAt}
+            error={validation.errors.endAt}
             onChange={(e) => setForm({ ...form, endAt: e.target.value })}
             required
           />
@@ -490,6 +491,7 @@ export default function EventManagementView() {
             label={t("fields.description", "Description")}
             placeholder={t("events.form.description_placeholder", "What is happening?")}
             value={form.description}
+            error={validation.errors.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
           <div className="md:col-span-3">

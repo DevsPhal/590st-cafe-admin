@@ -11,7 +11,6 @@ import {
   useResendOtpMutation,
   useResetPasswordMutation,
 } from "@/store/api/authApi";
-import { parseForm } from "@/lib/validation";
 import { forgotPasswordSchema, resetPasswordSchema } from "@/lib/formSchemas";
 import { useI18n } from "@/contexts/I18nContext";
 import {
@@ -20,6 +19,8 @@ import {
   AUTH_FIELD_CLASS,
   AUTH_SUBMIT_CLASS,
 } from "../authStyles";
+import { AuthFieldError, authInvalidProps } from "@/features/auth/components/AuthFieldError";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 type Step = "REQUEST" | "RESET";
 
@@ -43,6 +44,8 @@ export function ForgotPasswordDialog({
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const requestValidation = useFormErrors(forgotPasswordSchema, { email });
+  const resetValidation = useFormErrors(resetPasswordSchema, { otp, newPassword, confirmPassword });
 
   const [forgotPassword, { isLoading: isRequesting }] = useForgotPasswordMutation();
   const [resetPassword, { isLoading: isResetting }] = useResetPasswordMutation();
@@ -58,6 +61,8 @@ export function ForgotPasswordDialog({
       setNewPassword("");
       setConfirmPassword("");
       setShowPassword(false);
+      requestValidation.reset();
+      resetValidation.reset();
     }
   }
 
@@ -65,7 +70,7 @@ export function ForgotPasswordDialog({
 
   const handleRequest = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const parsed = parseForm(forgotPasswordSchema, { email });
+    const parsed = requestValidation.validate();
     if (!parsed) return;
 
     try {
@@ -73,30 +78,20 @@ export function ForgotPasswordDialog({
       setEmail(parsed.email);
       setStep("RESET");
     } catch (err) {
-      toast.error(
-        apiErrorMessage(
-          err as ApiError,
-          t("auth.forgot.errors.send_failed", "Could not send a reset code. Please try again."),
-        ),
-      );
+      requestValidation.showServerError(err, t("auth.forgot.errors.send_failed", "Could not send a reset code. Please try again."));
     }
   };
 
   const handleReset = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!parseForm(resetPasswordSchema, { otp, newPassword, confirmPassword })) return;
+    if (!resetValidation.validate()) return;
 
     try {
       await resetPassword({ email, otp, newPassword }).unwrap();
       onReset(email);
       onOpenChange(false);
     } catch (err) {
-      toast.error(
-        apiErrorMessage(
-          err as ApiError,
-          t("auth.errors.code_not_accepted", "That code was not accepted. Check it and try again."),
-        ),
-      );
+      resetValidation.showServerError(err, t("auth.errors.code_not_accepted", "That code was not accepted. Check it and try again."));
     }
   };
 
@@ -168,9 +163,11 @@ export function ForgotPasswordDialog({
                   autoComplete="email"
                   autoFocus
                   required
+                  {...authInvalidProps("forgot-email-error", requestValidation.errors.email)}
                 />
                 <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-700" />
               </span>
+              <AuthFieldError id="forgot-email-error" message={requestValidation.errors.email} />
             </label>
 
             <button type="submit" disabled={isRequesting} className={AUTH_SUBMIT_CLASS}>
@@ -211,7 +208,9 @@ export function ForgotPasswordDialog({
                 autoComplete="one-time-code"
                 autoFocus
                 required
+                {...authInvalidProps("forgot-otp-error", resetValidation.errors.otp)}
               />
+              <AuthFieldError id="forgot-otp-error" message={resetValidation.errors.otp} />
             </label>
 
             <label className="mt-6 block text-sm font-medium">
@@ -225,6 +224,7 @@ export function ForgotPasswordDialog({
                   onChange={(e) => setNewPassword(e.target.value)}
                   autoComplete="new-password"
                   required
+                  {...authInvalidProps("forgot-new-password-error", resetValidation.errors.newPassword)}
                 />
                 <button
                   type="button"
@@ -239,6 +239,7 @@ export function ForgotPasswordDialog({
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </span>
+              <AuthFieldError id="forgot-new-password-error" message={resetValidation.errors.newPassword} />
             </label>
             <p className="mt-2 text-xs text-gray-500">
               {t(
@@ -257,7 +258,9 @@ export function ForgotPasswordDialog({
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 autoComplete="new-password"
                 required
+                {...authInvalidProps("forgot-confirm-password-error", resetValidation.errors.confirmPassword)}
               />
+              <AuthFieldError id="forgot-confirm-password-error" message={resetValidation.errors.confirmPassword} />
             </label>
 
             <button

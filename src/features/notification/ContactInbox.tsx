@@ -26,6 +26,7 @@ import { SHOP_TIME_ZONE, parseShopDateTime } from "@/lib/estimate";
 import { formatPhone, phoneDigits } from "@/lib/phone";
 import { cn, timeAgo, titleCase } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/dateFormat";
+import { Loader } from "@/components/common/Loader";
 
 type MessageStatus = ContactMessage["status"];
 
@@ -215,10 +216,7 @@ export function ContactInbox() {
       </div>
 
       {list.isLoading || (list.isFetching && !rows) ? (
-        <p role="status" className="flex items-center gap-2.5 rounded-xl bg-white/80 p-3.5 text-sm text-slate-600">
-          <Loader2 aria-hidden className="size-4 shrink-0 animate-spin motion-reduce:animate-none" />
-          {t("notifications.contact.loading", "Loading messages...")}
-        </p>
+        <Loader block label={t("notifications.contact.loading", "Loading messages...")} />
       ) : list.error ? (
         <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-800">
           <p className="flex items-start gap-2">
@@ -291,7 +289,7 @@ function MessageCard({
       tabIndex={-1}
       aria-labelledby={titleId}
       className={cn(
-        "rounded-xl border bg-white p-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)] outline-none transition-shadow duration-300 sm:p-4",
+        "rounded-xl border bg-white p-3 shadow-(--shadow-card) outline-none transition-shadow duration-300 sm:p-4",
         isNew ? "border-sky-200" : "border-slate-200",
         highlighted && "ring-2 ring-sky-500 ring-offset-2",
       )}

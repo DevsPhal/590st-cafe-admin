@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/contexts/I18nContext";
 import { SHOP_LOCATION, isShopLocation } from "@/constants/shop";
+import { Button } from "@/components/common/Button";
 
 const LocationMapPicker = dynamic(() => import("./LocationMapPicker"), {
   ssr: false,
@@ -223,7 +224,7 @@ export function LocationPickerModal({
                 placeholder={t("map.search_placeholder", "Street, landmark, area, or paste a Google Maps link")}
                 aria-label={t("map.search_label", "Search for a place")}
                 enterKeyHint="search"
-                className="h-10 w-full rounded-full border border-gray-200 bg-white pr-3 pl-9 text-sm outline-none focus:border-[#7ec900] focus:ring-2 focus:ring-[#befe35]/40"
+                className="h-10 w-full rounded-full border border-gray-200 bg-white pr-3 pl-9 text-base outline-none focus:border-(--brand-lime-strong) focus:ring-2 focus:ring-(--color-brand)/40"
               />
             </div>
             <button
@@ -326,23 +327,23 @@ export function LocationPickerModal({
         </div>
 
         <DialogFooter className="admin_modal_footer">
-          <button
-            type="button"
+          <Button
+           
             onClick={() => onOpenChange(false)}
-            className="btn_outline_black"
+            variant="outline"
           >
             {t("map.cancel", "Cancel")}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+           
             onClick={() => {
               onConfirm(coords.lat, coords.lng);
               onOpenChange(false);
             }}
-            className="btn_primary_yellow"
+            variant="accent"
           >
             {t("map.confirm", "Use This Location")}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

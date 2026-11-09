@@ -3,10 +3,12 @@
 import { useState } from "react";
 import type { OrderResponse } from "@/store/api/types";
 import { fulfillmentLabel, titleCase } from "@/lib/utils";
-import { deliveryFeeSchema, parseForm } from "@/lib/validation";
+import { deliveryFeeSchema } from "@/lib/validation";
 import { formatPhone } from "@/lib/phone";
 import { MoneyInput } from "@/components/forms/MoneyInput";
 import { useI18n } from "@/contexts/I18nContext";
+import { useFormErrors } from "@/hooks/useFormErrors";
+import { FieldError } from "@/components/common/AdminKit";
 
 function formatDistance(meters: number): string {
   return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
@@ -23,12 +25,13 @@ export function OrderFulfillmentDetails({
 }) {
   const { t } = useI18n();
   const [feeInput, setFeeInput] = useState(() => (order.deliveryFee != null ? String(order.deliveryFee) : ""));
+  const feeValidation = useFormErrors(deliveryFeeSchema, { fee: feeInput });
   if (!order.fulfillmentMethod && !order.contactName) return null;
   const isDelivery = order.fulfillmentMethod === "DELIVERY";
   const hasPin = order.deliveryLatitude != null && order.deliveryLongitude != null;
 
   const submitFee = () => {
-    const parsed = parseForm(deliveryFeeSchema, { fee: feeInput });
+    const parsed = feeValidation.validate();
     if (!parsed) return;
     onSetDeliveryFee?.(parsed.fee);
   };
@@ -62,8 +65,10 @@ export function OrderFulfillmentDetails({
             value={feeInput}
             onValueChange={setFeeInput}
             wrapperClassName="w-24"
-            className="w-full rounded border border-gray-300 py-1 pr-2 text-xs"
+            className="w-full rounded border border-gray-300 py-1 pr-2 text-base"
             aria-label={t("fulfillment.fee_label", "Delivery fee in USD")}
+            aria-invalid={feeValidation.errors.fee ? true : undefined}
+            aria-describedby={feeValidation.errors.fee ? "order-fee-error" : undefined}
           />
         </label>
         <button
@@ -76,5 +81,6 @@ export function OrderFulfillmentDetails({
         </button>
       </div>
     )}
+    {isDelivery && onSetDeliveryFee && <FieldError id="order-fee-error" error={feeValidation.errors.fee} />}
   </div>;
 }

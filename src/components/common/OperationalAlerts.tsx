@@ -9,7 +9,6 @@ import {
   CircleCheck,
   Clock,
   ConciergeBell,
-  Loader2,
   PackageMinus,
   PhoneCall,
   ShoppingBag,
@@ -48,6 +47,7 @@ import {
 } from "@/lib/staffCall";
 import type { StaffCallResponse } from "@/store/api/types";
 import { lowStockNotice, newMessageNotice, orderNotice, staffCallNotice, staffCallToastId } from "@/lib/liveNotifications";
+import { Loader } from "@/components/common/Loader";
 
 const polling = { pollingInterval: 30000, skipPollingIfUnfocused: true };
 
@@ -312,7 +312,7 @@ const TONE: Record<
 };
 
 const ALERT_ITEM =
-  "group flex items-center gap-2 rounded-xl border bg-white p-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-[border-color,box-shadow] duration-150 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:gap-3 sm:p-3.5";
+  "group flex items-center gap-2 rounded-xl border bg-white p-3 shadow-(--shadow-card) transition-[border-color,box-shadow] duration-150 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:gap-3 sm:p-3.5";
 
 export function AlertSection({
   id,
@@ -403,13 +403,7 @@ export function OperationalAlertsContent({
   const { t } = useI18n();
   if (alerts.loading)
     return (
-      <p
-        role="status"
-        className="flex items-center gap-2.5 rounded-2xl border border-(--line-subtle) bg-(--surface-muted) p-4 text-sm text-slate-600"
-      >
-        <Loader2 aria-hidden className="size-4 shrink-0 animate-spin motion-reduce:animate-none" />
-        {t("alerts.loading", "Loading current alerts...")}
-      </p>
+      <Loader block label={t("alerts.loading", "Loading current alerts...")} />
     );
   if (alerts.error)
     return (
@@ -633,7 +627,7 @@ function StaffCallItem({
   };
 
   return (
-    <div className="rounded-xl border border-red-200 bg-white p-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)] sm:p-3.5">
+    <div className="rounded-xl border border-red-200 bg-white p-3 shadow-(--shadow-card) sm:p-3.5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 flex-1 basis-60">
           <span className="flex flex-wrap items-center gap-2">

@@ -6,7 +6,6 @@ import toast from "react-hot-toast";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
 import { AdminTopActions, DataCard, FormInput, FormSelect, MoneyField, StatusBadge, Thumbnail } from "@/components/common/AdminKit";
-import { MoneyInput } from "@/components/forms/MoneyInput";
 import { formatAmount } from "@/lib/moneyInput";
 import { apiErrorMessage } from "@/store/api/baseApi";
 import { useI18n } from "@/contexts/I18nContext";
@@ -27,12 +26,13 @@ import { enumLabel } from "@/lib/enumLabel";
 import { formatStock, unitsPerStock } from "@/lib/stockUnits";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useCatalogAlerts } from "@/hooks/useCatalogAlerts";
-import { parseForm } from "@/lib/validation";
 import { attachExtraSchema, discountSchema, extraSchema, variantSchema } from "@/lib/formSchemas";
 import { allowedVariantLabels, isIngredient, isPackLabel, variantDisplayName } from "@/features/product/productKinds";
 import RecipeSection from "./RecipeSection";
+import { useFormErrors } from "@/hooks/useFormErrors";
+import { IMAGE_ACCEPT, imageFileProblem } from "@/lib/imageFile";
+import { Button } from "@/components/common/Button";
 
-const inputClass = "mt-1 block w-full rounded border px-3 py-2 text-sm";
 const discountTypes: Record<DiscountType, string> = { PERCENTAGE: "Percentage", FIXED: "Amount in USD" };
 
 // Each recipe's price and margin come from the variant price and discount, but variant and discount saves
@@ -43,20 +43,25 @@ function DiscountForm({ product }: { product: ProductResponse }) {
   const [value, setValue] = useState(formatAmount(String(product.discountValue ?? ""), 2));
   const [start, setStart] = useState(product.discountStartAt?.slice(0, 16) ?? "");
   const [end, setEnd] = useState(product.discountEndAt?.slice(0, 16) ?? "");
+  const validation = useFormErrors(discountSchema(type), { value, start, end });
   const [save, saveState] = useSetProductDiscountMutation();
   const [clear, clearState] = useClearProductDiscountMutation();
   const busy = saveState.isLoading || clearState.isLoading;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const parsed = parseForm(discountSchema(type), { value, start, end });
+    const parsed = validation.validate();
     if (!parsed) return;
     try {
       await save({ id: product.id, body: { discountType: type, discountValue: parsed.value,
         ...(start ? { discountStartAt: `${start}:00` } : {}), ...(end ? { discountEndAt: `${end}:00` } : {}),
       } }).unwrap();
       toast.success(t("products.config.toast.discount_saved", "Product discount saved"));
-    } catch (error) { toast.error(apiErrorMessage(error as never, t("products.config.errors.save_discount", "Could not save discount."))); }
+    } catch (error) {
+      validation.showServerError(error, t("products.config.errors.save_discount", "Could not save discount."), {
+        discountValue: "value", discountStartAt: "start", discountEndAt: "end",
+      });
+    }
   }
 
   async function remove() {
@@ -71,12 +76,12 @@ function DiscountForm({ product }: { product: ProductResponse }) {
       <FormSelect label={t("products.config.discount.type", "Discount type")} value={type} onChange={(event) => setType(event.target.value as DiscountType)}>
         {Object.entries(discountTypes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </FormSelect>
-      <MoneyField label={type === "PERCENTAGE" ? t("products.config.discount.percentage_off", "Percentage off") : t("products.config.discount.usd_off", "USD off")} symbol={type === "PERCENTAGE" ? "%" : "$"} required value={value} onValueChange={setValue} />
-      <FormInput label={t("products.config.discount.starts_at", "Starts at (optional)")} type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} />
-      <FormInput label={t("products.config.discount.ends_at", "Ends at (optional)")} type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} />
+      <MoneyField label={type === "PERCENTAGE" ? t("products.config.discount.percentage_off", "Percentage off") : t("products.config.discount.usd_off", "USD off")} symbol={type === "PERCENTAGE" ? "%" : "$"} required value={value} onValueChange={setValue} error={validation.errors.value} />
+      <FormInput label={t("products.config.discount.starts_at", "Starts at (optional)")} type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} error={validation.errors.start} />
+      <FormInput label={t("products.config.discount.ends_at", "Ends at (optional)")} type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} error={validation.errors.end} />
     </div>
-    <div className="flex gap-3"><button className="btn_primary_black" disabled={busy}>{busy ? t("states.saving", "Saving...") : t("products.config.discount.save", "Save discount")}</button>
-      {product.discountType && <button className="btn_outline_black" type="button" disabled={busy} onClick={remove}>{t("products.config.discount.remove", "Remove discount")}</button>}</div>
+    <div className="flex gap-3"><Button type="submit" variant="primary" disabled={busy}>{busy ? t("states.saving", "Saving...") : t("products.config.discount.save", "Save discount")}</Button>
+      {product.discountType && <Button variant="outline" disabled={busy} onClick={remove}>{t("products.config.discount.remove", "Remove discount")}</Button>}</div>
   </form>;
 }
 
@@ -101,18 +106,19 @@ function VariantForm({ product, variant, takenLabels }: { product: ProductRespon
   const isPack = isPackLabel(name);
   const sellUnit = enumLabel(t, "unit", product.sellUnit);
   const packName = enumLabel(t, "variant", name);
+  const unitsPerSaleFor = isPack && name !== product.stockUnit ? { pack: packName, unit: sellUnit } : undefined;
+  const validation = useFormErrors(variantSchema({ unitsPerSaleFor }), { price, sortOrder, unitsPerSale: isPack ? perSale : "" });
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const unitsPerSaleFor = isPack && name !== product.stockUnit ? { pack: packName, unit: sellUnit } : undefined;
-    const parsed = parseForm(variantSchema({ unitsPerSaleFor }), { price, sortOrder, unitsPerSale: isPack ? perSale : "" });
+    const parsed = validation.validate();
     if (!parsed) return;
     const body = { name, price: parsed.price, sortOrder: parsed.sortOrder ?? 0, ...(parsed.unitsPerSale !== undefined ? { unitsPerSale: parsed.unitsPerSale } : {}) };
     try {
       if (variant) await update({ productId, id: variant.id, body }).unwrap();
       else { await create({ productId, body }).unwrap(); setPrice(""); setSortOrder("0"); }
       toast.success(t("products.config.toast.variant_saved", "Variant saved"));
-    } catch (error) { toast.error(apiErrorMessage(error as never, t("products.config.errors.save_variant", "Could not save variant."))); }
+    } catch (error) { validation.showServerError(error, t("products.config.errors.save_variant", "Could not save variant.")); }
   }
   async function toggleStatus() {
     if (!variant) return;
@@ -135,16 +141,16 @@ function VariantForm({ product, variant, takenLabels }: { product: ProductRespon
       <FormSelect label={t("products.fields.variant", "Variant")} value={name} onChange={(event) => { const next = event.target.value as VariantLabel; setName(next); setPerSale(defaultUnitsPerSale(next)); }} disabled={Boolean(variant)}>
         {labels.map((label) => <option key={label} value={label}>{enumLabel(t, "variant", label)}</option>)}
       </FormSelect>
-      <label className="text-sm">{t("products.config.price_usd", "Price (USD)")}<MoneyInput wrapperClassName="mt-1" className={inputClass} required value={price} onValueChange={setPrice} /></label>
-      <label className="text-sm">{t("products.config.variant.display_order", "Display order")}<input className={inputClass} required type="number" step="1" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} /></label>
-      {isPack && <label className="text-sm">{t("products.config.variant.units_per_sale", "Sell units per sale ({unit})", { unit: sellUnit })}
-        <input className={inputClass} type="number" min="1" step="1" inputMode="numeric" value={perSale} onChange={(event) => setPerSale(event.target.value)} />
+      <MoneyField label={t("products.config.price_usd", "Price (USD)")} required value={price} onValueChange={setPrice} error={validation.errors.price} />
+      <FormInput label={t("products.config.variant.display_order", "Display order")} required type="number" step="1" min="0" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} error={validation.errors.sortOrder} />
+      {isPack && <div>
+        <FormInput label={t("products.config.variant.units_per_sale", "Sell units per sale ({unit})", { unit: sellUnit })} type="number" min="1" step="1" inputMode="numeric" value={perSale} onChange={(event) => setPerSale(event.target.value)} error={validation.errors.unitsPerSale} />
         <span className="mt-1 block text-xs text-muted-foreground">{t("products.config.variant.units_per_sale_hint", "How many {unit} one {pack} takes from stock.", { unit: sellUnit, pack: packName })}</span>
-      </label>}
+      </div>}
     </div>
-    <div className="flex flex-wrap gap-3"><button className="btn_primary_black" disabled={busy}>{busy ? t("states.saving", "Saving...") : variant ? t("products.config.variant.save", "Save variant") : t("products.config.variant.add", "Add variant")}</button>
-      {variant && <><button className="btn_outline_black" type="button" disabled={busy} onClick={toggleStatus}>{variant.status === "ACTIVE" ? t("products.config.variant.disable", "Disable") : t("products.config.variant.enable", "Enable")}</button>
-        <button className="btn_outline_black" type="button" disabled={busy} onClick={deleteVariant}>{t("actions.delete", "Delete")}</button></>}
+    <div className="flex flex-wrap gap-3"><Button type="submit" variant="primary" disabled={busy}>{busy ? t("states.saving", "Saving...") : variant ? t("products.config.variant.save", "Save variant") : t("products.config.variant.add", "Add variant")}</Button>
+      {variant && <><Button variant="outline" disabled={busy} onClick={toggleStatus}>{variant.status === "ACTIVE" ? t("products.config.variant.disable", "Disable") : t("products.config.variant.enable", "Enable")}</Button>
+        <Button variant="outline" disabled={busy} onClick={deleteVariant}>{t("actions.delete", "Delete")}</Button></>}
     </div>
     {confirmDialog}
   </form>;
@@ -157,6 +163,7 @@ function ExtraCatalogForm({ extra }: { extra?: ExtraResponse }) {
   const [price, setPrice] = useState(formatAmount(String(extra?.price ?? ""), 2));
   const [tracked, setTracked] = useState(extra?.quantityOnHand != null);
   const [quantityOnHand, setQuantityOnHand] = useState(String(extra?.quantityOnHand ?? ""));
+  const validation = useFormErrors(extraSchema, { name, price, quantityOnHand: tracked ? quantityOnHand : "" });
   const [create, createState] = useCreateExtraMutation();
   const [update, updateState] = useUpdateExtraMutation();
   const [remove, removeState] = useDeleteExtraMutation();
@@ -167,14 +174,14 @@ function ExtraCatalogForm({ extra }: { extra?: ExtraResponse }) {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const parsed = parseForm(extraSchema, { name, price, quantityOnHand: tracked ? quantityOnHand : "" });
+    const parsed = validation.validate();
     if (!parsed) return;
     const body = { name: parsed.name, price: parsed.price, quantityOnHand: parsed.quantityOnHand };
     try {
       if (extra) await update({ id: extra.id, body }).unwrap();
       else { await create(body).unwrap(); setName(""); setPrice(""); setQuantityOnHand(""); }
       toast.success(t("products.config.toast.extra_saved", "Extra saved"));
-    } catch (error) { toast.error(apiErrorMessage(error as never, t("products.config.errors.save_extra", "Could not save extra."))); }
+    } catch (error) { validation.showServerError(error, t("products.config.errors.save_extra", "Could not save extra.")); }
   }
   async function deleteExtra() {
     if (!extra) return;
@@ -186,6 +193,11 @@ function ExtraCatalogForm({ extra }: { extra?: ExtraResponse }) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !extra) return;
+    const problem = imageFileProblem(file);
+    if (problem) {
+      toast.error(problem);
+      return;
+    }
     try { await uploadImage({ id: extra.id, file }).unwrap(); toast.success(t("products.config.toast.extra_photo_updated", "Extra photo updated")); }
     catch (error) { toast.error(apiErrorMessage(error as never, t("products.config.errors.upload_photo", "Could not upload the photo."))); }
   }
@@ -198,14 +210,14 @@ function ExtraCatalogForm({ extra }: { extra?: ExtraResponse }) {
   return <form onSubmit={submit} className="space-y-3 rounded-lg border p-4">
     <h3 className="font-semibold">{extra ? titleCase(extra.name) : t("products.config.extra.add_title", "Add an extra")}</h3>
     <div className="grid gap-3 md:grid-cols-3">
-      <label className="text-sm">{t("fields.name", "Name")}<input className={inputClass} required value={name} onChange={(event) => setName(event.target.value)} /></label>
-      <label className="text-sm">{t("products.config.price_usd", "Price (USD)")}<MoneyInput wrapperClassName="mt-1" className={inputClass} required value={price} onValueChange={setPrice} /></label>
-      <label className="text-sm">
-        <span className="mt-1 flex items-center gap-2">
+      <FormInput label={t("fields.name", "Name")} required value={name} onChange={(event) => setName(event.target.value)} error={validation.errors.name} />
+      <MoneyField label={t("products.config.price_usd", "Price (USD)")} required value={price} onValueChange={setPrice} error={validation.errors.price} />
+      <div className="space-y-2 text-sm">
+        <label className="mt-1 flex min-h-11 items-center gap-2">
           <input type="checkbox" checked={tracked} onChange={(event) => setTracked(event.target.checked)} /> {t("products.config.extra.track_stock", "Track stock")}
-        </span>
-        {tracked && <input className={inputClass} type="number" min="0" step="1" placeholder={t("products.config.extra.quantity_on_hand", "Quantity on hand")} value={quantityOnHand} onChange={(event) => setQuantityOnHand(event.target.value)} />}
-      </label>
+        </label>
+        {tracked && <FormInput label={t("products.config.extra.quantity_on_hand", "Quantity on hand")} type="number" min="0" step="1" value={quantityOnHand} onChange={(event) => setQuantityOnHand(event.target.value)} error={validation.errors.quantityOnHand} />}
+      </div>
     </div>
     <div className="flex items-center gap-3">
       <Thumbnail src={extra?.imageUrl} kind="product" />
@@ -213,7 +225,7 @@ function ExtraCatalogForm({ extra }: { extra?: ExtraResponse }) {
         <div className="flex flex-wrap items-center gap-2">
           <label className="btn_outline_black cursor-pointer text-xs">
             {imageBusy ? t("states.working", "Working...") : extra.imageUrl ? t("products.config.extra.change_photo", "Change photo") : t("products.config.extra.add_photo", "Add photo")}
-            <input type="file" accept="image/*" className="hidden" disabled={imageBusy} onChange={handleImagePick} />
+            <input type="file" accept={IMAGE_ACCEPT} className="hidden" disabled={imageBusy} onChange={handleImagePick} />
           </label>
           {extra.imageUrl && (
             <button type="button" className="text-xs text-red-600 underline" disabled={imageBusy} onClick={handleRemoveImage}>
@@ -225,8 +237,8 @@ function ExtraCatalogForm({ extra }: { extra?: ExtraResponse }) {
         <p className="text-xs text-muted-foreground">{t("products.config.extra.save_first", "Save the extra first, then you can add a photo.")}</p>
       )}
     </div>
-    <div className="flex flex-wrap gap-3"><button className="btn_primary_black" disabled={busy}>{busy ? t("states.saving", "Saving...") : extra ? t("products.config.extra.save", "Save extra") : t("products.config.extra.add", "Add extra")}</button>
-      {extra && <button className="btn_outline_black" type="button" disabled={busy} onClick={deleteExtra}>{t("actions.delete", "Delete")}</button>}
+    <div className="flex flex-wrap gap-3"><Button type="submit" variant="primary" disabled={busy}>{busy ? t("states.saving", "Saving...") : extra ? t("products.config.extra.save", "Save extra") : t("products.config.extra.add", "Add extra")}</Button>
+      {extra && <Button variant="outline" disabled={busy} onClick={deleteExtra}>{t("actions.delete", "Delete")}</Button>}
     </div>
     {confirmDialog}
   </form>;
@@ -260,8 +272,8 @@ function ProductExtraRow({ productId, productExtra }: { productId: string; produ
       </div>
     </div>
     <div className="flex gap-3">
-      <button className="btn_outline_black" type="button" disabled={busy} onClick={toggleStatus}>{productExtra.status === "ACTIVE" ? t("products.config.extra.hide", "Hide") : t("products.config.extra.offer", "Offer")}</button>
-      <button className="btn_outline_black" type="button" disabled={busy} onClick={remove}>{t("actions.remove", "Remove")}</button>
+      <Button variant="outline" disabled={busy} onClick={toggleStatus}>{productExtra.status === "ACTIVE" ? t("products.config.extra.hide", "Hide") : t("products.config.extra.offer", "Offer")}</Button>
+      <Button variant="outline" disabled={busy} onClick={remove}>{t("actions.remove", "Remove")}</Button>
     </div>
     {confirmDialog}
   </div>;
@@ -273,6 +285,7 @@ function ExtrasSection({ productId }: { productId: string }) {
   const offered = useListProductExtrasQuery(productId);
   const [attach, attachState] = useAttachProductExtraMutation();
   const [selectedExtraId, setSelectedExtraId] = useState("");
+  const validation = useFormErrors(attachExtraSchema, { extraId: selectedExtraId });
 
   useCatalogAlerts(
     useCallback(() => {
@@ -286,13 +299,13 @@ function ExtrasSection({ productId }: { productId: string }) {
 
   async function handleAttach(event: FormEvent) {
     event.preventDefault();
-    const parsed = parseForm(attachExtraSchema, { extraId: selectedExtraId });
+    const parsed = validation.validate();
     if (!parsed) return;
     try {
       await attach({ productId, body: { extraId: parsed.extraId } }).unwrap();
       toast.success(t("products.config.toast.extra_offered", "Extra offered on this product"));
       setSelectedExtraId("");
-    } catch (error) { toast.error(apiErrorMessage(error as never, t("products.config.errors.offer_extra", "Could not offer this extra."))); }
+    } catch (error) { validation.showServerError(error, t("products.config.errors.offer_extra", "Could not offer this extra.")); }
   }
 
   return <DataCard title={t("products.config.extras_on_product.title", "Extras on this product")} meta={t("products.config.extras_on_product.meta", "Add-ons (e.g. Pearl) a customer can add to this product.")}>
@@ -302,10 +315,10 @@ function ExtrasSection({ productId }: { productId: string }) {
         {offered.data?.map((productExtra) => <ProductExtraRow key={productExtra.id} productId={productId} productExtra={productExtra} />)}
       </>}
       <form onSubmit={handleAttach} className="flex flex-wrap items-end gap-3 rounded-lg border p-4">
-        <FormSelect label={t("products.config.extras_on_product.offer_label", "Offer an extra")} placeholder={t("products.config.extras_on_product.offer_placeholder", "Select an extra")} value={selectedExtraId} onChange={(event) => setSelectedExtraId(event.target.value)}>
+        <FormSelect label={t("products.config.extras_on_product.offer_label", "Offer an extra")} placeholder={t("products.config.extras_on_product.offer_placeholder", "Select an extra")} value={selectedExtraId} onChange={(event) => setSelectedExtraId(event.target.value)} error={validation.errors.extraId}>
           {attachable.map((extra) => <option key={extra.id} value={extra.id}>{titleCase(extra.name)} — ${Number(extra.price).toFixed(2)}</option>)}
         </FormSelect>
-        <button className="btn_primary_black" disabled={attachState.isLoading || !attachable.length}>{attachState.isLoading ? t("products.config.extras_on_product.adding", "Adding...") : t("products.config.extras_on_product.offer_submit", "Offer on this product")}</button>
+        <Button type="submit" variant="primary" disabled={attachState.isLoading || !attachable.length}>{attachState.isLoading ? t("products.config.extras_on_product.adding", "Adding...") : t("products.config.extras_on_product.offer_submit", "Offer on this product")}</Button>
         {!catalog.data?.length && <p className="text-sm text-muted-foreground">{t("products.config.extras_on_product.no_catalog", "No extras exist yet — add one to the shop-wide catalog below first.")}</p>}
       </form>
     </div>

@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, LogOut, RotateCcw, ShieldAlert, WifiOff } from "lucide-react";
+import { LogOut, RotateCcw, ShieldAlert, WifiOff } from "lucide-react";
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import { LogoMark } from "@/components/common/AdminKit";
 import { apiErrorMessage } from "@/store/api/baseApi";
@@ -12,6 +12,8 @@ import { adminHome, canAccessAdminPage } from "@/lib/adminAccess";
 import { clearTokens, isAuthenticated } from "@/lib/authStorage";
 import { useMounted } from "@/hooks/useMounted";
 import { useI18n } from "@/contexts/I18nContext";
+import { Button } from "@/components/common/Button";
+import { Loader } from "@/components/common/Loader";
 
 const AUTO_RETRY_MS = 5000;
 
@@ -103,9 +105,9 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     status === 401
   ) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-(--surface-muted)">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-(--surface-muted)">
         <LogoMark />
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+        <Loader />
       </div>
     );
   }
@@ -133,14 +135,14 @@ export function AuthGuard({ children }: { children: ReactNode }) {
             )
       }
     >
-      <button
-        type="button"
-        className="btn_primary_black"
+      <Button
+       
+        variant="primary"
         onClick={() => profile.refetch()}
       >
         <RotateCcw />
         {t("actions.try_again", "Try again")}
-      </button>
+      </Button>
       <SignOutButton />
     </GuardCard>
   );
@@ -158,7 +160,7 @@ function GuardCard({
   children: ReactNode;
 }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-(--surface-muted) px-4">
+    <main className="flex min-h-dvh items-center justify-center bg-(--surface-muted) px-4">
       <div
         role="alert"
         className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-sm"
@@ -183,10 +185,9 @@ function SignOutButton({ primary = false }: { primary?: boolean }) {
   const [logout, { isLoading }] = useLogoutMutation();
   const { t } = useI18n();
   return (
-    <button
-      type="button"
-      className={primary ? "btn_primary_black" : "btn_outline_black"}
-      disabled={isLoading}
+    <Button
+      variant={primary ? "primary" : "outline"}
+      loading={isLoading}
       onClick={async () => {
         try {
           await logout().unwrap();
@@ -195,8 +196,8 @@ function SignOutButton({ primary = false }: { primary?: boolean }) {
         window.location.href = "/auth/login";
       }}
     >
-      {isLoading ? <Loader2 className="animate-spin" /> : <LogOut />}
+      {isLoading ? null : <LogOut />}
       {t("actions.sign_out", "Sign out")}
-    </button>
+    </Button>
   );
 }

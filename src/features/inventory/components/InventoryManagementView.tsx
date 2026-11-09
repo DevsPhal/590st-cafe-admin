@@ -45,6 +45,7 @@ import { ClipboardCheck, Download, Eye, PackagePlus, PackageX, type LucideIcon }
 import { LEVEL_TONE, matchesKind, sellQuantity, stockLevel, stockUnitsOf, type ItemKind, type StockLevel } from "../stock";
 import { ItemKindField } from "./ItemKindField";
 import { StockActionModal, useStockActionModal } from "./StockActionModal";
+import { Button } from "@/components/common/Button";
 
 const itemLevel = (item: InventoryResponse) => stockLevel(Number(item.quantityOnHand), Number(item.reorderLevel));
 
@@ -59,7 +60,7 @@ function StockRowActions({ actions }: { actions: RowAction[] }) {
           key={label}
           type="button"
           onClick={onClick}
-          className="grid h-7 w-7 place-items-center rounded-full bg-(--brand-ink) text-(--brand-lime) transition hover:bg-(--brand-ink-hover)"
+          className="grid h-7 w-7 place-items-center rounded-full pointer-coarse:size-11 bg-(--brand-ink) text-(--brand-lime) transition hover:bg-(--brand-ink-hover)"
           aria-label={label}
           title={label}
         >
@@ -213,16 +214,16 @@ export default function Inventory() {
                     aria-label={t("inventory.expense.month_aria", "Stock expense report month")}
                   />
                 </label>
-                <button
-                  type="button"
+                <Button
+                 
                   onClick={handleDownloadExpenseReport}
                   disabled={isDownloadingExpenseReport || !expenseMonth}
-                  className="btn_outline_black shrink-0"
+                  variant="outline" className="shrink-0"
                   title={t("inventory.expense.export_tooltip", "Every stock-purchase (stock-in) cost recorded this month, as an Excel file")}
                 >
                   {isDownloadingExpenseReport ? t("inventory.expense.exporting", "Exporting...") : t("inventory.expense.export", "Export expenses")}
                   <Download />
-                </button>
+                </Button>
               </div>
               <ExcelImportButton
                 label={t("inventory.import.label", "Import Stock-In")}

@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { DataCard, FormSelect, StatusBadge } from "@/components/common/AdminKit";
+import { DataCard, FieldError, FormSelect, StatusBadge } from "@/components/common/AdminKit";
 import { apiErrorMessage } from "@/store/api/baseApi";
 import { useI18n } from "@/contexts/I18nContext";
 import { useListProductsQuery } from "@/store/api/productApi";
@@ -14,11 +14,10 @@ import { enumLabel } from "@/lib/enumLabel";
 import { formatStock } from "@/lib/stockUnits";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useCatalogAlerts } from "@/hooks/useCatalogAlerts";
-import { parseForm } from "@/lib/validation";
 import { recipeSchema } from "@/lib/formSchemas";
 import { isIngredient } from "@/features/product/productKinds";
-
-const inputClass = "block w-full rounded border px-3 py-2 text-sm";
+import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
 
 // A gram of beans or a millilitre of milk costs a fraction of a cent, so tiny amounts keep four decimals.
 const money = (value: number) => `$${value.toFixed(value !== 0 && Math.abs(value) < 0.01 ? 4 : 2)}`;
@@ -64,6 +63,7 @@ function RecipeCard({ productId, recipe, ingredients, copySources, needsRecipe }
     ...saved.filter((item) => !ingredientById.has(item.ingredientId)).map((item) => ({ id: item.ingredientId, name: item.ingredientName, unit: item.unit })),
   ];
   const nameOf = (id: string) => titleCase(ingredientById.get(id)?.name ?? savedById.get(id)?.ingredientName ?? "");
+  const validation = useFormErrors(recipeSchema(nameOf), { items: rows.map(({ ingredientId, quantity }) => ({ ingredientId, quantity })) });
   const unitOf = (id: string) => ingredientById.get(id)?.sellUnit ?? savedById.get(id)?.unit;
   const isSavedLine = (row: Row) => {
     const item = savedById.get(row.ingredientId);
@@ -83,12 +83,12 @@ function RecipeCard({ productId, recipe, ingredients, copySources, needsRecipe }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const parsed = parseForm(recipeSchema(nameOf), { items: rows.map(({ ingredientId, quantity }) => ({ ingredientId, quantity })) });
+    const parsed = validation.validate();
     if (!parsed) return;
     try {
       await save({ productId, variantId: recipe.variantId, body: { items: parsed.items } }).unwrap();
       toast.success(t("products.recipe.toast.saved", "{size} recipe saved", { size: sizeName }));
-    } catch (error) { toast.error(apiErrorMessage(error as never, t("products.recipe.errors.save", "Could not save the recipe."))); }
+    } catch (error) { validation.showServerError(error, t("products.recipe.errors.save", "Could not save the recipe.")); }
   }
   async function removeRecipe() {
     if (!(await confirm({ title: t("products.recipe.confirm.remove_title", "Remove recipe"), description: t("products.recipe.confirm.remove_description", "Remove the {size} recipe? This size will be sold from the product's own stock again.", { size: sizeName }), confirmLabel: t("actions.remove", "Remove"), tone: "danger" }))) return;
@@ -114,24 +114,28 @@ function RecipeCard({ productId, recipe, ingredients, copySources, needsRecipe }
       ? t("products.recipe.needs_recipe", "Fresh drinks are made to order: without a recipe this size is sold from the drink's own stock, which is usually empty.")
       : t("products.recipe.no_recipe", "No recipe: this size is sold from the product's own stock.")}</p>}
 
-    {rows.map((row) => {
+    {rows.map((row, index) => {
       const ingredient = ingredientById.get(row.ingredientId);
+      const quantityError = validation.errors[`items.${index}.quantity`] ?? validation.errors[`items[${index}].quantity`];
+      const quantityErrorId = `recipe-${row.key}-quantity-error`;
       const savedItem = savedById.get(row.ingredientId);
       const unit = unitOf(row.ingredientId);
       const takenElsewhere = new Set(rows.filter((other) => other.key !== row.key).map((other) => other.ingredientId));
       return <div key={row.key} className="grid items-start gap-3 rounded border p-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
         <div className="space-y-1">
-          <FormSelect label={t("products.recipe.ingredient", "Ingredient")} placeholder={t("products.recipe.ingredient_placeholder", "Select an ingredient")} value={row.ingredientId} onChange={(event) => updateRow(row.key, { ingredientId: event.target.value })}>
+          <FormSelect label={t("products.recipe.ingredient", "Ingredient")} placeholder={t("products.recipe.ingredient_placeholder", "Select an ingredient")} value={row.ingredientId} onChange={(event) => updateRow(row.key, { ingredientId: event.target.value })} error={validation.errors[`items.${index}.ingredientId`] ?? validation.errors[`items[${index}].ingredientId`]}>
             {options.map((option) => <option key={option.id} value={option.id} disabled={takenElsewhere.has(option.id)}>{titleCase(option.name)} ({enumLabel(t, "unit", option.unit)})</option>)}
           </FormSelect>
           {ingredient ? <p className="text-xs text-muted-foreground">{t("products.recipe.on_hand", "On hand: {stock}", { stock: formatStock(t, Number(ingredient.quantityOnHand), ingredient) })}</p>
             : savedItem ? <p className="text-xs text-muted-foreground">{t("products.recipe.on_hand", "On hand: {stock}", { stock: `${Number(savedItem.onHand).toLocaleString()} ${enumLabel(t, "unit", savedItem.unit)}` })}</p> : null}
         </div>
-        <label className="text-sm">{t("products.recipe.quantity", "Quantity")}
-          <span className="mt-1 flex items-center gap-2">
-            <input className={inputClass} type="number" min="1" step="1" inputMode="numeric" value={row.quantity} onChange={(event) => updateRow(row.key, { quantity: event.target.value })} aria-label={t("products.recipe.quantity_of", "Quantity of {name}", { name: nameOf(row.ingredientId) })} />
-            <span className="shrink-0 text-muted-foreground">{unit ? enumLabel(t, "unit", unit) : ""}</span>
+        <label className="form_field">
+          <span className="form_field_label">{t("products.recipe.quantity", "Quantity")}</span>
+          <span className="flex items-center gap-2">
+            <input className="form_field_control" type="number" min="1" step="1" inputMode="numeric" value={row.quantity} onChange={(event) => updateRow(row.key, { quantity: event.target.value })} aria-label={t("products.recipe.quantity_of", "Quantity of {name}", { name: nameOf(row.ingredientId) })} aria-invalid={quantityError ? true : undefined} aria-describedby={quantityError ? quantityErrorId : undefined} />
+            <span className="shrink-0 text-sm text-muted-foreground">{unit ? enumLabel(t, "unit", unit) : ""}</span>
           </span>
+          <FieldError id={quantityErrorId} error={quantityError} />
         </label>
         <div className="text-sm">
           <span className="block">{t("products.recipe.line_cost", "Line cost")}</span>
@@ -139,18 +143,18 @@ function RecipeCard({ productId, recipe, ingredients, copySources, needsRecipe }
             ? <span className="mt-1 block font-semibold">{money(Number(savedItem.lineCost))}</span>
             : <span className="mt-1 block text-muted-foreground">{t("products.recipe.line_cost_after_save", "Shown after saving")}</span>}
         </div>
-        <button className="btn_outline_black self-end" type="button" disabled={busy} onClick={() => removeRow(row.key)}>{t("actions.remove", "Remove")}</button>
+        <Button variant="outline" className="self-end" disabled={busy} onClick={() => removeRow(row.key)}>{t("actions.remove", "Remove")}</Button>
       </div>;
     })}
     {dirty && <p className="text-sm text-amber-700" role="status">{t("products.recipe.unsaved", "Unsaved changes. Save to update the cost and margin.")}</p>}
 
     <div className="flex flex-wrap items-center gap-3">
-      <button className="btn_outline_black" type="button" disabled={busy || options.length === 0} onClick={addRow}>{t("products.recipe.add_row", "Add ingredient")}</button>
-      <button className="btn_primary_black" disabled={busy || rows.length === 0 || !dirty}>{busy ? t("states.saving", "Saving...") : t("products.recipe.save", "Save recipe")}</button>
-      {hasRecipe && <button className="btn_outline_black" type="button" disabled={busy} onClick={removeRecipe}>{t("products.recipe.remove", "Remove recipe")}</button>}
-      {copySources.map((source) => <button key={source.variantId} className="btn_outline_black" type="button" disabled={busy} onClick={() => setRows(rowsOf(source))}>
+      <Button variant="outline" disabled={busy || options.length === 0} onClick={addRow}>{t("products.recipe.add_row", "Add ingredient")}</Button>
+      <Button type="submit" variant="primary" disabled={busy || rows.length === 0 || !dirty}>{busy ? t("states.saving", "Saving...") : t("products.recipe.save", "Save recipe")}</Button>
+      {hasRecipe && <Button variant="outline" disabled={busy} onClick={removeRecipe}>{t("products.recipe.remove", "Remove recipe")}</Button>}
+      {copySources.map((source) => <Button key={source.variantId} variant="outline" disabled={busy} onClick={() => setRows(rowsOf(source))}>
         {t("products.recipe.copy_from", "Copy from {size}", { size: enumLabel(t, "variant", source.variantName) })}
-      </button>)}
+      </Button>)}
     </div>
     {confirmDialog}
   </form>;

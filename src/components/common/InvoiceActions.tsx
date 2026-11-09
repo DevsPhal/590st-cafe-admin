@@ -14,6 +14,7 @@ import type { OrderResponse } from "@/store/api/types";
 import { cn, formatByCurrency } from "@/lib/utils";
 import { enumLabel } from "@/lib/enumLabel";
 import { translate, useI18n } from "@/contexts/I18nContext";
+import { Button } from "@/components/common/Button";
 
 const orderNumber = (order: Pick<OrderResponse, "id">) =>
   `#${orderCode(order.id)}`;
@@ -35,12 +36,12 @@ export function InvoiceActions({
 
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <button
-        type="button"
+      <Button
+       
         onClick={() => printInvoice(order.id)}
         disabled={busy}
         autoFocus={autoFocusPrint}
-        className="btn_primary_black"
+        variant="primary"
       >
         {isBusy(order.id, "print") ? (
           <Loader2 className="animate-spin" />
@@ -48,12 +49,12 @@ export function InvoiceActions({
           <Printer />
         )}
         {isBusy(order.id, "print") ? t("states.preparing", "Preparing...") : t("invoice.print", "Print Invoice")}
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
+       
         onClick={() => viewInvoice(order.id)}
         disabled={busy}
-        className="btn_outline_black"
+        variant="outline"
       >
         {isBusy(order.id, "view") ? (
           <Loader2 className="animate-spin" />
@@ -61,12 +62,12 @@ export function InvoiceActions({
           <FileText />
         )}
         {isBusy(order.id, "view") ? t("states.opening", "Opening...") : t("invoice.view_pdf", "View PDF")}
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
+       
         onClick={() => downloadInvoice(order.id)}
         disabled={busy}
-        className="btn_outline_black"
+        variant="outline"
       >
         {isBusy(order.id, "download") ? (
           <Loader2 className="animate-spin" />
@@ -74,7 +75,7 @@ export function InvoiceActions({
           <Download />
         )}
         {isBusy(order.id, "download") ? t("states.downloading", "Downloading...") : t("actions.download", "Download")}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -99,7 +100,7 @@ export function PrintInvoiceIconButton({
       aria-label={t("invoice.print_for_order", "Print invoice for order {number}", { number: orderNumber(order) })}
       title={t("actions.print_invoice", "Print invoice")}
       className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50",
+        "inline-flex h-7 w-7 items-center justify-center rounded-full pointer-coarse:size-11 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50",
         className
       )}
     >
@@ -183,13 +184,13 @@ export function SaleCompleteModal({
           </div>
         )}
         <DialogFooter className="admin_modal_footer">
-          <button
-            type="button"
+          <Button
+           
             onClick={onNewSale}
-            className="btn_primary_yellow"
+            variant="accent"
           >
             {t("invoice.new_sale", "New Sale")}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -28,7 +28,6 @@ import {
   useVerifyLoginOtpMutation,
 } from "@/store/api/authApi";
 import { formatPhoneInput, PHONE_MAX_LENGTH, PHONE_PLACEHOLDER } from "@/lib/phone";
-import { parseForm } from "@/lib/validation";
 import { emailLoginSchema, otpSchema, phoneLoginSchema } from "@/lib/formSchemas";
 import { cn } from "@/lib/utils";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
@@ -42,6 +41,8 @@ import {
   AUTH_FIELD_CLASS as FIELD_CLASS,
   AUTH_SUBMIT_CLASS as SUBMIT_CLASS,
 } from "@/features/auth/authStyles";
+import { AuthFieldError, authInvalidProps } from "@/features/auth/components/AuthFieldError";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
 function resolveNextPath(): string {
   if (typeof window === "undefined") return "/";
@@ -83,15 +84,6 @@ function focusFirstInvalid(errors: FieldErrors) {
   if (first) document.getElementById(FIELD_IDS[first])?.focus();
 }
 
-function FieldError({ id, message }: { id: string; message?: string }) {
-  if (!message) return null;
-  return (
-    <p id={id} className="mt-1.5 flex items-start gap-1.5 text-[13px] font-medium text-[#b42318] dark:text-[#fca5a5]">
-      <CircleAlert aria-hidden className="mt-px size-4 shrink-0" />
-      {message}
-    </p>
-  );
-}
 
 function FieldIcon({ icon: Icon }: { icon: LucideIcon }) {
   return (
@@ -106,7 +98,7 @@ const fieldClass = (invalid: boolean, extra: string) =>
   cn(
     FIELD_CLASS,
     extra,
-    invalid && "border-[#d92d20] hover:border-[#d92d20] focus:border-[#d92d20] focus:ring-[#d92d20]/15",
+    invalid && "border-(--color-danger) hover:border-(--color-danger) focus:border-(--color-danger) focus:ring-(--color-danger)/15",
   );
 
 export default function AuthPage() {
@@ -168,6 +160,7 @@ export default function AuthPage() {
 
   const [loginTicket, setLoginTicket] = useState<string | null>(null);
   const [otp, setOtp] = useState("");
+  const otpValidation = useFormErrors(otpSchema, { otp });
 
   const [login, { isLoading: isLoggingIn }] = useLoginMutation();
   const [loginPhone, { isLoading: isSendingPhoneCode }] =
@@ -268,7 +261,7 @@ export default function AuthPage() {
   const handleOtp = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!loginTicket) return;
-    const parsed = parseForm(otpSchema, { otp });
+    const parsed = otpValidation.validate();
     if (!parsed) return;
 
     try {
@@ -352,7 +345,7 @@ export default function AuthPage() {
   const formAlert = formError ? (
     <div
       role="alert"
-      className="mt-5 flex items-start gap-2.5 rounded-xl border border-[#f4c7c2] bg-[#fef3f2] px-3.5 py-3 text-sm text-[#912018] dark:border-[#5b2323] dark:bg-[#2e1414] dark:text-[#fca5a5]"
+      className="mt-5 flex items-start gap-2.5 rounded-xl border border-(--color-danger)/30 bg-(--danger-bg) px-3.5 py-3 text-sm text-(--color-danger)"
     >
       <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
       <p>{formError}</p>
@@ -363,7 +356,7 @@ export default function AuthPage() {
 
   return (
     <main className="flex min-h-dvh items-center bg-(--cafe-cream) px-3 py-4 text-(--cafe-espresso) sm:px-6 sm:py-8 short:sm:py-4">
-      <div className="mx-auto grid w-full max-w-[1180px] overflow-hidden rounded-[24px] bg-white shadow-[0_30px_70px_-40px_rgba(43,26,16,0.45)] ring-1 ring-(--cafe-line) sm:rounded-[28px] lg:min-h-[min(780px,calc(100dvh-4rem))] short:lg:min-h-[calc(100dvh-2rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      <div className="mx-auto grid w-full max-w-[1180px] overflow-hidden rounded-[24px] bg-white shadow-[0_30px_70px_-40px_color-mix(in_srgb,var(--shadow-espresso)_45%,transparent)] ring-1 ring-(--cafe-line) sm:rounded-[28px] lg:min-h-[min(780px,calc(100dvh-4rem))] short:lg:min-h-[calc(100dvh-2rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
         <section className="flex items-center justify-center px-5 py-9 sm:px-12 sm:py-12 lg:px-14 short:sm:py-8">
           <div className="w-full max-w-[400px]">
             <LogoMark className="h-12 w-auto short:h-10" />
@@ -392,7 +385,7 @@ export default function AuthPage() {
                   className={cn(
                     "flex h-10 items-center justify-center gap-2 rounded-[10px] text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-(--cafe-caramel) focus-visible:outline-none motion-reduce:transition-none",
                     method === value
-                      ? "bg-white text-(--cafe-espresso) shadow-[0_1px_3px_rgba(43,26,16,0.12)]"
+                      ? "bg-white text-(--cafe-espresso) shadow-[0_1px_3px_color-mix(in_srgb,var(--shadow-espresso)_12%,transparent)]"
                       : "text-(--cafe-muted) hover:text-(--cafe-espresso)",
                   )}
                 >
@@ -430,7 +423,7 @@ export default function AuthPage() {
                   />
                   <FieldIcon icon={Phone} />
                 </div>
-                <FieldError id={errorId("phoneNumber")} message={fieldErrors.phoneNumber} />
+                <AuthFieldError id={errorId("phoneNumber")} message={fieldErrors.phoneNumber} />
                 <p id="login-phone-help" className="mt-2 text-xs leading-relaxed text-(--cafe-muted)">
                   {t(
                     "auth.login.phone_help",
@@ -478,7 +471,7 @@ export default function AuthPage() {
                   />
                   <FieldIcon icon={Mail} />
                 </div>
-                <FieldError id={errorId("email")} message={fieldErrors.email} />
+                <AuthFieldError id={errorId("email")} message={fieldErrors.email} />
 
                 <label htmlFor={FIELD_IDS.password} className="mt-5 short:mt-4 block text-sm font-medium">
                   {t("fields.password", "Password")}
@@ -502,7 +495,7 @@ export default function AuthPage() {
                   <FieldIcon icon={LockKeyhole} />
                   <button
                     type="button"
-                    className="absolute top-1/2 right-1.5 grid size-9 -translate-y-1/2 place-items-center rounded-lg text-(--cafe-subtle) transition-colors hover:bg-(--cafe-sand) hover:text-(--cafe-espresso) focus-visible:ring-2 focus-visible:ring-(--cafe-caramel) focus-visible:outline-none motion-reduce:transition-none"
+                    className="absolute top-1/2 right-1.5 grid size-9 pointer-coarse:size-11 -translate-y-1/2 place-items-center rounded-lg text-(--cafe-subtle) transition-colors hover:bg-(--cafe-sand) hover:text-(--cafe-espresso) focus-visible:ring-2 focus-visible:ring-(--cafe-caramel) focus-visible:outline-none motion-reduce:transition-none"
                     onClick={() => setShowPassword((prev) => !prev)}
                     aria-controls={FIELD_IDS.password}
                     aria-label={
@@ -518,7 +511,7 @@ export default function AuthPage() {
                     )}
                   </button>
                 </div>
-                <FieldError id={errorId("password")} message={fieldErrors.password} />
+                <AuthFieldError id={errorId("password")} message={fieldErrors.password} />
 
                 {rememberRow}
                 {formAlert}
@@ -581,7 +574,9 @@ export default function AuthPage() {
                 autoComplete="one-time-code"
                 autoFocus
                 required
+                {...authInvalidProps("login-otp-error", otpValidation.errors.otp)}
               />
+              <AuthFieldError id="login-otp-error" message={otpValidation.errors.otp} />
             </label>
 
             <button

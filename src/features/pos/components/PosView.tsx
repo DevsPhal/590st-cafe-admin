@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import QRCode from "qrcode";
-import { Minus, Pencil, Plus, Search, ShoppingBag, X } from "lucide-react";
+import { Minus, Pencil, Plus, Search, ShoppingBag, UtensilsCrossed, X } from "lucide-react";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
 import { AdminTopActions, ErrorState, FormSelect, SkeletonBlock, Thumbnail, listLoadState } from "@/components/common/AdminKit";
@@ -43,6 +43,7 @@ import type {
   MilkType,
   OrderItemRequest,
   OrderResponse,
+  OrderType,
   ProductResponse,
   ProductVariantResponse,
   SugarLevel,
@@ -55,8 +56,12 @@ import { useInventoryAlerts } from "@/hooks/useInventoryAlerts";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useStaffOrderAlerts } from "@/hooks/useStaffOrderAlerts";
 import { useI18n } from "@/contexts/I18nContext";
+import { Button } from "@/components/common/Button";
+import { EmptyState } from "@/components/common/EmptyState";
 
 const BAKONG_POLL_MS = 4000;
+// The API's ValidationPatterns.MAX_ITEM_QUANTITY: the most of one item a single line can hold.
+const MAX_LINE_QUANTITY = 999;
 
 type CartLine = {
   key: string;
@@ -131,9 +136,11 @@ export default function PosView() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PosPaymentMethod>("cash");
   const [cart, setCart] = usePersistentState<CartLine[]>("pos:cart", []);
-  const [note, setNote] = usePersistentState("pos:note", "");
+  const [storedOrderType, setOrderType] = usePersistentState<OrderType>("pos:orderType", "DINE_IN");
+  // Dine in unless take-away was picked (also covers a stale or missing saved value).
+  const orderType: OrderType = storedOrderType === "TAKE_AWAY" ? "TAKE_AWAY" : "DINE_IN";
   const [tableNumber, setTableNumber] = usePersistentState("pos:tableNumber", "");
-  const isDineIn = note === "Dine in";
+  const isDineIn = orderType === "DINE_IN";
   const { data: tables } = useListPublicTablesQuery(undefined, { skip: !isDineIn });
   const [pendingOrder, setPendingOrder] = usePersistentState<OrderResponse | null>("pos:pendingOrder", null);
   const confirmingRef = useRef(false);
@@ -214,6 +221,10 @@ export default function PosView() {
       return;
     }
     const key = lineKey(product.id, options);
+    if ((cart.find((line) => line.key === key)?.quantity ?? 0) >= MAX_LINE_QUANTITY) {
+      toast.error(t("pos.toast.line_limit", "One line can hold at most {max}.", { max: MAX_LINE_QUANTITY }));
+      return;
+    }
 
     setCart((current) => {
       const existing = current.find((line) => line.key === key);
@@ -262,6 +273,11 @@ export default function PosView() {
       return;
     }
     const key = lineKey(product.id, options);
+    const twinQuantity = cart.find((line) => line.key === key && line.key !== editKey)?.quantity ?? 0;
+    if (editing && twinQuantity + editing.quantity > MAX_LINE_QUANTITY) {
+      toast.error(t("pos.toast.line_limit", "One line can hold at most {max}.", { max: MAX_LINE_QUANTITY }));
+      return;
+    }
     setCart((current) => {
       const edited = current.find((line) => line.key === editKey);
       if (!edited) return current;
@@ -279,6 +295,10 @@ export default function PosView() {
     if (pendingOrder || confirmingRef.current) return;
     const item = cart.find((line) => line.key === key);
     if (item && delta > 0) {
+      if (item.quantity + delta > MAX_LINE_QUANTITY) {
+        toast.error(t("pos.toast.line_limit", "One line can hold at most {max}.", { max: MAX_LINE_QUANTITY }));
+        return;
+      }
       if (!hasStockFor(item.product, item.variant, cart, delta)) {
         toast.error(t("pos.toast.not_enough_stock", "{name} does not have enough stock.", { name: item.product.name }));
         return;
@@ -342,7 +362,7 @@ export default function PosView() {
   const resetCart = () => {
     setPendingOrder(null);
     setCart([]);
-    setNote("");
+    setOrderType("DINE_IN");
     setTableNumber("");
     setPaymentMethod("cash");
     setCashCurrency("USD");
@@ -412,10 +432,20 @@ export default function PosView() {
   const grossTotal = cart.reduce((sum, line) => sum + lineUnitOriginal(line) * line.quantity, 0);
   const discount = Math.max(grossTotal - total, 0);
 
-  const noteLabels: Record<string, string> = {
-    "Dine in": t("pos.order.note_dine_in", "Dine in"),
-    Takeaway: t("pos.order.note_takeaway", "Takeaway"),
-    Delivery: t("pos.order.note_delivery", "Delivery"),
+  const orderTypeLabels: Record<OrderType, string> = {
+    DINE_IN: t("pos.order.type_dine_in", "Dine in"),
+    TAKE_AWAY: t("pos.order.type_take_away", "Take away"),
+  };
+  const orderTypeSummary =
+    isDineIn && tableNumber
+      ? t("pos.order.table_option", "Table {number}", { number: tableNumber })
+      : orderTypeLabels[orderType];
+  // The type is part of the order once it's created, so it can't change mid-payment.
+  const isOrderLocked = pendingOrder != null;
+  const chooseOrderType = (next: OrderType) => {
+    if (isOrderLocked || confirmingRef.current) return;
+    setOrderType(next);
+    if (next === "TAKE_AWAY") setTableNumber("");
   };
 
   const paymentItems: PosCartItem[] = cart.map((line) => ({
@@ -442,7 +472,7 @@ export default function PosView() {
     }));
     const order = await createOrder({
       items,
-      note: note.trim() || undefined,
+      orderType,
       tableNumber: isDineIn && tableNumber ? tableNumber : undefined,
     }).unwrap();
     setPendingOrder(order);
@@ -633,19 +663,21 @@ export default function PosView() {
                 <ErrorState error={products.error} fallback={t("pos.catalog.load_error", "Could not load products.")} onRetry={refetch} isRetrying={productsQuery.isFetching} />
               </div>
             ) : visibleProducts.length === 0 ? (
-              <div className="pos_catalog_empty">
-                <Search aria-hidden />
-                {search.trim() ? (
-                  <>
-                    <p>{t("pos.catalog.no_match", "No products match “{term}”.", { term: search.trim() })}</p>
-                    <button type="button" className="btn_outline_black" onClick={() => setSearch("")}>
+              <EmptyState
+                icon={Search}
+                title={
+                  search.trim()
+                    ? t("pos.catalog.no_match", "No products match “{term}”.", { term: search.trim() })
+                    : t("pos.catalog.empty", "No active products in this category.")
+                }
+                action={
+                  search.trim() ? (
+                    <Button variant="outline" onClick={() => setSearch("")}>
                       {t("pos.catalog.clear_search", "Clear search")}
-                    </button>
-                  </>
-                ) : (
-                  <p>{t("pos.catalog.empty", "No active products in this category.")}</p>
-                )}
-              </div>
+                    </Button>
+                  ) : undefined
+                }
+              />
             ) : (
               <div className="pos_product_grid">
                 {visibleProducts.map((product) => (
@@ -676,21 +708,32 @@ export default function PosView() {
           </div>
 
           <div className="pos_order_selects">
-            <FormSelect
-              label={t("pos.order.note_label", "Order note")}
-              value={note}
-              onChange={(event) => { if (!pendingOrder && !confirmingRef.current) setNote(event.target.value); }}
-              placeholder={t("pos.order.note_placeholder", "No note")}
-            >
-              <option value="Dine in">{noteLabels["Dine in"]}</option>
-              <option value="Takeaway">{noteLabels.Takeaway}</option>
-              <option value="Delivery">{noteLabels.Delivery}</option>
-            </FormSelect>
+            <div className="form_field pos_order_type">
+              <span id="pos-order-type-label" className="form_field_label">
+                {t("pos.order.type_label", "Order type")}
+              </span>
+              <div className="pos_order_type_options" role="radiogroup" aria-labelledby="pos-order-type-label">
+                {(["DINE_IN", "TAKE_AWAY"] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    role="radio"
+                    aria-checked={orderType === type}
+                    disabled={isOrderLocked}
+                    onClick={() => chooseOrderType(type)}
+                    className="pos_order_type_option"
+                  >
+                    {type === "DINE_IN" ? <UtensilsCrossed aria-hidden /> : <ShoppingBag aria-hidden />}
+                    {orderTypeLabels[type]}
+                  </button>
+                ))}
+              </div>
+            </div>
             {isDineIn ? (
               <FormSelect
                 label={t("pos.order.table_label", "Table")}
                 value={tableNumber}
-                onChange={(event) => { if (!pendingOrder && !confirmingRef.current) setTableNumber(event.target.value); }}
+                onChange={(event) => { if (!isOrderLocked && !confirmingRef.current) setTableNumber(event.target.value); }}
                 placeholder={t("pos.order.table_placeholder", "No table")}
               >
                 {(tables ?? []).map((table) => (
@@ -776,18 +819,18 @@ export default function PosView() {
           </dl>
 
           <div className="pos_order_ctas">
-            <button
-              type="button"
-              className="btn_outline_black"
+            <Button
+             
+              variant="outline"
               onClick={clearCart}
               disabled={cart.length === 0}
             >
               <ShoppingBag />
               {t("actions.clear", "Clear")}
-            </button>
-            <button
-              type="button"
-              className="btn_primary_yellow"
+            </Button>
+            <Button
+             
+              variant="accent"
               onClick={() => setPaymentOpen(true)}
               disabled={cart.length === 0 || (!isAdmin && !isBarista)}
             >
@@ -795,7 +838,7 @@ export default function PosView() {
               <span aria-hidden className="pos_cta_arrow">
                 →
               </span>
-            </button>
+            </Button>
           </div>
         </aside>
       </div>
@@ -830,7 +873,7 @@ export default function PosView() {
         }}
         items={paymentItems}
         total={Number(pendingOrder?.totalAmount ?? total)}
-        orderTable={note ? noteLabels[note] ?? note : t("pos.order.walk_in", "Walk-in")}
+        orderTable={orderTypeSummary}
         orderId={
           pendingOrder
             ? `#${pendingOrder.id.slice(0, 8)}`

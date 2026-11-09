@@ -38,6 +38,7 @@ import { formatLocalDate } from "@/lib/dateFormat";
 import { enumLabel } from "@/lib/enumLabel";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useI18n } from "@/contexts/I18nContext";
+import { Button } from "@/components/common/Button";
 
 type Source = "orders" | "attendance";
 type Tone = "success" | "danger" | "warning" | "info" | "neutral";
@@ -328,10 +329,10 @@ export default function AuditManagementView() {
 function ViewHistoryButton({ onClick }: { onClick: () => void }) {
   const { t } = useI18n();
   return (
-    <button type="button" className="btn_outline_black" onClick={onClick}>
+    <Button variant="outline" onClick={onClick}>
       <History />
       {t("actions.view", "View")}
-    </button>
+    </Button>
   );
 }
 

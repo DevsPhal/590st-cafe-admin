@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.scss";
 import { Analytics } from "@vercel/analytics/next";
 import {
@@ -139,6 +139,14 @@ const notoSansKhmer = Noto_Sans_Khmer({
   variable: "--font-noto-sans-khmer",
   display: "swap",
 });
+
+// Zoom stays allowed (no maximum-scale / user-scalable=no); fields are 16px so iOS never zooms on focus.
+// resizes-visual: the on-screen keyboard overlays the page instead of shrinking it, so nothing jumps.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  interactiveWidget: "resizes-visual",
+};
 
 export const metadata: Metadata = {
   title: "590st Cafe Admin Dashboard",

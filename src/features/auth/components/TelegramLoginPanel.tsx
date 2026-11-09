@@ -126,7 +126,7 @@ export function TelegramLoginPanel({
             key={text}
             className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm"
           >
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#229ED9]/10 text-[#229ED9]">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-(--brand-telegram)/10 text-(--brand-telegram)">
               <Icon className="h-4 w-4" />
             </span>
             <span className="text-gray-700">

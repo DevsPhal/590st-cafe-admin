@@ -51,12 +51,12 @@ export function LoginBrandVisual() {
         <PosterPrint
           poster={LOGIN_POSTERS.supporting}
           alt=""
-          className="top-1/2 left-1/2 w-[min(42cqw,40cqh)] -translate-x-full translate-y-[-60%] -rotate-6 shadow-[0_24px_48px_-24px_rgba(43,26,16,0.45)]"
+          className="top-1/2 left-1/2 w-[min(42cqw,40cqh)] -translate-x-full translate-y-[-60%] -rotate-6 shadow-[0_24px_48px_-24px_color-mix(in_srgb,var(--shadow-espresso)_45%,transparent)]"
         />
         <PosterPrint
           poster={LOGIN_POSTERS.hero}
           alt={t("auth.login.visual.hero_alt", "590st Cafe poster: iced soda, iced latte and iced americano in 590st cups")}
-          className="top-1/2 left-1/2 w-[min(52cqw,54cqh)] translate-x-[-27%] translate-y-[-46%] rotate-3 shadow-[0_36px_64px_-28px_rgba(43,26,16,0.65)]"
+          className="top-1/2 left-1/2 w-[min(52cqw,54cqh)] translate-x-[-27%] translate-y-[-46%] rotate-3 shadow-[0_36px_64px_-28px_color-mix(in_srgb,var(--shadow-espresso)_65%,transparent)]"
         />
       </div>
       <figcaption className="px-8 pt-2 pb-8">

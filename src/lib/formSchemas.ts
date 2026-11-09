@@ -273,15 +273,6 @@ export const attachExtraSchema = z.object({
   extraId: requiredChoice(message("extra_required", "Choose an extra to offer.")),
 });
 
-export function stockMovementSchema(kind: "STOCK_IN" | "STOCK_CUT") {
-  return z.object({
-    productId: requiredChoice(message("product_required", "Choose a product first.")),
-    quantity: numberField("quantity", { greaterThan: 0 }),
-    unitCost: kind === "STOCK_IN" ? numberField("unit cost", { min: 0 }) : z.any().transform(() => undefined),
-    note: optionalText("Note", 500),
-  });
-}
-
 // ---- Shop content -----------------------------------------------------------------
 
 export const isUsableLink = (link: string) => link.startsWith("/") || /^https?:\/\//i.test(link);

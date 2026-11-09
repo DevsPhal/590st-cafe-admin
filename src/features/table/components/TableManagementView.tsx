@@ -42,8 +42,10 @@ import type { OrderResponse, OrderStatus, TableActivityResponse, TableResponse, 
 import { cn, timeAgo, titleCase } from "@/lib/utils";
 import { staffCallReasonLabel } from "@/lib/staffCall";
 import { enumLabel } from "@/lib/enumLabel";
-import { parseForm } from "@/lib/validation";
 import { tableSchema } from "@/lib/formSchemas";
+import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
+import { EmptyState } from "@/components/common/EmptyState";
 
 const STATUS_LABEL: Record<TableStatus, string> = {
   AVAILABLE: "Available",
@@ -95,6 +97,7 @@ export default function TableManagementView() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TableResponse | null>(null);
   const [form, setForm] = useState<TableForm>(EMPTY_FORM);
+  const validation = useFormErrors(tableSchema, form);
   const [qrTarget, setQrTarget] = useState<QrTarget | null>(null);
   const { data: menuLink } = useGetMenuLinkQuery(undefined, { skip: !isAdmin });
 
@@ -142,11 +145,12 @@ export default function TableManagementView() {
   const openForm = (table?: TableResponse) => {
     setEditing(table ?? null);
     setForm(table ? { tableNumber: table.tableNumber, size: table.size, capacity: String(table.capacity) } : EMPTY_FORM);
+    validation.reset();
     setFormOpen(true);
   };
 
   const saveTable = async () => {
-    const parsed = parseForm(tableSchema, form);
+    const parsed = validation.validate();
     if (!parsed) return;
     const { tableNumber, capacity } = parsed;
     try {
@@ -160,7 +164,7 @@ export default function TableManagementView() {
       }
       setFormOpen(false);
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("tables.toast.save_error", "Could not save the table.")));
+      validation.showServerError(err, t("tables.toast.save_error", "Could not save the table."));
     }
   };
 
@@ -196,10 +200,7 @@ export default function TableManagementView() {
       onDelete={() => removeTable(selected)}
     />
   ) : (
-    <div className="table_detail_empty">
-      <QrCode className="h-8 w-8" />
-      <p>{t("tables.detail.empty", "Tap a table to see who's seated and what they ordered.")}</p>
-    </div>
+    <EmptyState icon={QrCode} title={t("tables.detail.empty", "Tap a table to see who's seated and what they ordered.")} />
   );
 
   return (
@@ -228,16 +229,16 @@ export default function TableManagementView() {
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {isAdmin ? (
-                <button type="button" className="btn_outline_black" onClick={showMenuQr} disabled={!menuLink}>
+                <Button variant="outline" onClick={showMenuQr} disabled={!menuLink}>
                   <QrCode />
                   {t("tables.qr.menu", "Menu QR")}
-                </button>
+                </Button>
               ) : null}
               {isAdmin ? (
-                <button type="button" className="btn_primary_black" onClick={() => openForm()}>
+                <Button variant="primary" onClick={() => openForm()}>
                   <Plus />
                   {t("tables.actions.add_table", "Add table")}
-                </button>
+                </Button>
               ) : null}
             </div>
           }
@@ -268,14 +269,14 @@ export default function TableManagementView() {
               />
             </div>
           ) : tables.length === 0 ? (
-            <div className="table_detail_empty">
-              <QrCode className="h-8 w-8" />
-              <p>
-                {isAdmin
+            <EmptyState
+              icon={QrCode}
+              title={
+                isAdmin
                   ? t("tables.floor.empty_admin", "No tables yet. Use Add table, then print each table's QR code.")
-                  : t("tables.floor.empty_barista", "No tables have been set up yet.")}
-              </p>
-            </div>
+                  : t("tables.floor.empty_barista", "No tables have been set up yet.")
+              }
+            />
           ) : (
             <div className="table_grid">
               {tables.map((table) => (
@@ -343,11 +344,13 @@ export default function TableManagementView() {
             placeholder={t("tables.form.table_number_placeholder", "e.g. 01")}
             maxLength={20}
             value={form.tableNumber}
+            error={validation.errors.tableNumber}
             onChange={(e) => setForm({ ...form, tableNumber: e.target.value.toUpperCase() })}
           />
           <FormSelect
             label={t("tables.form.size", "Size")}
             value={form.size}
+            error={validation.errors.size}
             onChange={(e) => setForm({ ...form, size: e.target.value as TableSize })}
           >
             {(Object.keys(SIZE_LABEL) as TableSize[]).map((size) => (
@@ -359,6 +362,7 @@ export default function TableManagementView() {
             inputMode="numeric"
             placeholder={t("tables.form.seats_placeholder", "Uses the size default")}
             value={form.capacity}
+            error={validation.errors.capacity}
             onChange={(e) => setForm({ ...form, capacity: e.target.value.replace(/\D/g, "") })}
           />
         </div>
@@ -544,32 +548,32 @@ function TableDetail({
       </div>
 
       {table.status === "OCCUPIED" && activeOrders.length === 0 && !isLoading ? (
-        <button type="button" className="btn_outline_black w-full justify-center" disabled={isSaving} onClick={() => setStatus("AVAILABLE")}>
+        <Button variant="outline" className="w-full justify-center" disabled={isSaving} onClick={() => setStatus("AVAILABLE")}>
           {t("tables.actions.clear_table", "Clear table")}
-        </button>
+        </Button>
       ) : null}
 
       <div className="table_detail_actions">
-        <button type="button" className="btn_outline_black" onClick={onShowQr}>
+        <Button variant="outline" onClick={onShowQr}>
           <QrCode />
           {t("tables.qr.table", "Table QR")}
-        </button>
+        </Button>
         {isAdmin ? (
           <>
-            <button type="button" className="btn_outline_black" onClick={onEdit}>
+            <Button variant="outline" onClick={onEdit}>
               <Pencil />
               {t("actions.edit", "Edit")}
-            </button>
-            <button
-              type="button"
-              className="btn_outline_black text-red-600"
+            </Button>
+            <Button
+             
+              variant="outline" className="text-red-600"
               onClick={onDelete}
               disabled={table.status === "OCCUPIED"}
               title={table.status === "OCCUPIED" ? t("tables.detail.delete_disabled", "Clear the table before deleting it") : undefined}
             >
               <Trash2 />
               {t("actions.delete", "Delete")}
-            </button>
+            </Button>
           </>
         ) : null}
       </div>
@@ -614,10 +618,10 @@ function TableOrderCard({ order, onPrint, isPrinting }: { order: OrderResponse; 
         ))}
       </ol>
       {order.paidAt ? (
-        <button type="button" className="btn_primary_black w-full justify-center" onClick={onPrint} disabled={isPrinting}>
+        <Button variant="primary" className="w-full justify-center" onClick={onPrint} disabled={isPrinting}>
           {isPrinting ? <Loader2 className="animate-spin" /> : <Printer />}
           {isPrinting ? t("states.preparing", "Preparing...") : t("tables.order.print_bill", "Print Bill")}
-        </button>
+        </Button>
       ) : (
         <p className="table_detail_hint">{t("tables.order.not_paid", "Not paid yet — the bill can be printed once it's paid.")}</p>
       )}
@@ -675,10 +679,10 @@ function QrDialog({ target, onClose }: { target: QrTarget | null; onClose: () =>
           )}
           <p className="break-all text-xs text-gray-500">{target?.url}</p>
           <div className="flex flex-wrap justify-center gap-2">
-            <button type="button" className="btn_primary_black" onClick={printQr} disabled={!dataUrl}>
+            <Button variant="primary" onClick={printQr} disabled={!dataUrl}>
               <Printer />
               {t("actions.print", "Print")}
-            </button>
+            </Button>
             {dataUrl ? (
               <a className="btn_outline_black" href={dataUrl} download={target?.fileName}>
                 <Download />
@@ -686,9 +690,9 @@ function QrDialog({ target, onClose }: { target: QrTarget | null; onClose: () =>
               </a>
             ) : null}
             {target ? (
-              <button
-                type="button"
-                className="btn_outline_black"
+              <Button
+               
+                variant="outline"
                 onClick={() => {
                   void navigator.clipboard?.writeText(target.url).then(
                     () => toast.success(t("tables.toast.link_copied", "Link copied")),
@@ -698,7 +702,7 @@ function QrDialog({ target, onClose }: { target: QrTarget | null; onClose: () =>
               >
                 <Copy />
                 {t("tables.qr.copy_link", "Copy link")}
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>

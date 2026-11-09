@@ -11,9 +11,11 @@ import {
 } from "@/lib/estimate";
 import { useNow } from "@/hooks/useNow";
 import type { OrderResponse } from "@/store/api/types";
-import { parseForm } from "@/lib/validation";
 import { estimateMinutesSchema } from "@/lib/formSchemas";
 import { useI18n, type TranslationParams } from "@/contexts/I18nContext";
+import { FieldError } from "@/components/common/AdminKit";
+import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
 
 type EstimateOrder = Pick<OrderResponse, "status" | "estimatedReadyAt">;
 
@@ -66,18 +68,19 @@ export function OrderEstimateEditor({
   const { t } = useI18n();
   const now = useNow(REFRESH_MS);
   const [custom, setCustom] = useState("");
+  const validation = useFormErrors(estimateMinutesSchema, { minutes: custom });
   const estimate = getOrderEstimate(order, now);
   if (estimate.state === "finished") return null;
 
   const submitCustom = () => {
-    const parsed = parseForm(estimateMinutesSchema, { minutes: custom });
+    const parsed = validation.validate();
     if (!parsed) return;
     onSave(parsed.minutes);
     setCustom("");
   };
 
   return (
-    <section className="mt-4 rounded-xl border border-gray-200 bg-white p-3.5" aria-label={t("estimate.title", "Estimated time")}>
+    <section className="ui_card is_padded mt-4" aria-label={t("estimate.title", "Estimated time")}>
       <div className="flex items-start gap-2.5">
         <span
           className={cn(
@@ -132,19 +135,22 @@ export function OrderEstimateEditor({
                 submitCustom();
               }
             }}
-            className="h-7 w-20 rounded-full border border-gray-300 px-3 text-xs outline-none focus:border-gray-900"
+            className="h-9 w-24 rounded-full border border-gray-300 px-3 text-base outline-none focus:border-gray-900"
             aria-label={t("estimate.custom_label", "Custom estimated minutes")}
+            aria-invalid={validation.errors.minutes ? true : undefined}
+            aria-describedby={validation.errors.minutes ? "estimate-minutes-error" : undefined}
           />
-          <button
-            type="button"
+          <Button
+           
             onClick={submitCustom}
             disabled={isSaving || !custom.trim()}
-            className="btn_primary_black h-7 rounded-full px-3 text-xs font-medium disabled:opacity-50"
+            variant="primary" className="h-9 rounded-full px-3 text-xs font-medium disabled:opacity-50"
           >
             {isSaving ? t("states.saving", "Saving...") : t("actions.set", "Set")}
-          </button>
+          </Button>
         </div>
       </div>
+      <FieldError id="estimate-minutes-error" error={validation.errors.minutes} />
     </section>
   );
 }

@@ -37,17 +37,18 @@ import {
   useUpdateProfileMutation,
   useUploadAvatarMutation,
 } from "@/store/api/authApi";
-import { parseForm } from "@/lib/validation";
 import { changePasswordSchema, profileSchema } from "@/lib/formSchemas";
 import type { Gender, UpdateProfileRequest } from "@/store/api/types";
 import { statusTone } from "@/features/user/components/UserManagementView";
 import { titleCase } from "@/lib/utils";
 import { enumLabel } from "@/lib/enumLabel";
 import { formatPhoneInput, samePhone } from "@/lib/phone";
+import { useFormErrors } from "@/hooks/useFormErrors";
+import { IMAGE_ACCEPT, imageFileProblem } from "@/lib/imageFile";
+import { Button } from "@/components/common/Button";
 
 const GENDERS: Gender[] = ["MALE", "FEMALE", "OTHER"];
 
-const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 const EMPTY_PASSWORD_FORM = { current: "", next: "", confirm: "" };
 
@@ -66,6 +67,8 @@ export default function ProfileView() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [gender, setGender] = useState<string>("");
   const [password, setPassword] = useState(EMPTY_PASSWORD_FORM);
+  const profileValidation = useFormErrors(profileSchema, { fullName, phoneNumber });
+  const passwordValidation = useFormErrors(changePasswordSchema, password);
 
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
@@ -86,7 +89,7 @@ export default function ProfileView() {
   const handleSaveProfile = async () => {
     if (!user) return;
 
-    const parsed = parseForm(profileSchema, { fullName, phoneNumber });
+    const parsed = profileValidation.validate();
     if (!parsed) return;
 
     const body: UpdateProfileRequest = {};
@@ -103,7 +106,7 @@ export default function ProfileView() {
       await updateProfile(body).unwrap();
       toast.success(t("profile.toast.profile_updated", "Profile updated"));
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("profile.toast.profile_update_failed", "Could not update your profile.")));
+      profileValidation.showServerError(err, t("profile.toast.profile_update_failed", "Could not update your profile."));
     }
   };
 
@@ -112,10 +115,11 @@ export default function ProfileView() {
     setFullName(user.fullName ?? "");
     setPhoneNumber(formatPhoneInput(user.phoneNumber));
     setGender(user.gender ?? "");
+    profileValidation.reset();
   };
 
   const handleChangePassword = async () => {
-    if (!parseForm(changePasswordSchema, password)) return;
+    if (!passwordValidation.validate()) return;
 
     try {
       await changePassword({
@@ -130,7 +134,10 @@ export default function ProfileView() {
         )
       );
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("profile.toast.password_change_failed", "Could not change your password.")));
+      passwordValidation.showServerError(err, t("profile.toast.password_change_failed", "Could not change your password."), {
+        currentPassword: "current",
+        newPassword: "next",
+      });
     }
   };
 
@@ -138,12 +145,9 @@ export default function ProfileView() {
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      toast.error(t("profile.toast.choose_image", "Choose an image file."));
-      return;
-    }
-    if (file.size > MAX_AVATAR_BYTES) {
-      toast.error(t("profile.toast.image_too_large", "Image must be 5 MB or smaller."));
+    const problem = imageFileProblem(file);
+    if (problem) {
+      toast.error(problem);
       return;
     }
 
@@ -232,14 +236,14 @@ export default function ProfileView() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept={IMAGE_ACCEPT}
                 className="sr-only"
                 onChange={(e) => handlePickAvatar(e.target.files?.[0] ?? null)}
               />
               <div className="flex flex-wrap items-center justify-center gap-2">
-                <button
-                  type="button"
-                  className="btn_primary_black"
+                <Button
+                 
+                  variant="primary"
                   disabled={avatarBusy}
                   onClick={() => fileInputRef.current?.click()}
                 >
@@ -247,17 +251,17 @@ export default function ProfileView() {
                   {user.avatarUrl
                     ? t("profile.photo.replace", "Replace")
                     : t("profile.photo.upload", "Upload")}
-                </button>
+                </Button>
                 {user.avatarUrl ? (
-                  <button
-                    type="button"
-                    className="btn_outline_black"
+                  <Button
+                   
+                    variant="outline"
                     disabled={avatarBusy}
                     onClick={handleRemoveAvatar}
                   >
                     <Trash2 />
                     {t("actions.remove", "Remove")}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             </div>
@@ -311,6 +315,7 @@ export default function ProfileView() {
                 <FormInput
                   label={t("fields.full_name", "Full Name")}
                   value={fullName}
+                  error={profileValidation.errors.fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder={t("profile.personal.name_placeholder", "Your name")}
                   required
@@ -321,7 +326,7 @@ export default function ProfileView() {
                   readOnly
                   placeholder="—"
                 />
-                <FormPhoneInput value={phoneNumber} onChange={setPhoneNumber} />
+                <FormPhoneInput value={phoneNumber} onChange={setPhoneNumber} error={profileValidation.errors.phoneNumber} />
                 <FormSelect
                   label={t("profile.personal.gender", "Gender")}
                   value={gender}
@@ -350,23 +355,23 @@ export default function ProfileView() {
               </p>
 
               <div className="flex flex-wrap justify-end gap-3 border-t border-gray-100 pt-6">
-                <button
-                  type="button"
-                  className="btn_outline_black"
+                <Button
+                 
+                  variant="outline"
                   onClick={handleResetForm}
                   disabled={!isDirty || isSaving}
                 >
                   {t("actions.reset", "Reset")}
-                </button>
-                <button
-                  type="button"
-                  className="btn_primary_black"
+                </Button>
+                <Button
+                 
+                  variant="primary"
                   onClick={handleSaveProfile}
                   disabled={!isDirty || isSaving}
                 >
                   {isSaving ? <Loader2 className="animate-spin" /> : <Check />}
                   {isSaving ? t("states.saving", "Saving...") : t("actions.save_changes", "Save Changes")}
-                </button>
+                </Button>
               </div>
             </div>
           </DataCard>
@@ -394,6 +399,7 @@ export default function ProfileView() {
                     label={t("profile.password.current", "Current Password")}
                     type="password"
                     value={password.current}
+                    error={passwordValidation.errors.current}
                     onChange={(e) =>
                       setPassword((prev) => ({ ...prev, current: e.target.value }))
                     }
@@ -405,6 +411,7 @@ export default function ProfileView() {
                     label={t("profile.password.new", "New Password")}
                     type="password"
                     value={password.next}
+                    error={passwordValidation.errors.next}
                     onChange={(e) => setPassword((prev) => ({ ...prev, next: e.target.value }))}
                     placeholder="••••••••"
                     required
@@ -413,6 +420,7 @@ export default function ProfileView() {
                     label={t("profile.password.confirm", "Confirm New Password")}
                     type="password"
                     value={password.confirm}
+                    error={passwordValidation.errors.confirm}
                     onChange={(e) =>
                       setPassword((prev) => ({ ...prev, confirm: e.target.value }))
                     }
@@ -430,9 +438,9 @@ export default function ProfileView() {
                 </p>
 
                 <div className="flex justify-end border-t border-gray-100 pt-6">
-                  <button
-                    type="button"
-                    className="btn_primary_black"
+                  <Button
+                   
+                    variant="primary"
                     onClick={handleChangePassword}
                     disabled={
                       isChangingPassword ||
@@ -445,7 +453,7 @@ export default function ProfileView() {
                     {isChangingPassword
                       ? t("profile.password.changing", "Changing...")
                       : t("profile.password.change", "Change Password")}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

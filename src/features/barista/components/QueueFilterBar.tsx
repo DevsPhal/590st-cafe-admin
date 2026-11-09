@@ -37,6 +37,7 @@ import { trailingDates } from "@/lib/shopDate";
 import { cn } from "@/lib/utils";
 import type { PaymentMethod, SortDirection } from "@/store/api/types";
 import { EMPTY_FILTERS, hasActiveFilters, type OrderTypeFilter, type QueueFilters } from "../queue";
+import { Button } from "@/components/common/Button";
 
 type Translate = ReturnType<typeof useI18n>["t"];
 
@@ -133,7 +134,7 @@ function SearchField({ value, onCommit }: { value: string; onCommit: (value: str
             type="button"
             onClick={clear}
             aria-label={t("barista.filters.clear_search", "Clear search")}
-            className="absolute top-1/2 right-2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+            className="absolute top-1/2 right-2 grid h-6 w-6 -translate-y-1/2 place-items-center pointer-coarse:size-11 rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -225,12 +226,12 @@ function DateRangeFilter({
                 locale={locale === "kh" ? dayPickerKhmer : undefined}
               />
               <div className="flex items-center justify-end gap-2 border-t border-(--line-subtle) px-3 py-2.5">
-                <button type="button" className="btn_outline_black" onClick={() => apply("", "")} disabled={!from}>
+                <Button variant="outline" onClick={() => apply("", "")} disabled={!from}>
                   {t("barista.filters.any_date", "Any date")}
-                </button>
-                <button
-                  type="button"
-                  className="btn_primary_black"
+                </Button>
+                <Button
+                 
+                  variant="primary"
                   disabled={!draft?.from}
                   onClick={() => {
                     if (!draft?.from) return;
@@ -238,7 +239,7 @@ function DateRangeFilter({
                   }}
                 >
                   {t("barista.filters.apply", "Apply")}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -390,7 +391,7 @@ export function QueueFilterBar({
             <SelectGroup>
               <SelectLabel>{t("barista.filters.served_as", "Served as")}</SelectLabel>
               <SelectItem value="DINE_IN">{t("fulfillment.dine_in", "Dine-in")}</SelectItem>
-              <SelectItem value="PICKUP">{t("fulfillment.pickup", "Pickup")}</SelectItem>
+              <SelectItem value="PICKUP">{t("fulfillment.pickup_or_take_away", "Pickup / Take away")}</SelectItem>
               <SelectItem value="DELIVERY">{t("fulfillment.delivery", "Delivery")}</SelectItem>
             </SelectGroup>
           </FilterSelect>
