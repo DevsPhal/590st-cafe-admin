@@ -7,8 +7,10 @@ import {
   Bike,
   CircleHelp,
   Clock,
+  ExternalLink,
   Globe,
   MapPin,
+  MapPinned,
   MessageSquareText,
   Phone,
   QrCode,
@@ -137,10 +139,18 @@ function ContactDetails({ order }: { order: OrderResponse }) {
           href={`https://www.google.com/maps?q=${order.deliveryLatitude},${order.deliveryLongitude}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-block font-medium underline"
+          className="mt-1 flex w-full items-center gap-2 rounded-lg border border-gray-200 bg-white py-1.5 pr-2.5 pl-1.5 font-semibold text-gray-900 shadow-xs transition-colors hover:border-gray-300 hover:bg-gray-100 pointer-coarse:py-2"
         >
-          {t("fulfillment.view_pin", "View pinned location on map")}
-          {order.distanceMeters != null ? ` · ${formatDistance(Number(order.distanceMeters))}` : ""}
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-600">
+            <MapPinned className="h-4 w-4" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1 leading-snug">{t("fulfillment.view_pin", "View pinned location on map")}</span>
+          {order.distanceMeters != null ? (
+            <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600 tabular-nums">
+              {formatDistance(Number(order.distanceMeters))}
+            </span>
+          ) : null}
+          <ExternalLink className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden />
         </a>
       ) : null}
     </div>
