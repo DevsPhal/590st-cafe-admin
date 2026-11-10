@@ -193,7 +193,25 @@ export function InvoicePrintDialog() {
 }
 
 // A thumbnail of the printed receipt: the real labels in the PDF's layout and fonts, with bars
-// standing in for the order's details.
+// standing in for the order's details. The logo between rules opens it; the thanks between rules and two
+// coffee beans close it, as on paper.
+// The two beans printed under the thanks: tilted ovals with the crease left white.
+function CoffeeBeans() {
+  return (
+    <svg className="invoice_receipt_beans" viewBox="0 0 20 12" aria-hidden="true">
+      {[
+        { x: 6, angle: 28 },
+        { x: 14, angle: -28 },
+      ].map(({ x, angle }) => (
+        <g key={x} transform={`translate(${x} 6) rotate(${angle})`}>
+          <ellipse rx="3" ry="4.4" fill="currentColor" />
+          <path d="M0 -3.7 C1.6 -1.3 -1.6 1.3 0 3.7" fill="none" stroke="#fff" strokeWidth="0.75" strokeLinecap="round" />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 function ReceiptPreview({
   language,
   orderId,
@@ -208,7 +226,12 @@ function ReceiptPreview({
         className={cn("invoice_receipt_preview", language === "KH" && "is_khmer")}
         lang={language === "KH" ? "km" : "en"}
       >
-        <span className="invoice_receipt_store">590st Cafe</span>
+        <span className="invoice_receipt_flanked">
+          <span className="invoice_receipt_flank" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logos/logo-black.png" alt="" className="invoice_receipt_logo" />
+          <span className="invoice_receipt_flank" />
+        </span>
         <span className="invoice_receipt_title">{labels.title}</span>
         <span className="invoice_receipt_rule is_dashed" />
         <span className="invoice_receipt_line is_split">
@@ -253,7 +276,16 @@ function ReceiptPreview({
           <span className="invoice_receipt_bar" style={{ width: "20%" }} />
         </span>
         <span className="invoice_receipt_rule is_dashed" />
-        <span className="invoice_receipt_thanks">{labels.thanks}</span>
+        <span className="invoice_receipt_flanked is_thanks">
+          <span className="invoice_receipt_flank" />
+          <span className={cn("invoice_receipt_thanks", language === "EN" && "is_script")}>{labels.thanks}</span>
+          <span className="invoice_receipt_flank" />
+        </span>
+        <span className="invoice_receipt_flanked is_ornament">
+          <span className="invoice_receipt_flank" />
+          <CoffeeBeans />
+          <span className="invoice_receipt_flank" />
+        </span>
       </span>
     </span>
   );

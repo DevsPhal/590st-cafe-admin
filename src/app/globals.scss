@@ -6776,14 +6776,45 @@ body {
     font-family: var(--font-noto-sans-khmer), Helvetica, Arial, sans-serif;
   }
 }
-.invoice_receipt_store {
-  font-size: 1.45em;
-  font-weight: 700;
-  line-height: 1.2;
-  text-align: center;
+// The receipt's closing line is printed in Satisfy; loaded only when a preview shows it.
+@font-face {
+  font-family: "Receipt Script";
+  src: url("/font/Satisfy-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+// Something centred between two rules that run out to the paper's edges: the logo, the thanks, the beans.
+.invoice_receipt_flanked {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  &.is_thanks {
+    margin-top: 0.35em;
+  }
+  &.is_ornament {
+    justify-content: center;
+    .invoice_receipt_flank {
+      flex: 0 0 22%;
+    }
+  }
+}
+.invoice_receipt_flank {
+  flex: 1;
+  border-top: 1.2px solid var(--receipt-ink);
+}
+.invoice_receipt_logo {
+  flex: none;
+  width: 38%;
+  height: auto;
+}
+.invoice_receipt_beans {
+  flex: none;
+  width: 1.9em;
+  height: auto;
+  color: var(--receipt-ink);
 }
 .invoice_receipt_title {
-  margin-top: 0.15em;
+  margin-top: 0.35em;
+  font-size: 1.15em;
   font-weight: 700;
   text-align: center;
 }
@@ -6841,12 +6872,13 @@ body {
   background-color: var(--zinc-300);
 }
 .invoice_receipt_thanks {
-  margin-top: 0.1em;
+  flex: none;
   text-align: center;
-  font-style: italic;
-  .is_khmer & {
-    font-style: normal;
-  }
+}
+.invoice_receipt_preview .invoice_receipt_thanks.is_script {
+  font-family: "Receipt Script", Helvetica, cursive;
+  font-size: 1.35em;
+  line-height: 1.2;
 }
 
 .invoice_viewer_language {
