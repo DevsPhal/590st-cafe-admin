@@ -79,11 +79,7 @@
     "role_cannot_read": "Your account role cannot read orders. Sign in as an admin or a barista.",
     "load_queue": "Could not load the queue."
   },
-  "confirm": {
-    "cancel_title": "Cancel order",
-    "cancel_description": "Cancel order #{id}? Only unpaid orders can be cancelled.",
-    "cancel_confirm": "Cancel order"
-  },
+  "confirm": {},
   "cash": {
     "title": "Take Cash Payment",
     "total_due": "Total Due",
@@ -135,7 +131,8 @@
   "payment": {
     "paid": "Paid",
     "unpaid": "Unpaid",
-    "due": "Due"
+    "due": "Due",
+    "refunded": "Refunded"
   },
   "results": {
     "showing": "Showing {from}–{to} of {total} orders",

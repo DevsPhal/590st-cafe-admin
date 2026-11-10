@@ -1,4 +1,6 @@
 "use client";
+import { cancelBlockedMessage, cancellationLabel, useCancelOrderDialog } from "@/features/order/components/useCancelOrderDialog";
+import { cancelPolicy } from "@/lib/orderCancel";
 import { OrderFulfillmentDetails } from "@/components/common/OrderFulfillmentDetails";
 import { rielTotalLabel } from "@/lib/khr";
 import { OrderEstimateEditor } from "@/components/common/OrderEstimateEditor";
@@ -48,7 +50,6 @@ import { enumLabel } from "@/lib/enumLabel";
 import { InvoiceActions } from "@/components/common/InvoiceActions";
 import { useOrderInvoice } from "@/hooks/useOrderInvoice";
 import { useStaffOrderAlerts } from "@/hooks/useStaffOrderAlerts";
-import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useI18n } from "@/contexts/I18nContext";
 import { optionSummary } from "@/lib/drinkOptions";
@@ -141,7 +142,6 @@ function describeNextStep(order: OrderResponse, t: Translate): NextStep {
 
 export default function Orders() {
   const { t } = useI18n();
-  const { confirm, confirmDialog } = useConfirmDialog();
   const [page, setPage] = usePersistentState("orders:page", 1);
   const [size, setSize] = usePageSize();
   const refresh = useRefreshOptions();
@@ -163,6 +163,7 @@ export default function Orders() {
   useStaffOrderAlerts(useCallback(() => { void refetch(); }, [refetch]));
 
   const [cancelOrder, { isLoading: isCancelling }] = useCancelOrderMutation();
+  const { askCancel, cancelDialog } = useCancelOrderDialog();
   const [setDeliveryFee, { isLoading: isSettingFee }] = useSetOrderDeliveryFeeMutation();
   const [setEstimate, { isLoading: isSettingEstimate }] = useSetOrderEstimatedTimeMutation();
   const [startPreparing, { isLoading: isStartingPreparing }] = useStartPreparingOrderMutation();
@@ -185,8 +186,9 @@ export default function Orders() {
   const orders = useMemo(() => orderPage?.content ?? [], [orderPage]);
 
   const pendingCount = orders.filter((o) => o.status === "PENDING").length;
+  // Refunded (cancelled) orders are not sales.
   const pageRevenue = orders
-    .filter((o) => o.paidAt != null)
+    .filter((o) => o.paidAt != null && o.status !== "CANCELLED")
     .reduce((sum, o) => sum + Number(o.totalAmount), 0);
 
   const orderTableHeaders = [
@@ -203,10 +205,18 @@ export default function Orders() {
     t("table.action", "Action"),
   ];
 
+  // Admins can cancel any order that isn't finished; a paid cash order is a refund (see lib/orderCancel).
+  const policyFor = (order: OrderResponse) => cancelPolicy(order, { role: "ADMIN" });
   const handleCancel = async (order: OrderResponse) => {
-    if (!(await confirm({ title: t("orders.confirm.cancel_title", "Cancel order"), description: t("orders.confirm.cancel_description", "Cancel order {id}?", { id: order.id.slice(0, 8) }), confirmLabel: t("orders.confirm.cancel_title", "Cancel order"), tone: "danger" }))) return;
+    const policy = policyFor(order);
+    if (!policy.allowed) {
+      toast.error(cancelBlockedMessage(t, policy.why));
+      return;
+    }
+    const body = await askCancel(order, policy);
+    if (!body) return;
     try {
-      await cancelOrder(order.id).unwrap();
+      await cancelOrder({ id: order.id, body }).unwrap();
       toast.success(t("orders.toast.cancelled", "Order cancelled"));
     } catch (err) {
       toast.error(apiErrorMessage(err as never, t("orders.errors.cancel", "Could not cancel the order.")));
@@ -334,9 +344,7 @@ export default function Orders() {
                     onView={() => setSelectedId(order.id)}
                     onHistory={() => setHistoryFor(order.id)}
                     onPrint={order.paidAt != null ? () => printInvoice(order.id) : undefined}
-                    onDelete={
-                      order.status === "PENDING" ? () => handleCancel(order) : undefined
-                    }
+                    onDelete={policyFor(order).allowed ? () => handleCancel(order) : undefined}
                     deleteLabel={t("orders.confirm.cancel_title", "Cancel order")}
                     isLoading={isCancelling}
                   />
@@ -382,6 +390,11 @@ export default function Orders() {
                 {selected.paymentMethod ? enumLabel(t, "payment_method", selected.paymentMethod) : t("orders.detail.not_paid", "Not paid")}
               </DetailItem>
               <DetailItem label={t("fields.total", "Total")}>{money(selected.totalAmount)}</DetailItem>
+              {cancellationLabel(t, selected) ? (
+                <DetailItem label={t("orders.cancel.cancellation", "Cancellation")} wide>
+                  {cancellationLabel(t, selected)}
+                </DetailItem>
+              ) : null}
               {rielTotalLabel(selected) ? (
                 <DetailItem label={t("orders.detail.total_khr", "Total in KHR")}>{rielTotalLabel(selected)}</DetailItem>
               ) : null}
@@ -524,7 +537,7 @@ export default function Orders() {
           )}
         </div>
       </DetailModal>
-      {confirmDialog}
+      {cancelDialog}
     </PageShell>
   );
 }

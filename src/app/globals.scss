@@ -6737,6 +6737,159 @@ body {
   }
 }
 
+// Cancelling an order: why (preset reasons or free text), what happens to stock taken for it, and any refund.
+.cancel_order_hint {
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+.cancel_order_body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 16px;
+}
+.cancel_order_group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  legend {
+    margin-bottom: 8px;
+    padding: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+}
+.cancel_order_chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cancel_order_chip {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background-color: var(--surface);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  @media (pointer: coarse) {
+    min-height: var(--touch-target);
+  }
+  &:hover {
+    border-color: var(--ink-subtle);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  &.is_selected {
+    border-color: var(--danger-text);
+    background-color: var(--danger-bg);
+    color: var(--danger-text);
+    font-weight: 600;
+  }
+}
+.cancel_order_options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+  }
+}
+.cancel_order_option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background-color: var(--surface);
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+  svg {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+    color: var(--ink-muted);
+  }
+  span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  b {
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  small {
+    font-size: 0.75rem;
+    color: var(--ink-muted);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  &.is_selected {
+    border-color: var(--ink-strong);
+    box-shadow: inset 0 0 0 1px var(--ink-strong);
+    svg {
+      color: var(--ink-strong);
+    }
+  }
+}
+.cancel_order_refund {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--warning-text) 35%, transparent);
+  border-radius: var(--radius-control);
+  background-color: var(--warning-bg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink);
+  svg {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    color: var(--warning-text);
+  }
+}
+// A cancelled order's reason on its queue card.
+.queue_cancel_reason {
+  display: flex;
+  gap: 8px;
+  margin: 12px 14px 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--danger-text) 30%, transparent);
+  border-radius: 8px;
+  background-color: var(--danger-bg);
+  svg {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    margin-top: 2px;
+    color: var(--danger-text);
+  }
+  p {
+    min-width: 0;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--danger-text);
+    overflow-wrap: anywhere;
+  }
+}
+
 // A paper receipt in miniature: white in both themes, Helvetica and Noto Sans Khmer like the PDF.
 .invoice_receipt_tray {
   display: flex;

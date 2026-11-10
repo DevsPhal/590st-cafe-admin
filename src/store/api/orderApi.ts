@@ -1,6 +1,7 @@
 import { baseApi, unwrap } from "./baseApi";
 import type {
   BakongQrResponse,
+  CancelOrderRequest,
   CashPaymentRequest,
   CreateOrderRequest,
   Currency,
@@ -184,13 +185,14 @@ export const orderApi = baseApi.injectEndpoints({
       ],
     }),
 
-    cancelOrder: builder.mutation<OrderResponse, UUID>({
-      query: (id) => ({
+    cancelOrder: builder.mutation<OrderResponse, { id: UUID; body: CancelOrderRequest }>({
+      query: ({ id, body }) => ({
         url: `/api/admin/orders/${id}/cancel`,
         method: "POST",
+        body,
       }),
       transformResponse: unwrap<OrderResponse>,
-      invalidatesTags: (_r, _e, id) => [
+      invalidatesTags: (_r, _e, { id }) => [
         { type: "Order", id },
         { type: "OrderHistory", id },
         { type: "Inventory", id: "LIST" },

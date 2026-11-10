@@ -663,6 +663,13 @@ export interface OrderResponse {
   exchangeRate?: Numeric | null;
   /** When the QR payment window closes; unpaid online orders are cancelled after it. */
   bakongExpiresAt?: string | null;
+  /** A cancelled order: why, when and who (null when the system cancelled it, as for an expired QR). */
+  cancelReason?: string | null;
+  cancelledAt?: string | null;
+  cancelledByRole?: Role | null;
+  /** Cash handed back when an admin cancelled a paid order, in the currency it was paid in. */
+  refundAmount?: Numeric | null;
+  refundCurrency?: Currency | null;
   note: string | null;
   paidAt: string | null;
   createdAt: string;
@@ -797,6 +804,12 @@ export interface CreateOrderRequest {
   /** Admin only: seat the order past the table rules (reserved or uncleaned table). Needs overrideReason. */
   override?: boolean;
   overrideReason?: string;
+}
+
+/** Every cancellation says why. restock: staff choice for an order whose stock was taken (default true). */
+export interface CancelOrderRequest {
+  reason: string;
+  restock?: boolean;
 }
 
 export interface CashPaymentRequest {

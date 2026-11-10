@@ -1,25 +1,8 @@
 "use client";
 
+import { cancellationLabel } from "@/features/order/components/useCancelOrderDialog";
 import type { ReactNode } from "react";
-import {
-  Armchair,
-  Banknote,
-  Bike,
-  CircleHelp,
-  Clock,
-  ExternalLink,
-  Globe,
-  MapPin,
-  MapPinned,
-  MessageSquareText,
-  Phone,
-  QrCode,
-  ShoppingBag,
-  Store,
-  TriangleAlert,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+import { Armchair, Ban, Banknote, Bike, CircleHelp, Clock, ExternalLink, Globe, MapPin, MapPinned, MessageSquareText, Phone, QrCode, ShoppingBag, Store, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import { OrderEstimateChip } from "@/components/common/OrderEstimateEditor";
 import { PrintInvoiceIconButton } from "@/components/common/InvoiceActions";
 import { useI18n } from "@/contexts/I18nContext";
@@ -96,7 +79,9 @@ function PaymentChip({ order }: { order: OrderResponse }) {
       }
     >
       {enumLabel(t, "payment_method", order.paymentMethod)} ·{" "}
-      {paid
+      {order.refundAmount != null
+        ? t("barista.payment.refunded", "Refunded")
+        : paid
         ? t("barista.payment.paid", "Paid")
         : due
           ? t("barista.payment.due", "Due")
@@ -283,6 +268,12 @@ export function QueueOrderCard({
         <div className="mx-3.5 mt-3 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2">
           <MessageSquareText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
           <p className="min-w-0 text-xs font-medium whitespace-pre-line wrap-break-word text-amber-900">{order.note}</p>
+        </div>
+      ) : null}
+      {cancellationLabel(t, order) ? (
+        <div className="queue_cancel_reason">
+          <Ban aria-hidden />
+          <p>{cancellationLabel(t, order)}</p>
         </div>
       ) : null}
 

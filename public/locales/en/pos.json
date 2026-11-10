@@ -128,5 +128,6 @@
     "reserved_notice": "Table {number} is reserved for a booking. Check the booked party in from Tables, then add their order here.",
     "same_party_cleaning": "Table {number} is waiting to be cleaned. The same guests are still there and want more.",
     "same_party_occupied": "Table {number} is occupied. This order is for the guests already seated there."
-  }
+  },
+  "cancel_reason": "Cleared at the POS before payment"
 }

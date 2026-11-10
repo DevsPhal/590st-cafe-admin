@@ -1,4 +1,6 @@
 "use client";
+import { cancelPolicy } from "@/lib/orderCancel";
+import { cancelBlockedMessage, cancellationLabel, useCancelOrderDialog } from "@/features/order/components/useCancelOrderDialog";
 import { OrderFulfillmentDetails } from "@/components/common/OrderFulfillmentDetails";
 import { OrderEstimateEditor } from "@/components/common/OrderEstimateEditor";
 
@@ -84,7 +86,6 @@ import { InvoiceActions, toastPaidWithInvoice } from "@/components/common/Invoic
 import { orderCode, useOrderInvoice } from "@/hooks/useOrderInvoice";
 import { buildCashPaymentSchema } from "@/lib/validation";
 import { amountDue, changeDue, rielTotalLabel } from "@/lib/khr";
-import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useNow } from "@/hooks/useNow";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useI18n } from "@/contexts/I18nContext";
@@ -198,7 +199,6 @@ export default function BaristaQueueView() {
   const { t } = useI18n();
   const dispatch = useAppDispatch();
   const { isAdmin, isBarista, isLoading: isLoadingRole } = useCurrentRole();
-  const { confirm, confirmDialog } = useConfirmDialog();
   const roles = { isAdmin, isBarista };
   const now = useNow(CLOCK_TICK_MS);
   const resultsTopRef = useRef<HTMLDivElement>(null);
@@ -258,12 +258,14 @@ export default function BaristaQueueView() {
   const { printInvoice } = useOrderInvoice();
 
   const { data: currentUser } = useGetCurrentUserQuery();
+  const { askCancel, cancelDialog } = useCancelOrderDialog();
   const cashMutationFor = (order: OrderResponse) =>
     order.paymentMethod === "CASH"
       ? isAdmin ? adminCollectCash : baristaCollectCash
       : isAdmin ? adminPayCash : baristaPayCash;
-  const canCancel = (order: OrderResponse) =>
-    isAdmin || (order.customerId == null && order.handledById === currentUser?.id);
+  // Who may cancel, and what it means (refund, stock), mirrored from the API's rules.
+  const policyFor = (order: OrderResponse) =>
+    cancelPolicy(order, { role: isAdmin ? "ADMIN" : "BARISTA", userId: currentUser?.id });
 
   const awaitingPaymentStep = (
     order: OrderResponse
@@ -436,19 +438,16 @@ export default function BaristaQueueView() {
   };
 
   const handleCancel = async (order: OrderResponse) => {
-    const confirmed = await confirm({
-      title: t("barista.confirm.cancel_title", "Cancel order"),
-      description: t(
-        "barista.confirm.cancel_description",
-        "Cancel order #{id}? Only unpaid orders can be cancelled.",
-        { id: orderCode(order.id) }
-      ),
-      confirmLabel: t("barista.confirm.cancel_confirm", "Cancel order"),
-      tone: "danger",
-    });
-    if (!confirmed) return;
+    const policy = policyFor(order);
+    if (!policy.allowed) {
+      toast.error(cancelBlockedMessage(t, policy.why));
+      return;
+    }
+    const body = await askCancel(order, policy);
+    if (!body) return;
     try {
-      await cancelOrder(order.id).unwrap();
+      const cancelled = await cancelOrder({ id: order.id, body }).unwrap();
+      setDetailSnapshot((current) => (current?.id === cancelled.id ? cancelled : current));
       toast.success(t("barista.toast.order_cancelled", "Order cancelled"));
     } catch (err) {
       toast.error(apiErrorMessage(err as never, t("barista.errors.cancel_order", "Could not cancel the order.")));
@@ -515,14 +514,16 @@ export default function BaristaQueueView() {
   };
 
   // The next step for an order at its current status — the same buttons the status columns used to offer.
-  const cardActions = (
-    order: OrderResponse
-  ): { primary?: CardAction; secondary?: CardAction; hint?: string; onCancel?: () => void } => {
+  type CardActions = { primary?: CardAction; secondary?: CardAction; hint?: string; onCancel?: () => void };
+  const cardActions = (order: OrderResponse): CardActions => ({
+    ...stepActions(order),
+    onCancel: policyFor(order).allowed ? () => void handleCancel(order) : undefined,
+  });
+  const stepActions = (order: OrderResponse): CardActions => {
     switch (order.status) {
       case "PENDING": {
         const step = awaitingPaymentStep(order);
-        const onCancel = canCancel(order) ? () => handleCancel(order) : undefined;
-        if (step.kind === "waiting") return { hint: step.hint, onCancel };
+        if (step.kind === "waiting") return { hint: step.hint };
         return {
           primary: {
             label: step.label,
@@ -537,7 +538,6 @@ export default function BaristaQueueView() {
             step.kind === "prepare"
               ? { label: t("barista.actions.take_cash", "Take Cash"), onClick: () => openCashModal(order) }
               : undefined,
-          onCancel,
         };
       }
       case "PAID":
@@ -860,6 +860,11 @@ export default function BaristaQueueView() {
               {rielTotalLabel(detailOrder) ? (
                 <DetailItem label={t("barista.detail.total_khr", "Total in KHR")}>{rielTotalLabel(detailOrder)}</DetailItem>
               ) : null}
+              {cancellationLabel(t, detailOrder) ? (
+                <DetailItem label={t("orders.cancel.cancellation", "Cancellation")} wide>
+                  {cancellationLabel(t, detailOrder)}
+                </DetailItem>
+              ) : null}
               {detailOrder.paymentMethod === "CASH" ? (
                 <>
                   <DetailItem label={t("barista.cash.amount_tendered", "Amount Tendered")}>
@@ -948,7 +953,7 @@ export default function BaristaQueueView() {
           </div>
         )}
       </DetailModal>
-      {confirmDialog}
+      {cancelDialog}
     </PageShell>
   );
 }

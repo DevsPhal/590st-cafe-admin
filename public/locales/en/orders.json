@@ -32,8 +32,7 @@
     "delivery_fee_needed": "Delivery fee needed"
   },
   "confirm": {
-    "cancel_title": "Cancel order",
-    "cancel_description": "Cancel order {id}?"
+    "cancel_title": "Cancel order"
   },
   "toast": {
     "cancelled": "Order cancelled",
@@ -96,5 +95,38 @@
   "invoice": {
     "title": "Invoice #{code}",
     "load_error": "Could not load the invoice."
+  },
+  "cancel": {
+    "blocked_admin": "This order is paid. Only an admin can cancel it and refund the cash.",
+    "blocked_bakong": "Paid by Bakong KHQR: the refund goes through the bank, so it can't be cancelled here.",
+    "blocked_finished": "This order is finished and can't be cancelled.",
+    "blocked_handler": "Another staff member is handling this order.",
+    "by_customer": "Cancelled by the customer",
+    "by_staff": "Cancelled by staff",
+    "by_system": "Cancelled automatically",
+    "cancellation": "Cancellation",
+    "confirm": "Cancel order",
+    "confirm_refund": "Cancel and refund",
+    "details": "More details (optional)",
+    "hint": "The customer and the staff see the reason with the order.",
+    "keep": "Keep order",
+    "other": "Or write the reason",
+    "reason_required": "Choose a reason or write one.",
+    "refund": "This order is paid. Hand back {amount} in cash; it leaves the sales figures.",
+    "refunded": "refunded {amount}",
+    "restock": "Not made yet",
+    "restock_hint": "Put everything back in stock.",
+    "stock_question": "The stock for this order was already taken. Was it made?",
+    "title": "Cancel order #{code}",
+    "waste": "Already made",
+    "waste_hint": "Count it as waste in the inventory.",
+    "why": "Why is it cancelled?",
+    "reasons": {
+      "customer_changed_mind": "Customer changed their mind",
+      "customer_no_show": "Customer didn't come to collect",
+      "out_of_stock": "Item ran out",
+      "wrong_order": "Order entered by mistake",
+      "delivery_refused": "Customer refused the delivery"
+    }
   }
 }

@@ -542,7 +542,10 @@ export default function PosView() {
     if (confirmingRef.current || isCancelling) return;
     try {
       if (pendingOrder?.status === "PENDING" || (pendingOrder && latestPendingOrder?.status === "PENDING")) {
-        await cancelOrder(pendingOrder.id).unwrap();
+        await cancelOrder({
+          id: pendingOrder.id,
+          body: { reason: t("pos.cancel_reason", "Cleared at the POS before payment") },
+        }).unwrap();
       }
       resetCart();
     } catch (error) {
