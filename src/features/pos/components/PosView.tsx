@@ -36,6 +36,8 @@ import { useListCategoriesQuery } from "@/store/api/categoryApi";
 import { useListProductsQuery } from "@/store/api/productApi";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useListPublicTablesQuery } from "@/store/api/tableApi";
+import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
+import { posBlocker, posRequirement, posSeatingFields, type TableStatus } from "@/lib/tableTransitions";
 import { useCurrentRole } from "@/store/api/useCurrentRole";
 import type {
   Currency,
@@ -139,9 +141,27 @@ export default function PosView() {
   const [storedOrderType, setOrderType] = usePersistentState<OrderType>("pos:orderType", "DINE_IN");
   // Dine in unless take-away was picked (also covers a stale or missing saved value).
   const orderType: OrderType = storedOrderType === "TAKE_AWAY" ? "TAKE_AWAY" : "DINE_IN";
-  const [tableNumber, setTableNumber] = usePersistentState("pos:tableNumber", "");
+  const [tableNumber, setTableNumberState] = usePersistentState("pos:tableNumber", "");
+  // For a table that is not free: staff confirm the order is for the party already there, or an admin
+  // overrides with a reason. The API checks the same rules (and has the final say).
+  const [forSeatedParty, setForSeatedParty] = usePersistentState("pos:forSeatedParty", false);
+  const [overrideTable, setOverrideTable] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+  const setTableNumber = useCallback(
+    (next: string) => {
+      setTableNumberState(next);
+      setForSeatedParty(false);
+      setOverrideTable(false);
+      setOverrideReason("");
+    },
+    [setTableNumberState, setForSeatedParty]
+  );
   const isDineIn = orderType === "DINE_IN";
-  const { data: tables } = useListPublicTablesQuery(undefined, { skip: !isDineIn });
+  const { data: tables, refetch: refetchTables } = useListPublicTablesQuery(undefined, { skip: !isDineIn });
+  useRealtimeTopic("/topic/tables", useCallback(() => { if (isDineIn) void refetchTables(); }, [isDineIn, refetchTables]));
+  const selectedTable = tables?.find((table) => table.tableNumber === tableNumber);
+  const tableStatus = selectedTable?.status as TableStatus | undefined;
+  const seating = { forSeatedParty, override: overrideTable, overrideReason };
   const [pendingOrder, setPendingOrder] = usePersistentState<OrderResponse | null>("pos:pendingOrder", null);
   const confirmingRef = useRef(false);
   const [completedSale, setCompletedSale] = usePersistentState<OrderResponse | null>("pos:completedSale", null);
@@ -353,6 +373,29 @@ export default function PosView() {
     return counts as ReadonlyMap<string, CartCounts>;
   }, [cart]);
 
+  // Read after the page commits (client navigation updates the URL only then) and kept in a ref: the effect
+  // may run twice (React dev mode) and must not depend on the URL it cleans up.
+  const arrivalRef = useRef<URLSearchParams | null>(null);
+  useEffect(() => {
+    arrivalRef.current ??= new URLSearchParams(window.location.search);
+    const arrival = arrivalRef.current;
+    const fromTables = arrival.get("table");
+    if (!fromTables) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    // Deferred like the other state syncs on this page. Running it twice sets the same values.
+    setTimeout(() => {
+      if (pendingOrder) {
+        toast(t("pos.table.finish_pending_first", "Finish or clear the pending order before starting one for table {number}.", { number: fromTables }), { id: "pos-from-tables" });
+        return;
+      }
+      setOrderType("DINE_IN");
+      setTableNumber(fromTables);
+      setForSeatedParty(arrival.get("seated") === "1");
+    }, 0);
+    // Runs on arrival from the Tables screen only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const resetBakongState = () => {
     setBakongQr(null);
     setBakongSecondsLeft(null);
@@ -432,6 +475,13 @@ export default function PosView() {
   const grossTotal = cart.reduce((sum, line) => sum + lineUnitOriginal(line) * line.quantity, 0);
   const discount = Math.max(grossTotal - total, 0);
 
+  const tableStatusLabels: Record<TableStatus, string> = {
+    AVAILABLE: t("tables.status.available", "Available"),
+    OCCUPIED: t("tables.status.occupied", "Occupied"),
+    RESERVED: t("tables.status.reserved", "Reserved"),
+    CLEANING: t("tables.status.cleaning", "Needs cleaning"),
+  };
+
   const orderTypeLabels: Record<OrderType, string> = {
     DINE_IN: t("pos.order.type_dine_in", "Dine in"),
     TAKE_AWAY: t("pos.order.type_take_away", "Take away"),
@@ -459,6 +509,21 @@ export default function PosView() {
     accent: accentFor(line.product.id),
   }));
 
+  const tableBlocker = isDineIn && tableNumber && !isOrderLocked ? posBlocker(tableStatus, seating, isAdmin) : null;
+  const openPayment = () => {
+    if (tableBlocker) {
+      toast.error(
+        tableBlocker === "CONFIRM_SEATED_PARTY"
+          ? t("pos.table.confirm_party_first", "Table {number} is not free. Confirm the order is for the guests already there, or pick another table.", { number: tableNumber })
+          : tableBlocker === "OVERRIDE_REASON"
+            ? t("pos.table.override_reason_needed", "Give a reason for the override.")
+            : t("pos.table.reserved_blocked", "Table {number} is reserved. Check the booked party in from Tables, or pick another table.", { number: tableNumber })
+      );
+      return;
+    }
+    setPaymentOpen(true);
+  };
+
   const ensureOrder = async (): Promise<OrderResponse> => {
     if (pendingOrder) return pendingOrder;
     const items: OrderItemRequest[] = cart.map((line) => ({
@@ -474,6 +539,7 @@ export default function PosView() {
       items,
       orderType,
       tableNumber: isDineIn && tableNumber ? tableNumber : undefined,
+      ...(isDineIn && tableNumber ? posSeatingFields(tableStatus, seating, isAdmin) : {}),
     }).unwrap();
     setPendingOrder(order);
     return order;
@@ -737,11 +803,71 @@ export default function PosView() {
                 placeholder={t("pos.order.table_placeholder", "No table")}
               >
                 {(tables ?? []).map((table) => (
-                  <option key={table.id} value={table.tableNumber}>
-                    {t("pos.order.table_option", "Table {number}", { number: table.tableNumber })}
+                  <option
+                    key={table.id}
+                    value={table.tableNumber}
+                    disabled={table.status === "RESERVED" && !isAdmin && table.tableNumber !== tableNumber}
+                  >
+                    {table.status === "AVAILABLE"
+                      ? t("pos.order.table_option", "Table {number}", { number: table.tableNumber })
+                      : t("pos.order.table_option_status", "{number} · {status}", {
+                          number: table.tableNumber,
+                          status: tableStatusLabels[table.status],
+                        })}
                   </option>
                 ))}
               </FormSelect>
+            ) : null}
+            {isDineIn && tableNumber && tableStatus && posRequirement(tableStatus) !== "WALK_IN" && !isOrderLocked ? (
+              <div className={cn("pos_table_notice", tableBlocker && "is_warning")} role="group" aria-label={t("pos.table.notice_label", "Table check")}>
+                {posRequirement(tableStatus) === "SEATED_PARTY" ? (
+                  <>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={forSeatedParty}
+                        onChange={(event) => setForSeatedParty(event.target.checked)}
+                      />
+                      <span>
+                        {tableStatus === "OCCUPIED"
+                          ? t("pos.table.same_party_occupied", "Table {number} is occupied. This order is for the guests already seated there.", { number: tableNumber })
+                          : t("pos.table.same_party_cleaning", "Table {number} is waiting to be cleaned. The same guests are still there and want more.", { number: tableNumber })}
+                      </span>
+                    </label>
+                    {tableStatus === "CLEANING" ? (
+                      <span className="table_detail_hint">
+                        {t("pos.table.new_guests_hint", "New guests? Mark the table clean on the Tables screen first.")}
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  <span>
+                    {t("pos.table.reserved_notice", "Table {number} is reserved for a booking. Check the booked party in from Tables, then add their order here.", { number: tableNumber })}
+                  </span>
+                )}
+                {isAdmin && posRequirement(tableStatus) === "OVERRIDE" ? (
+                  <>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={overrideTable}
+                        onChange={(event) => setOverrideTable(event.target.checked)}
+                      />
+                      <span>{t("pos.table.override", "Admin override: seat this order here anyway")}</span>
+                    </label>
+                    {overrideTable ? (
+                      <input
+                        type="text"
+                        maxLength={300}
+                        value={overrideReason}
+                        onChange={(event) => setOverrideReason(event.target.value)}
+                        placeholder={t("pos.table.override_reason", "Reason (saved in the table history)")}
+                        aria-label={t("pos.table.override_reason", "Reason (saved in the table history)")}
+                      />
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
             ) : null}
           </div>
 
@@ -831,7 +957,7 @@ export default function PosView() {
             <Button
              
               variant="accent"
-              onClick={() => setPaymentOpen(true)}
+              onClick={openPayment}
               disabled={cart.length === 0 || (!isAdmin && !isBarista)}
             >
               {t("pos.actions.make_payment", "Make a Payment")}

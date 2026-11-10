@@ -314,6 +314,22 @@ export const tableSchema = z.object({
   capacity: optionalNumberField("seats", { min: 1, max: 50, integer: true }),
 });
 
+// Mirrors ReservationRequest. The phone is optional and may be foreign, so it is checked loosely.
+export const reservationSchema = z.object({
+  tableId: requiredChoice(message("reservation_table_required", "Choose a table.")),
+  customerName: requiredText("guest name", 100),
+  customerPhone: z
+    .string()
+    .trim()
+    .max(30, message("reservation_phone_long", "Phone number must be 30 characters or fewer."))
+    .refine((value) => !value || /^\+?[0-9][0-9 ()-]{5,28}$/.test(value), message("phone_invalid", "Enter a valid phone number."))
+    .transform((value) => value || undefined),
+  partySize: numberField("number of guests", { min: 1, max: 100, integer: true }),
+  reservedFor: z.string().min(1, message("reservation_time_required", "Choose the date and time.")),
+  durationMinutes: numberField("booking length", { min: 15, max: 480, integer: true }),
+  note: optionalText("note", 500),
+});
+
 // ---- Settings & orders ------------------------------------------------------------
 
 export const exchangeRateSchema = z.object({

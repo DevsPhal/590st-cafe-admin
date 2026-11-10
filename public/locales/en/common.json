@@ -603,5 +603,8 @@
       "MONTH": "Month",
       "YEAR": "Year"
     }
+  },
+  "reason_dialog": {
+    "required": "Give a reason."
   }
 }

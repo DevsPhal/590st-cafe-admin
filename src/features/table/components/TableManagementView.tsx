@@ -3,7 +3,26 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import toast from "react-hot-toast";
-import { BellRing, Copy, Download, Loader2, Minus, Pencil, Plus, Printer, QrCode, Trash2, Users, X } from "lucide-react";
+import {
+  BellRing,
+  CalendarClock,
+  CalendarPlus,
+  Copy,
+  Download,
+  History,
+  Loader2,
+  Minus,
+  Pencil,
+  Plus,
+  Printer,
+  QrCode,
+  ShieldAlert,
+  Sparkles,
+  Trash2,
+  Users,
+  UtensilsCrossed,
+  X,
+} from "lucide-react";
 
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -29,29 +48,32 @@ import { useCurrentRole } from "@/store/api/useCurrentRole";
 import { apiErrorMessage } from "@/store/api/baseApi";
 import {
   useCreateTableMutation,
-  useGetMenuLinkQuery,
   useDeleteTableMutation,
-  useListTableOrdersQuery,
-  useListBaristaTablesQuery,
-  useListTablesQuery,
-  useUpdateBaristaTableStatusMutation,
+  useGetMenuLinkQuery,
+  useListTableActivityQuery,
   useUpdateTableMutation,
-  useUpdateTableStatusMutation,
 } from "@/store/api/tableApi";
-import type { OrderResponse, OrderStatus, TableActivityResponse, TableResponse, TableSize, TableStatus } from "@/store/api/types";
+import type {
+  OrderResponse,
+  OrderStatus,
+  ReservationResponse,
+  TableActivityResponse,
+  TableResponse,
+  TableSize,
+  TableStatus,
+} from "@/store/api/types";
 import { cn, timeAgo, titleCase } from "@/lib/utils";
 import { staffCallReasonLabel } from "@/lib/staffCall";
 import { enumLabel } from "@/lib/enumLabel";
 import { tableSchema } from "@/lib/formSchemas";
+import { shopDateTimeInput } from "@/lib/shopDate";
+import { addMinutesToShopTime, HOLD_BEFORE_MINUTES, manualChangeAt, TABLE_STATUSES } from "@/lib/tableTransitions";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { Button } from "@/components/common/Button";
 import { EmptyState } from "@/components/common/EmptyState";
-
-const STATUS_LABEL: Record<TableStatus, string> = {
-  AVAILABLE: "Available",
-  OCCUPIED: "Occupied",
-  RESERVED: "Reserved",
-};
+import { BookingCard, BookingFormModal, BookingsCard, bookingTime, type BookingTarget } from "./ReservationViews";
+import { TableHistoryDialog } from "./TableHistoryDialog";
+import { type StatusLabels, type TableActions, useTableActions } from "./useTableActions";
 
 const SIZE_LABEL: Record<TableSize, string> = {
   SMALL: "Small (2 seats)",
@@ -72,22 +94,41 @@ const money = (value: number | string | null | undefined) => `$${Number(value ??
 type TableForm = { tableNumber: string; size: TableSize; capacity: string };
 const EMPTY_FORM: TableForm = { tableNumber: "", size: "SMALL", capacity: "" };
 
+function useStatusLabels(): StatusLabels {
+  const { t } = useI18n();
+  return useMemo(
+    () => ({
+      AVAILABLE: t("tables.status.available", "Available"),
+      OCCUPIED: t("tables.status.occupied", "Occupied"),
+      RESERVED: t("tables.status.reserved", "Reserved"),
+      CLEANING: t("tables.status.cleaning", "Needs cleaning"),
+    }),
+    [t]
+  );
+}
+
+/** The booking holding the table now: the earliest booked party whose hold window has started. */
+function holdingBooking(bookings: readonly ReservationResponse[]): ReservationResponse | null {
+  const holdStarted = addMinutesToShopTime(shopDateTimeInput(), HOLD_BEFORE_MINUTES);
+  return (
+    bookings
+      .filter((booking) => booking.status === "BOOKED" && booking.reservedFor.slice(0, 16) <= holdStarted)
+      .sort((a, b) => a.reservedFor.localeCompare(b.reservedFor))[0] ?? null
+  );
+}
+
 export default function TableManagementView() {
   const { t } = useI18n();
+  const labels = useStatusLabels();
   const { isAdmin, isBarista } = useCurrentRole();
   const { confirm, confirmDialog } = useConfirmDialog();
-  // Admins use the admin table API; baristas get the same floor (plus open orders and staff calls) from theirs.
-  const adminTables = useListTablesQuery({ page: 1, size: 500 }, { skip: !isAdmin });
-  const baristaTables = useListBaristaTablesQuery(undefined, { skip: !isBarista });
-  const { isLoading, isFetching, error, refetch } = isBarista ? baristaTables : adminTables;
-  const tables = useMemo(
-    () => (isBarista ? (baristaTables.data ?? []).map((activity) => activity.table) : adminTables.data?.content ?? []),
-    [isBarista, baristaTables.data, adminTables.data]
-  );
-  const activityById = useMemo(
-    () => new Map((baristaTables.data ?? []).map((activity) => [activity.table.id, activity])),
-    [baristaTables.data]
-  );
+  const actions = useTableActions({ isAdmin, labels });
+  // Both roles get every table with its open orders, staff calls and bookings in one request.
+  const floor = useListTableActivityQuery(actions.scope, { skip: !isAdmin && !isBarista });
+  const { isLoading, isFetching, error, refetch } = floor;
+  const activities = useMemo(() => floor.data ?? [], [floor.data]);
+  const tables = useMemo(() => activities.map((activity) => activity.table), [activities]);
+  const activityById = useMemo(() => new Map(activities.map((activity) => [activity.table.id, activity])), [activities]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = tables.find((table) => table.id === selectedId) ?? null;
@@ -99,6 +140,8 @@ export default function TableManagementView() {
   const [form, setForm] = useState<TableForm>(EMPTY_FORM);
   const validation = useFormErrors(tableSchema, form);
   const [qrTarget, setQrTarget] = useState<QrTarget | null>(null);
+  const [bookingTarget, setBookingTarget] = useState<BookingTarget>(null);
+  const [historyTable, setHistoryTable] = useState<TableResponse | null>(null);
   const { data: menuLink } = useGetMenuLinkQuery(undefined, { skip: !isAdmin });
 
   const showMenuQr = () => {
@@ -125,14 +168,14 @@ export default function TableManagementView() {
   const [updateTable, { isLoading: isUpdating }] = useUpdateTableMutation();
   const [deleteTable] = useDeleteTableMutation();
 
+  // Table, booking and order changes all arrive here, so the floor is always the server's state.
   const refreshFloor = useCallback(() => { void refetch(); }, [refetch]);
   useRealtimeTopic("/topic/tables", refreshFloor);
-  // Baristas also see open orders and staff calls on the floor, so refresh when either changes.
-  useStaffCallAlerts(useCallback(() => { if (isBarista) refreshFloor(); }, [isBarista, refreshFloor]));
-  useStaffOrderAlerts(useCallback(() => { if (isBarista) refreshFloor(); }, [isBarista, refreshFloor]));
+  useStaffCallAlerts(refreshFloor);
+  useStaffOrderAlerts(refreshFloor);
 
   const counts = useMemo(() => {
-    const result: Record<TableStatus, number> = { AVAILABLE: 0, OCCUPIED: 0, RESERVED: 0 };
+    const result: Record<TableStatus, number> = { AVAILABLE: 0, OCCUPIED: 0, RESERVED: 0, CLEANING: 0 };
     for (const table of tables) result[table.status] += 1;
     return result;
   }, [tables]);
@@ -192,10 +235,13 @@ export default function TableManagementView() {
     <TableDetail
       table={selected}
       activity={activityById.get(selected.id)}
-      onActivityChange={refetch}
       isAdmin={isAdmin}
-      isBarista={isBarista}
+      labels={labels}
+      actions={actions}
+      onBook={() => setBookingTarget({ tableId: selected.id })}
+      onEditBooking={(reservation) => setBookingTarget({ reservation })}
       onShowQr={() => showTableQr(selected)}
+      onShowHistory={() => setHistoryTable(selected)}
       onEdit={() => openForm(selected)}
       onDelete={() => removeTable(selected)}
     />
@@ -218,14 +264,10 @@ export default function TableManagementView() {
       <div className="table_layout">
         <DataCard
           title={t("tables.card.title", "QR Table Management")}
-          meta={
-            isAdmin
-              ? t(
-                  "tables.card.meta_admin",
-                  "Customers scan the menu QR (or a table QR) and enter their table number at checkout. Tables turn occupied when they order."
-                )
-              : t("tables.card.meta_barista", "Tap a table to see its orders. Clear it once the guests have left.")
-          }
+          meta={t(
+            "tables.card.meta_rules",
+            "Walk-ins sit at available tables only. Booked tables are held 1 hour ahead, and a table needs cleaning after its last order."
+          )}
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {isAdmin ? (
@@ -244,10 +286,10 @@ export default function TableManagementView() {
           }
         >
           <div className="table_legend" aria-label={t("tables.floor.status_counts", "Table status counts")}>
-            {(Object.keys(STATUS_LABEL) as TableStatus[]).map((status) => (
+            {TABLE_STATUSES.map((status) => (
               <span key={status} className="table_legend_item">
                 <span className={cn("table_legend_dot", `is_${status.toLowerCase()}`)} />
-                {STATUS_LABEL[status]}
+                {labels[status]}
                 <b>{counts[status]}</b>
               </span>
             ))}
@@ -279,36 +321,61 @@ export default function TableManagementView() {
             />
           ) : (
             <div className="table_grid">
-              {tables.map((table) => (
-                <button
-                  key={table.id}
-                  type="button"
-                  onClick={() => selectTable(table)}
-                  aria-pressed={table.id === selectedId}
-                  aria-label={t("tables.floor.tile_label", "Table {number}, {status}", {
-                    number: table.tableNumber,
-                    status: STATUS_LABEL[table.status],
-                  })}
-                  className={cn("table_tile", `is_${table.status.toLowerCase()}`, table.id === selectedId && "is_selected")}
-                >
-                  <span className="table_tile_number">{table.tableNumber}</span>
-                  {(activityById.get(table.id)?.openStaffCallCount ?? 0) > 0 ? (
-                    <span className="table_tile_call" aria-label={t("tables.floor.calling_staff", "Customer is calling staff")}>
-                      <BellRing />
+              {activities.map(({ table, openStaffCallCount, reservations }) => {
+                const next = reservations.find((booking) => booking.status === "BOOKED");
+                return (
+                  <button
+                    key={table.id}
+                    type="button"
+                    onClick={() => selectTable(table)}
+                    aria-pressed={table.id === selectedId}
+                    aria-label={t("tables.floor.tile_label", "Table {number}, {status}", {
+                      number: table.tableNumber,
+                      status: labels[table.status],
+                    })}
+                    className={cn("table_tile", `is_${table.status.toLowerCase()}`, table.id === selectedId && "is_selected")}
+                  >
+                    <span className="table_tile_number">{table.tableNumber}</span>
+                    {openStaffCallCount > 0 ? (
+                      <span className="table_tile_call" aria-label={t("tables.floor.calling_staff", "Customer is calling staff")}>
+                        <BellRing />
+                      </span>
+                    ) : null}
+                    <span className="table_tile_meta">
+                      {table.status === "CLEANING" ? <Sparkles /> : <Users />}
+                      {table.status === "OCCUPIED"
+                        ? `${table.guestCount}/${table.capacity}`
+                        : table.status === "CLEANING"
+                          ? labels.CLEANING
+                          : table.capacity}
                     </span>
-                  ) : null}
-                  <span className="table_tile_meta">
-                    <Users />
-                    {table.status === "OCCUPIED" ? `${table.guestCount}/${table.capacity}` : table.capacity}
-                  </span>
-                </button>
-              ))}
+                    {next ? (
+                      <span className="table_tile_booking">
+                        <CalendarClock aria-hidden />
+                        {table.status === "RESERVED"
+                          ? `${next.customerName} · ${bookingTime(next.reservedFor)}`
+                          : bookingTime(next.reservedFor)}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           )}
         </DataCard>
 
         {/* iPad landscape and up: details sit beside the floor. Phones and iPad portrait use a bottom sheet. */}
         <aside className="table_detail_aside">{detail}</aside>
+      </div>
+
+      <div className="mt-6">
+        <BookingsCard
+          scope={actions.scope}
+          tables={tables}
+          actions={actions}
+          onNew={() => setBookingTarget({ tableId: selectedId ?? undefined })}
+          onEdit={(reservation) => setBookingTarget({ reservation })}
+        />
       </div>
 
       <Sheet open={!isWide && sheetOpen && selected !== null} onOpenChange={setSheetOpen}>
@@ -368,7 +435,10 @@ export default function TableManagementView() {
         </div>
       </FormModal>
 
+      <BookingFormModal target={bookingTarget} onClose={() => setBookingTarget(null)} scope={actions.scope} tables={tables} />
+      {isAdmin ? <TableHistoryDialog table={historyTable} labels={labels} onClose={() => setHistoryTable(null)} /> : null}
       <QrDialog target={qrTarget} onClose={() => setQrTarget(null)} />
+      {actions.dialogs}
       {confirmDialog}
     </PageShell>
   );
@@ -377,70 +447,106 @@ export default function TableManagementView() {
 function TableDetail({
   table,
   activity,
-  onActivityChange,
   isAdmin,
-  isBarista,
+  labels,
+  actions,
+  onBook,
+  onEditBooking,
   onShowQr,
+  onShowHistory,
   onEdit,
   onDelete,
 }: {
   table: TableResponse;
   activity?: TableActivityResponse;
-  onActivityChange: () => void;
   isAdmin: boolean;
-  isBarista: boolean;
+  labels: StatusLabels;
+  actions: TableActions;
+  onBook: () => void;
+  onEditBooking: (reservation: ReservationResponse) => void;
   onShowQr: () => void;
+  onShowHistory: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const { t } = useI18n();
-  // Baristas already have this table's orders from the floor request; admins fetch them per table.
-  const adminOrders = useListTableOrdersQuery(table.id, { skip: isBarista });
-  const orders = isBarista ? activity?.activeOrders : adminOrders.data;
-  const isLoading = isBarista ? !activity : adminOrders.isLoading;
-  const error = isBarista ? undefined : adminOrders.error;
-  const isFetching = adminOrders.isFetching;
-  const refetch = isBarista ? onActivityChange : adminOrders.refetch;
-  const [updateAdminStatus, { isLoading: isSavingAdmin }] = useUpdateTableStatusMutation();
-  const [updateBaristaStatus, { isLoading: isSavingBarista }] = useUpdateBaristaTableStatusMutation();
-  const updateStatus = isBarista ? updateBaristaStatus : updateAdminStatus;
-  const isSaving = isSavingAdmin || isSavingBarista;
+  const orders = useMemo(() => activity?.activeOrders ?? [], [activity]);
+  const bookings = useMemo(() => activity?.reservations ?? [], [activity]);
   const openCalls = activity?.openStaffCalls ?? [];
+  const isLoading = !activity;
   const { printInvoice, isBusy } = useOrderInvoice();
   const guests = Math.max(table.guestCount, 1);
+  const [seatCount, setSeatCount] = useState(() => Math.min(2, table.capacity));
+  const holding = holdingBooking(bookings);
+  const context = { activeOrders: orders.length, heldByBooking: holding !== null };
+  const verdict = (to: TableStatus) => manualChangeAt(table.status, to, context);
+  // Baristas only see moves the rules allow; admins also see the ones they can override.
+  const offered = (to: TableStatus) => verdict(to) === "ALLOWED" || (isAdmin && verdict(to) === "ADMIN_OVERRIDE");
+  const busy = actions.busy;
+  const tableTotal = orders.reduce((sum, order) => sum + Number(order.totalAmount), 0);
+  const hasActiveBookings = bookings.some((booking) => booking.status === "BOOKED" || booking.status === "SEATED");
 
-  useStaffOrderAlerts(
-    useCallback(
-      (message) => {
-        if (message.order.tableNumber === table.tableNumber) void refetch();
-      },
-      [refetch, table.tableNumber]
-    )
-  );
-
-  const activeOrders = orders ?? [];
-  const tableTotal = activeOrders.reduce((sum, order) => sum + Number(order.totalAmount), 0);
-
-  const setStatus = async (status: TableStatus, guestCount = guests) => {
-    try {
-      await updateStatus({ id: table.id, body: { status, guestCount: status === "OCCUPIED" ? guestCount : 0 } }).unwrap();
-      if (status !== table.status) {
-        toast.success(
-          t("tables.toast.status_changed", "Table {number} is {status}", {
-            number: table.tableNumber,
-            status: STATUS_LABEL[status].toLowerCase(),
-          })
-        );
-      }
-    } catch (err) {
-      toast.error(apiErrorMessage(err as never, t("tables.toast.update_error", "Could not update the table.")));
-    }
-  };
+  const move = (to: TableStatus, guestCount?: number, overrideNote?: string) =>
+    void actions.changeStatus(table, to, { verdict: verdict(to), guestCount, overrideNote });
 
   const changeGuests = (delta: number) => {
     const next = Math.min(Math.max(guests + delta, 1), table.capacity);
-    if (next !== table.guestCount) void setStatus("OCCUPIED", next);
+    if (next !== table.guestCount) move("OCCUPIED", next);
   };
+
+  const statusNote = (() => {
+    switch (table.status) {
+      case "AVAILABLE":
+        return t("tables.detail.note_available", "Free for walk-ins. Ordering at this table seats the guests.");
+      case "OCCUPIED":
+        return orders.length > 0
+          ? t("tables.detail.note_occupied_orders", "{count} guests seated. The table needs cleaning once their last order is done.", { count: guests })
+          : t("tables.detail.note_occupied", "{count} guests seated, no open orders.", { count: guests });
+      case "RESERVED":
+        return holding
+          ? t("tables.detail.note_reserved", "Held for {name} at {time} ({count} guests). Walk-ins can't sit here.", {
+              name: holding.customerName,
+              time: bookingTime(holding.reservedFor),
+              count: holding.partySize,
+            })
+          : t("tables.detail.note_reserved_stale", "Marked reserved, but no booking is holding it. Free it if it isn't needed.");
+      case "CLEANING":
+        return t("tables.detail.note_cleaning", "The guests' orders are done. Clear the table, then mark it clean for the next party.");
+    }
+  })();
+
+  const seatStepper = (
+    <div className="table_guest_row">
+      <span>{t("tables.detail.guests", "Guests")}</span>
+      <div className="table_guest_stepper">
+        <button
+          type="button"
+          onClick={() => setSeatCount((count) => Math.max(count - 1, 1))}
+          disabled={busy || seatCount <= 1}
+          aria-label={t("tables.detail.fewer_guests", "Fewer guests")}
+        >
+          <Minus />
+        </button>
+        <b>{seatCount}</b>
+        <button
+          type="button"
+          onClick={() => setSeatCount((count) => Math.min(count + 1, table.capacity))}
+          disabled={busy || seatCount >= table.capacity}
+          aria-label={t("tables.detail.more_guests", "More guests")}
+        >
+          <Plus />
+        </button>
+      </div>
+    </div>
+  );
+
+  const overrideButton = (to: TableStatus, label: string, guestCount?: number, note?: string) =>
+    isAdmin && verdict(to) === "ADMIN_OVERRIDE" ? (
+      <Button variant="outline" className="table_override_button is_wide" disabled={busy} onClick={() => move(to, guestCount, note)}>
+        <ShieldAlert />
+        {label}
+      </Button>
+    ) : null;
 
   return (
     <div className="table_detail">
@@ -448,7 +554,7 @@ function TableDetail({
         <h2>{t("tables.detail.heading", "Table #{number}", { number: table.tableNumber })}</h2>
         <span className="table_status_pill">
           <span className={cn("table_legend_dot", `is_${table.status.toLowerCase()}`)} />
-          {STATUS_LABEL[table.status]}
+          {labels[table.status]}
         </span>
       </div>
       <p className="table_detail_sub">
@@ -457,19 +563,8 @@ function TableDetail({
 
       <div className="table_detail_section">
         <span className="table_detail_label">{t("tables.detail.table_status", "Table status")}</span>
-        <div className="table_status_switch" role="group" aria-label={t("tables.detail.table_status", "Table status")}>
-          {(Object.keys(STATUS_LABEL) as TableStatus[]).map((status) => (
-            <button
-              key={status}
-              type="button"
-              disabled={isSaving}
-              className={cn(table.status === status && "is_selected")}
-              onClick={() => table.status !== status && setStatus(status)}
-            >
-              {STATUS_LABEL[status]}
-            </button>
-          ))}
-        </div>
+        <p className="table_status_note">{statusNote}</p>
+
         {table.status === "OCCUPIED" ? (
           <div className="table_guest_row">
             <span>{t("tables.detail.guests", "Guests")}</span>
@@ -477,7 +572,7 @@ function TableDetail({
               <button
                 type="button"
                 onClick={() => changeGuests(-1)}
-                disabled={isSaving || guests <= 1}
+                disabled={busy || guests <= 1}
                 aria-label={t("tables.detail.fewer_guests", "Fewer guests")}
               >
                 <Minus />
@@ -486,14 +581,138 @@ function TableDetail({
               <button
                 type="button"
                 onClick={() => changeGuests(1)}
-                disabled={isSaving || guests >= table.capacity}
+                disabled={busy || guests >= table.capacity}
                 aria-label={t("tables.detail.more_guests", "More guests")}
               >
                 <Plus />
               </button>
             </div>
           </div>
+        ) : table.status === "AVAILABLE" || offered("OCCUPIED") ? (
+          seatStepper
         ) : null}
+
+        <div className="table_action_grid">
+          {table.status === "AVAILABLE" ? (
+            <>
+              <Button variant="primary" disabled={busy} onClick={() => actions.takeOrder(table.tableNumber, false)}>
+                <UtensilsCrossed />
+                {t("tables.actions.take_order", "Take order")}
+              </Button>
+              {offered("OCCUPIED") && verdict("OCCUPIED") === "ALLOWED" ? (
+                <Button variant="outline" disabled={busy} onClick={() => move("OCCUPIED", seatCount)}>
+                  <Users />
+                  {t("tables.actions.seat_guests", "Seat {count} guests", { count: seatCount })}
+                </Button>
+              ) : null}
+              <Button variant="outline" disabled={busy} onClick={onBook}>
+                <CalendarPlus />
+                {t("tables.actions.book", "Book")}
+              </Button>
+              <Button variant="outline" disabled={busy} onClick={() => move("CLEANING")}>
+                <Sparkles />
+                {t("tables.actions.needs_cleaning", "Needs cleaning")}
+              </Button>
+              {overrideButton("OCCUPIED", t("tables.actions.seat_anyway", "Seat walk-in anyway"), seatCount)}
+            </>
+          ) : null}
+
+          {table.status === "OCCUPIED" ? (
+            <>
+              <Button variant="primary" className="is_wide" disabled={busy} onClick={() => actions.takeOrder(table.tableNumber, true)}>
+                <UtensilsCrossed />
+                {t("tables.actions.add_order", "Add order for this party")}
+              </Button>
+              <Button
+                variant="outline"
+                className="is_wide"
+                disabled={busy || verdict("CLEANING") !== "ALLOWED"}
+                onClick={() => move("CLEANING")}
+              >
+                <Sparkles />
+                {t("tables.actions.guests_left", "Guests left — needs cleaning")}
+              </Button>
+              {overrideButton("AVAILABLE", t("tables.actions.free_without_cleaning", "Free without cleaning"))}
+            </>
+          ) : null}
+
+          {table.status === "RESERVED" ? (
+            <>
+              {holding ? (
+                <Button
+                  variant="primary"
+                  className="is_wide"
+                  disabled={busy}
+                  onClick={() => void actions.checkInBooking(holding, { guestCount: holding.partySize })}
+                >
+                  <Users />
+                  {t("tables.actions.check_in", "Check in {name}", { name: holding.customerName })}
+                </Button>
+              ) : null}
+              {offered("AVAILABLE") ? (
+                <Button variant="outline" disabled={busy} onClick={() => move("AVAILABLE")}>
+                  {t("tables.actions.free_table", "Free table")}
+                </Button>
+              ) : null}
+              <Button variant="outline" disabled={busy} onClick={() => move("CLEANING")}>
+                <Sparkles />
+                {t("tables.actions.needs_cleaning", "Needs cleaning")}
+              </Button>
+              {overrideButton(
+                "OCCUPIED",
+                t("tables.actions.seat_anyway", "Seat walk-in anyway"),
+                seatCount,
+                holding
+                  ? t("tables.override.seat_reserved", "Table {number} is held for {name} at {time}. Give it to walk-in guests anyway?", {
+                      number: table.tableNumber,
+                      name: holding.customerName,
+                      time: bookingTime(holding.reservedFor),
+                    })
+                  : undefined
+              )}
+            </>
+          ) : null}
+
+          {table.status === "CLEANING" ? (
+            <>
+              <Button variant="primary" className="is_wide" disabled={busy} onClick={() => move("AVAILABLE")}>
+                <Sparkles />
+                {t("tables.actions.mark_clean", "Mark clean")}
+              </Button>
+              {verdict("OCCUPIED") === "ALLOWED" ? (
+                <Button variant="outline" className="is_wide" disabled={busy} onClick={() => move("OCCUPIED", seatCount)}>
+                  <Users />
+                  {t("tables.actions.still_seated", "Guests are still here")}
+                </Button>
+              ) : null}
+              {overrideButton("OCCUPIED", t("tables.actions.seat_anyway", "Seat walk-in anyway"), seatCount)}
+            </>
+          ) : null}
+        </div>
+        {table.status === "OCCUPIED" && orders.length > 0 ? (
+          <p className="table_detail_hint">
+            {t("tables.detail.clear_after_orders", "Complete or cancel the open orders before clearing the table.")}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="table_detail_section">
+        <div className="flex items-center justify-between gap-2">
+          <span className="table_detail_label">{t("tables.detail.bookings", "Bookings (next 24 hours)")}</span>
+          <Button variant="outline" onClick={onBook} disabled={busy}>
+            <CalendarPlus />
+            {t("tables.actions.book", "Book")}
+          </Button>
+        </div>
+        {bookings.length === 0 ? (
+          <p className="table_detail_hint">{t("tables.detail.no_bookings", "No bookings coming up.")}</p>
+        ) : (
+          <div className="table_booking_list">
+            {bookings.map((booking) => (
+              <BookingCard key={booking.id} reservation={booking} sameTableBookings={bookings} actions={actions} onEdit={onEditBooking} />
+            ))}
+          </div>
+        )}
       </div>
 
       {openCalls.length > 0 ? (
@@ -518,18 +737,11 @@ function TableDetail({
         <span className="table_detail_label">{t("tables.detail.customer_orders", "Customer orders")}</span>
         {isLoading ? (
           <SkeletonBlock className="h-24 w-full rounded-xl" />
-        ) : error ? (
-          <ErrorState
-            error={error}
-            fallback={t("tables.detail.orders_error", "Could not load this table's orders.")}
-            onRetry={refetch}
-            isRetrying={isFetching}
-          />
-        ) : activeOrders.length === 0 ? (
+        ) : orders.length === 0 ? (
           <p className="table_detail_hint">{t("tables.detail.no_orders", "No open orders at this table.")}</p>
         ) : (
           <div className="space-y-3">
-            {activeOrders.map((order) => (
+            {orders.map((order) => (
               <TableOrderCard
                 key={order.id}
                 order={order}
@@ -537,7 +749,7 @@ function TableDetail({
                 isPrinting={isBusy(order.id, "print")}
               />
             ))}
-            {activeOrders.length > 1 ? (
+            {orders.length > 1 ? (
               <div className="table_total_row">
                 <span>{t("tables.detail.table_total", "Table total")}</span>
                 <b>{money(tableTotal)}</b>
@@ -547,12 +759,6 @@ function TableDetail({
         )}
       </div>
 
-      {table.status === "OCCUPIED" && activeOrders.length === 0 && !isLoading ? (
-        <Button variant="outline" className="w-full justify-center" disabled={isSaving} onClick={() => setStatus("AVAILABLE")}>
-          {t("tables.actions.clear_table", "Clear table")}
-        </Button>
-      ) : null}
-
       <div className="table_detail_actions">
         <Button variant="outline" onClick={onShowQr}>
           <QrCode />
@@ -560,16 +766,26 @@ function TableDetail({
         </Button>
         {isAdmin ? (
           <>
+            <Button variant="outline" onClick={onShowHistory}>
+              <History />
+              {t("tables.actions.history", "History")}
+            </Button>
             <Button variant="outline" onClick={onEdit}>
               <Pencil />
               {t("actions.edit", "Edit")}
             </Button>
             <Button
-             
-              variant="outline" className="text-red-600"
+              variant="outline"
+              className="text-red-600"
               onClick={onDelete}
-              disabled={table.status === "OCCUPIED"}
-              title={table.status === "OCCUPIED" ? t("tables.detail.delete_disabled", "Clear the table before deleting it") : undefined}
+              disabled={table.status === "OCCUPIED" || hasActiveBookings}
+              title={
+                table.status === "OCCUPIED"
+                  ? t("tables.detail.delete_disabled", "Clear the table before deleting it")
+                  : hasActiveBookings
+                    ? t("tables.detail.delete_disabled_bookings", "Move or cancel its bookings before deleting it")
+                    : undefined
+              }
             >
               <Trash2 />
               {t("actions.delete", "Delete")}
@@ -691,7 +907,6 @@ function QrDialog({ target, onClose }: { target: QrTarget | null; onClose: () =>
             ) : null}
             {target ? (
               <Button
-               
                 variant="outline"
                 onClick={() => {
                   void navigator.clipboard?.writeText(target.url).then(

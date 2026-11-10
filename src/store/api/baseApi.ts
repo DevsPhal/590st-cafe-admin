@@ -192,6 +192,7 @@ export const baseApi = createApi({
   refetchOnMountOrArgChange: 30,
   tagTypes: [
     "Table",
+    "Reservation",
     "Attendance",
     "ContactMessage",
     "Auth",

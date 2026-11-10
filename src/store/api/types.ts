@@ -753,7 +753,8 @@ export type WatchedResource =
   | "EXTRA"
   | "INVENTORY"
   | "FEEDBACK"
-  | "TABLE";
+  | "TABLE"
+  | "RESERVATION";
 
 export type ResourceChangeType = "CREATED" | "UPDATED" | "DELETED";
 
@@ -791,6 +792,11 @@ export interface CreateOrderRequest {
   note?: string;
   /** Dine-in only, and optional there (a counter seat has no table). */
   tableNumber?: string;
+  /** The order is another round for the party already at the table (occupied, or waiting to be cleaned). */
+  forSeatedParty?: boolean;
+  /** Admin only: seat the order past the table rules (reserved or uncleaned table). Needs overrideReason. */
+  override?: boolean;
+  overrideReason?: string;
 }
 
 export interface CashPaymentRequest {
@@ -926,7 +932,8 @@ export interface UpdateBakongExchangeRateRequest {
   marketRate?: Numeric;
 }
 
-export type TableStatus = "AVAILABLE" | "OCCUPIED" | "RESERVED";
+/** RESERVED is set by bookings only; CLEANING follows the last order (or guests leaving) until marked clean. */
+export type TableStatus = "AVAILABLE" | "OCCUPIED" | "RESERVED" | "CLEANING";
 export type TableSize = "SMALL" | "MEDIUM" | "LARGE";
 
 export interface TableResponse {
@@ -959,9 +966,80 @@ export interface TableActivityResponse {
   openStaffCallCount: number;
   activeOrders: OrderResponse[];
   openStaffCalls: StaffCallResponse[];
+  /** The party seated from a booking, and bookings starting in the next 24 hours. */
+  reservations: ReservationResponse[];
 }
 
 export interface UpdateTableStatusRequest {
   status: TableStatus;
   guestCount?: number;
+  /** Admin only: make a change the table rules block. The reason is kept in the table history. */
+  override?: boolean;
+  overrideReason?: string;
+}
+
+export type ReservationStatus = "BOOKED" | "SEATED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+
+export interface ReservationResponse {
+  id: UUID;
+  tableId: UUID | null;
+  tableNumber: string;
+  customerName: string;
+  customerPhone: string | null;
+  partySize: number;
+  /** Shop time, no zone (Asia/Phnom_Penh). */
+  reservedFor: string;
+  endsAt: string;
+  durationMinutes: number;
+  status: ReservationStatus;
+  note: string | null;
+  seatedAt: string | null;
+  closedAt: string | null;
+  closeReason: string | null;
+  createdAt: string;
+}
+
+export interface ReservationRequest {
+  tableId: UUID;
+  customerName: string;
+  customerPhone?: string;
+  partySize: number;
+  /** yyyy-MM-ddTHH:mm in shop time. */
+  reservedFor: string;
+  durationMinutes?: number;
+  note?: string;
+}
+
+export interface CheckInReservationRequest {
+  guestCount?: number;
+  override?: boolean;
+  overrideReason?: string;
+}
+
+export interface CloseReservationRequest {
+  reason?: string;
+}
+
+export type TableAuditAction =
+  | "STATUS_CHANGED"
+  | "ORDER_SEATED"
+  | "ORDER_ADDED"
+  | "ORDERS_FINISHED"
+  | "RESERVATION_HELD"
+  | "RESERVATION_CHECKED_IN"
+  | "RESERVATION_RELEASED";
+
+export interface TableAuditLogResponse {
+  id: UUID;
+  action: TableAuditAction;
+  fromStatus: TableStatus | null;
+  toStatus: TableStatus;
+  guestCount: number;
+  /** Null when the system made the change (a booking hold or an automatic no-show). */
+  actor: { id: UUID; name: string; role: Role | null } | null;
+  override: boolean;
+  reason: string | null;
+  orderId: UUID | null;
+  reservationId: UUID | null;
+  createdAt: string;
 }

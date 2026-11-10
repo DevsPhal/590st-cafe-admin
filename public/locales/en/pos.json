@@ -47,7 +47,8 @@
     "table_placeholder": "No table",
     "table_option": "Table {number}",
     "item_count_one": "{count} item",
-    "item_count_other": "{count} items"
+    "item_count_other": "{count} items",
+    "table_option_status": "{number} · {status}"
   },
   "cart": {
     "empty": "Cart is empty. Tap a product to add it.",
@@ -112,5 +113,18 @@
     "each": "Each",
     "add": "Add to order",
     "update": "Update item"
+  },
+  "table": {
+    "confirm_party_first": "Table {number} is not free. Confirm the order is for the guests already there, or pick another table.",
+    "finish_pending_first": "Finish or clear the pending order before starting one for table {number}.",
+    "new_guests_hint": "New guests? Mark the table clean on the Tables screen first.",
+    "notice_label": "Table check",
+    "override": "Admin override: seat this order here anyway",
+    "override_reason": "Reason (saved in the table history)",
+    "override_reason_needed": "Give a reason for the override.",
+    "reserved_blocked": "Table {number} is reserved. Check the booked party in from Tables, or pick another table.",
+    "reserved_notice": "Table {number} is reserved for a booking. Check the booked party in from Tables, then add their order here.",
+    "same_party_cleaning": "Table {number} is waiting to be cleaned. The same guests are still there and want more.",
+    "same_party_occupied": "Table {number} is occupied. This order is for the guests already seated there."
   }
 }
