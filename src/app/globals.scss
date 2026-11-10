@@ -530,8 +530,7 @@ body {
     // prominent thing in their row instead of fading into the charcoal.
     .btn_primary_black,
     .pagination_btn.is_active,
-    .pos_payment_method_tab.is_active,
-    .pos_order_type_option[aria-checked="true"] {
+    .pos_payment_method_tab.is_active {
       background-color: var(--ink-strong);
       border-color: var(--ink-strong);
       color: var(--brand-ink);
@@ -4625,11 +4624,13 @@ body {
     transition: none;
   }
 }
+// The order panel: header, order setup, the cart (the only part that scrolls) and a footer with the totals and
+// the charge button, pinned to the bottom of the panel on desktop.
 .pos_order_panel {
   position: sticky;
   top: 0;
-  flex: 0 0 485px;
-  width: 485px;
+  flex: 0 0 440px;
+  width: 440px;
   @media (min-width: 1100px) and (max-width: 1279px) {
     flex-basis: 360px;
     width: 360px;
@@ -4639,129 +4640,108 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 20px 16px;
-  border-radius: var(--radius-card) var(--radius-card) 0px 0px;
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
   background-color: var(--surface);
-  box-shadow: 0px 19px 38px color-mix(in srgb, var(--neutral-800) 10%, transparent);
+  box-shadow: 0 19px 38px color-mix(in srgb, var(--neutral-800) 10%, transparent);
   @media (max-width: 1099px) {
     position: static;
     width: 100%;
     height: auto;
     max-height: none;
     flex-basis: auto;
+    border-radius: var(--radius-card);
   }
 }
 .pos_order_header {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 10px 12px 20px 12px;
-  border-bottom: 1px solid var(--line-subtle);
-  p {
-    font-size: 0.6875rem;
-    color: var(--ink-muted);
-  }
-  h2 {
-    margin-top: 3px;
-    font-size: 1.25rem;
-    font-weight: 500;
-    line-height: 1.625rem;
-    color: var(--accent-violet);
-  }
-}
-.pos_order_header_actions {
-  display: flex;
-  gap: 8px;
-  button {
-    display: grid;
-    place-items: center;
-    width: 34px;
-    height: 34px;
-    border-radius: var(--radius-control);
-    border: 1px solid var(--line-subtle);
-    background-color: var(--surface);
-    color: var(--ink);
-    cursor: pointer;
-    &:hover {
-      border-color: var(--brand-lime);
-      background-color: var(--option-selected-bg);
-    }
-    svg {
-      width: 16px;
-      height: 16px;
-    }
-    &:last-child {
-      color: var(--danger-text);
-    }
-  }
-}
-.pos_order_selects {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  padding: 12px;
-  border-radius: var(--radius-card);
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--line-subtle);
+}
+.pos_order_heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  h2 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--ink-strong);
+  }
+}
+.pos_order_count {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background-color: var(--surface-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pos_order_clear.btn_ghost {
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 0 10px;
+  color: var(--danger-text);
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+  &:hover:not(:disabled) {
+    background-color: var(--danger-bg);
+  }
+  &:disabled {
+    color: var(--ink-subtle);
+    opacity: 0.6;
+  }
+}
+.pos_order_setup {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line-subtle);
   .form_field {
     gap: 6px;
     margin: 0;
   }
   .form_field_label {
-    font-size: 0.6875rem;
-    font-weight: 400;
-    line-height: 1.25;
+    font-size: 0.75rem;
+    font-weight: 600;
     color: var(--ink-muted);
   }
-  .form_field_control {
+  .form_field_select_trigger {
     height: 44px;
-    padding: 12px 40px 12px 12px;
-    border-radius: 16px;
-    border-color: var(--line);
-    font-size: 1rem;
-  }
-  .form_field_icon {
-    right: 12px;
-    width: 16px;
-    height: 16px;
-    color: var(--ink);
-  }
-  @media (max-width: 480px) {
-    grid-template-columns: 1fr;
+    font-size: 0.9375rem;
   }
 }
-// Dine in | Take away: a required two-way choice, so both options stay visible instead of hiding in a menu.
-.pos_order_selects:has(.pos_order_type) {
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-  @media (max-width: 480px) {
-    grid-template-columns: 1fr;
-  }
-}
-.pos_order_type {
-  // Take-away has no table picker; the toggle then takes the whole row.
-  &:only-child {
-    grid-column: 1 / -1;
-  }
-}
+// Dine in | Take away: a required two-way choice, so both options stay in view.
 .pos_order_type_options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  padding: 4px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 14px;
   background-color: var(--surface-muted);
 }
 .pos_order_type_option {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 8px;
   min-height: 44px;
-  padding: 0 8px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 13px;
+  border-radius: 10px;
   background-color: transparent;
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   font-weight: 600;
   white-space: nowrap;
   color: var(--ink-muted);
@@ -4770,22 +4750,29 @@ body {
     background-color 150ms ease,
     color 150ms ease;
   svg {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     flex-shrink: 0;
   }
-  &:hover:not(:disabled) {
-    color: var(--ink);
+  // Hover only where there is a real pointer, and never on the selected option: on a tablet the hover state
+  // sticks after a tap, and it used to turn the selected option's text dark on its dark fill.
+  @media (hover: hover) {
+    &:not([aria-checked="true"]):not(:disabled):hover {
+      background-color: var(--surface);
+      color: var(--ink);
+    }
   }
+  // The strongest fill in the panel with the surface colour on it: black and white in the light theme,
+  // cream and charcoal in the dark one.
   &[aria-checked="true"] {
-    background-color: var(--brand-ink);
-    color: var(--ink-inverse);
+    background-color: var(--ink-strong);
+    color: var(--surface);
   }
   &:disabled {
     cursor: not-allowed;
   }
   &:disabled:not([aria-checked="true"]) {
-    opacity: 0.5;
+    opacity: 0.45;
   }
   &:focus-visible {
     outline: 2px solid var(--focus-ring);
@@ -4794,74 +4781,140 @@ body {
 }
 .pos_cart_list {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: 0;
   min-height: 0;
   overflow-y: auto;
-  padding-right: 2px;
+  padding: 0 20px;
   scrollbar-width: thin;
+  @media (max-width: 1099px) {
+    flex: none;
+    overflow: visible;
+  }
+}
+.pos_cart_empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 40px 16px;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+  p {
+    max-width: 28ch;
+  }
+}
+.pos_cart_empty_icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 8px;
+  border-radius: 16px;
+  background-color: var(--surface-muted);
+  color: var(--ink-subtle);
+  svg {
+    width: 24px;
+    height: 24px;
+  }
+}
+.pos_cart_empty_title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink);
 }
 .pos_cart_item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px;
-  border-radius: var(--radius-card);
-  background-color: var(--surface);
-  &:nth-child(odd) {
-    background-color: var(--surface-muted);
+  padding: 14px 0;
+  & + & {
+    border-top: 1px solid var(--line-subtle);
   }
 }
-.pos_cart_item_content {
+.pos_cart_item_main {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 4px;
   min-width: 0;
+}
+.pos_cart_item_top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   h3 {
-    font-size: 0.8125rem;
+    min-width: 0;
+    font-size: 0.9375rem;
     font-weight: 600;
+    line-height: 1.35;
     color: var(--ink);
-  }
-  p {
-    margin-top: 4px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 0.6875rem;
-    color: var(--ink-muted);
+    overflow-wrap: anywhere;
   }
 }
 .pos_cart_item_bottom {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-top: 10px;
+  gap: 12px;
+  margin-top: 4px;
 }
 .pos_cart_price {
-  display: flex;
+  display: inline-flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px;
-  margin-top: 2px;
-  .is_struck {
-    font-size: 0.75rem;
-    color: var(--ink-muted);
-    text-decoration: line-through;
-  }
-  strong {
-    font-size: 0.8125rem;
-    font-weight: 700;
+  gap: 2px 5px;
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  b {
+    font-weight: 600;
     color: var(--ink);
   }
-  span:not(.is_struck) {
-    font-size: 0.75rem;
-    color: var(--ink-muted);
+  s {
+    color: var(--ink-subtle);
   }
 }
 .pos_cart_options {
-  margin-top: 2px;
-  font-size: 0.75rem;
-  line-height: 1.35;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
   color: var(--ink-muted);
   overflow-wrap: anywhere;
+}
+.pos_cart_change {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--info-text);
+  cursor: pointer;
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+  &:hover {
+    text-decoration: underline;
+  }
+  &:focus-visible {
+    border-radius: 4px;
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  @media (pointer: coarse) {
+    min-height: 32px;
+  }
 }
 // Drink options dialog: size, sugar, ice, milk and extras for one item.
 .pos_options_body {
@@ -5005,73 +5058,130 @@ body {
   }
 }
 .pos_cart_line_total {
+  flex-shrink: 0;
   font-size: 0.9375rem;
   font-weight: 700;
-  color: var(--success-text);
+  color: var(--ink-strong);
   font-variant-numeric: tabular-nums;
 }
-.pos_cart_item_actions {
+.pos_order_footer {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
   flex-shrink: 0;
-  align-self: flex-start;
-}
-.pos_cart_action {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 9999px;
-  cursor: pointer;
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-  &.is_remove {
-    background-color: color-mix(in srgb, var(--red-600) 10%, transparent);
-    color: var(--danger-text);
-  }
-  &.is_edit {
-    background-color: color-mix(in srgb, var(--blue-600) 10%, transparent);
-    color: var(--info-text);
-  }
-  &:hover {
-    opacity: 0.85;
-  }
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px 20px;
+  border-top: 1px solid var(--line-subtle);
+  background-color: var(--surface);
 }
 .pos_order_totals {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px 16px;
-  margin-top: 16px;
-  padding: 16px;
-  border-top: 1px solid var(--line-subtle);
-  border-radius: var(--radius-card);
-  background-color: var(--surface-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+  }
   dt,
   dd {
     margin: 0;
-    font-size: 1rem;
-    line-height: 1.5;
-    color: var(--ink);
-  }
-  dt {
-    font-weight: 400;
+    font-size: 0.9375rem;
+    color: var(--ink-muted);
   }
   dd {
     text-align: right;
-    font-weight: 400;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
   }
-  dt.is_grand_total,
-  dd.is_grand_total {
-    font-size: 1.25rem;
-    font-weight: 500;
-    line-height: 1.625rem;
+  .is_discount dd {
+    color: var(--success-text);
   }
-  dt.is_grand_total {
-    color: var(--accent-violet);
+  // A dashed rule above the total, as on the printed receipt.
+  .is_total {
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--line);
+    dt {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    dd {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+      font-size: 1.75rem;
+      font-weight: 800;
+      line-height: 1.1;
+      color: var(--ink-strong);
+    }
+    small {
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--ink-muted);
+    }
+  }
+}
+.pos_charge_button.btn_lg {
+  width: 100%;
+  height: 56px;
+  max-height: 56px;
+  gap: 10px;
+  padding: 0 20px;
+  border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+.pos_charge_amount {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+// The riel sign comes from the Khmer font (the English one has no glyph for it) and is a touch larger,
+// since it is small in every font.
+.pos_riel_sign {
+  margin-left: 3px;
+  font-family: var(--current-khmer-font), sans-serif;
+  font-size: 1.3em;
+}
+// Short desktop and iPad-landscape screens: tighter spacing, so more of the cart stays in view.
+@media (min-width: 1100px) and (max-height: 860px) {
+  .pos_order_header {
+    padding: 12px 16px 10px;
+  }
+  .pos_order_setup {
+    gap: 10px;
+    padding: 12px 16px;
+  }
+  .pos_cart_list {
+    padding: 0 16px;
+  }
+  .pos_cart_item {
+    padding: 10px 0;
+  }
+  .pos_order_footer {
+    gap: 10px;
+    padding: 12px 16px 16px;
+  }
+  .pos_order_totals {
+    gap: 4px;
+    .is_total {
+      margin-top: 2px;
+      padding-top: 8px;
+      dd {
+        font-size: 1.5rem;
+      }
+    }
+  }
+  .pos_charge_button.btn_lg {
+    height: 50px;
+    max-height: 50px;
   }
 }
 .pos_order_discount_link {
@@ -5086,24 +5196,6 @@ body {
   cursor: pointer;
   &:hover {
     color: var(--info-text);
-  }
-}
-.pos_order_ctas {
-  display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  gap: 10px;
-  padding-top: 16px;
-  button {
-    width: 100%;
-    height: 44px;
-    max-height: 44px;
-  }
-  .pos_cta_arrow {
-    font-size: 1.125rem;
-    line-height: 1;
-  }
-  @media (max-width: 480px) {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -6415,26 +6507,47 @@ body {
   font-weight: 700;
 }
 .pos_table_notice {
-  // Spans the order-type and table columns above it.
-  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-subtle);
   border-radius: 12px;
   background-color: var(--surface-muted);
   font-size: 0.8125rem;
+  line-height: 1.45;
   color: var(--ink);
-  label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
-  input[type="checkbox"] { margin-top: 2px; width: 16px; height: 16px; flex-shrink: 0; }
-  textarea, input[type="text"] {
-    width: 100%;
-    padding: 8px 10px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background-color: var(--surface);
+  label {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
   }
-  &.is_warning { background-color: var(--danger-bg); }
+  input[type="checkbox"] {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+    accent-color: var(--ink-strong);
+  }
+  input[type="text"] {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    background-color: var(--surface);
+    color: var(--ink);
+  }
+  // Needs a choice before payment can open: amber, not an error.
+  &.is_warning {
+    border-color: color-mix(in srgb, var(--warning-text) 35%, transparent);
+    background-color: var(--warning-bg);
+  }
+}
+.pos_table_notice_hint {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
 }
 
 .pos_qty_control {
@@ -6464,7 +6577,35 @@ body {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
-  &.is_cart button { width: 32px; height: 32px; }
+  &.is_cart {
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    background-color: var(--surface);
+    button {
+      width: 32px;
+      height: 32px;
+      border: 0;
+      background-color: var(--surface-muted);
+      &:hover {
+        background-color: var(--option-hover-bg);
+      }
+      &.is_remove {
+        background-color: var(--danger-bg);
+        color: var(--danger-text);
+      }
+    }
+    span {
+      min-width: 22px;
+    }
+    @media (pointer: coarse) {
+      button {
+        width: 38px;
+        height: 38px;
+      }
+    }
+  }
 }
 .pos_mobile_order_bar {
   position: fixed;

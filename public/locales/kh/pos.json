@@ -51,21 +51,23 @@
     "table_option_status": "{number} · {status}"
   },
   "cart": {
-    "empty": "កន្ត្រកទទេ។ ចុចលើផលិតផលដើម្បីបន្ថែម។",
     "remove_item": "ដក {name} ចេញ",
     "each": "ក្នុងមួយ",
-    "edit_item": "ប្តូរជម្រើសសម្រាប់ {name}"
+    "edit_item": "ប្តូរជម្រើសសម្រាប់ {name}",
+    "empty_title": "មិនទាន់មានមុខទំនិញ",
+    "empty_hint": "ចុចលើផលិតផលដើម្បីបន្ថែមវាទៅក្នុងការបញ្ជាទិញ។",
+    "change": "ប្តូរ"
   },
   "totals": {
-    "subtotal": "សរុបរង៖",
-    "items_one": "{count} មុខ",
-    "items_other": "{count} មុខ",
-    "total_discount": "បញ្ចុះតម្លៃសរុប៖",
-    "grand_total": "សរុបរួម៖"
+    "subtotal": "សរុបរង",
+    "total_discount": "បញ្ចុះតម្លៃ",
+    "grand_total": "សរុប",
+    "riel": "≈ {amount}",
+    "riel_rate": "តាមអត្រា 1 USD = {rate} ៛"
   },
   "actions": {
-    "make_payment": "ទូទាត់ប្រាក់",
-    "view_order": "មើលការបញ្ជាទិញ"
+    "view_order": "មើលការបញ្ជាទិញ",
+    "charge": "គិតប្រាក់"
   },
   "payment": {
     "title": "ទូទាត់ការបញ្ជាទិញ",

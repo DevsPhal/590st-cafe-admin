@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import QRCode from "qrcode";
-import { Minus, Pencil, Plus, Search, ShoppingBag, UtensilsCrossed, X } from "lucide-react";
+import { ArrowRight, Minus, Pencil, Plus, ReceiptText, Search, ShoppingBag, Trash2, UtensilsCrossed, X } from "lucide-react";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
 import { AdminTopActions, ErrorState, FormSelect, SkeletonBlock, Thumbnail, listLoadState } from "@/components/common/AdminKit";
@@ -35,6 +35,7 @@ import {
 import { useListCategoriesQuery } from "@/store/api/categoryApi";
 import { useListProductsQuery } from "@/store/api/productApi";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
+import { usdToKhr } from "@/lib/khr";
 import { useListPublicTablesQuery } from "@/store/api/tableApi";
 import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
 import { posBlocker, posRequirement, posSeatingFields, type TableStatus } from "@/lib/tableTransitions";
@@ -107,25 +108,97 @@ function accentFor(id: string): string {
 function QuantityControl({
   quantity,
   variant,
+  removeLabel,
   onIncrement,
   onDecrement,
 }: {
   quantity: number;
   variant: "product" | "cart";
+  /** When given, the minus button at quantity 1 removes the line, so it shows a bin with this label. */
+  removeLabel?: string;
   onIncrement: () => void;
   onDecrement: () => void;
 }) {
   const { t } = useI18n();
+  const removes = removeLabel !== undefined && quantity <= 1;
   return (
     <div className={cn("pos_qty_control", variant === "cart" && "is_cart")}>
-      <button type="button" aria-label={t("pos.quantity.decrease", "Decrease quantity")} onClick={onDecrement}>
-        <Minus />
+      <button
+        type="button"
+        className={cn(removes && "is_remove")}
+        aria-label={removes ? removeLabel : t("pos.quantity.decrease", "Decrease quantity")}
+        onClick={onDecrement}
+      >
+        {removes ? <Trash2 /> : <Minus />}
       </button>
       <span>{quantity}</span>
       <button type="button" aria-label={t("pos.quantity.increase", "Increase quantity")} onClick={onIncrement}>
         <Plus />
       </button>
     </div>
+  );
+}
+
+// One cart line: name and line total on top, the chosen options (with Change for drinks), then the unit price
+// beside the quantity stepper. At quantity 1 the stepper's minus removes the line.
+function PosCartLine({
+  line,
+  canChange,
+  onChange,
+  onIncrement,
+  onDecrement,
+}: {
+  line: CartLine;
+  canChange: boolean;
+  onChange: () => void;
+  onIncrement: () => void;
+  onDecrement: () => void;
+}) {
+  const { t } = useI18n();
+  const options = lineOptions(line);
+  const name = titleCase(line.product.name);
+  const changeable = hasDrinkOptions(line.product) && canChange;
+  return (
+    <article className="pos_cart_item" aria-label={name}>
+      <Thumbnail src={line.product.imageUrl} kind="product" />
+      <div className="pos_cart_item_main">
+        <div className="pos_cart_item_top">
+          <h3>{name}</h3>
+          <strong className="pos_cart_line_total">${(lineUnitPrice(line) * line.quantity).toFixed(2)}</strong>
+        </div>
+        {options || changeable ? (
+          <p className="pos_cart_options">
+            {options ? <span>{options}</span> : null}
+            {changeable ? (
+              <button
+                type="button"
+                className="pos_cart_change"
+                aria-haspopup="dialog"
+                aria-label={t("pos.cart.edit_item", "Change options for {name}", { name: line.product.name })}
+                onClick={onChange}
+              >
+                <Pencil aria-hidden />
+                {t("pos.cart.change", "Change")}
+              </button>
+            ) : null}
+          </p>
+        ) : null}
+        <div className="pos_cart_item_bottom">
+          <span className="pos_cart_price">
+            {line.product.discountActive ? <s>${lineUnitOriginal(line).toFixed(2)}</s> : null}
+            <b>${lineUnitPrice(line).toFixed(2)}</b>
+            {t("pos.cart.each", "each")}
+          </span>
+          <QuantityControl
+            quantity={line.quantity}
+            variant="cart"
+            removeLabel={t("pos.cart.remove_item", "Remove {name}", { name: line.product.name })}
+            onIncrement={onIncrement}
+            onDecrement={onDecrement}
+          />
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -164,6 +237,17 @@ export default function PosView() {
   const seating = { forSeatedParty, override: overrideTable, overrideReason };
   const [pendingOrder, setPendingOrder] = usePersistentState<OrderResponse | null>("pos:pendingOrder", null);
   const confirmingRef = useRef(false);
+  // Phones: the floating "View order" bar would cover the total and the charge button, so it hides while the
+  // order panel itself is on screen.
+  const orderPanelRef = useRef<HTMLElement | null>(null);
+  const [orderPanelInView, setOrderPanelInView] = useState(false);
+  useEffect(() => {
+    const panel = orderPanelRef.current;
+    if (!panel || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => setOrderPanelInView(entry.isIntersecting), { threshold: 0.15 });
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
   const [completedSale, setCompletedSale] = usePersistentState<OrderResponse | null>("pos:completedSale", null);
 
   const [cashCurrency, setCashCurrency] = useState<Currency>("USD");
@@ -275,7 +359,13 @@ export default function PosView() {
 
   const editLine = (line: CartLine) => {
     if (pendingOrder || confirmingRef.current) return;
-    setOptionsRequest({ id: Date.now(), product: line.product, initial: { ...line, extras: line.extras ?? [] }, editKey: line.key });
+    // The id only has to differ from the open request's (it remounts the dialog), so count up from it.
+    setOptionsRequest((open) => ({
+      id: (open?.id ?? 0) + 1,
+      product: line.product,
+      initial: { ...line, extras: line.extras ?? [] },
+      editKey: line.key,
+    }));
   };
 
   const confirmOptions = (options: PosLineOptions) => {
@@ -331,10 +421,6 @@ export default function PosView() {
         )
         .filter((line) => line.quantity > 0)
     );
-  };
-
-  const removeLine = (key: string) => {
-    if (!pendingOrder && !confirmingRef.current) setCart((current) => current.filter((line) => line.key !== key));
   };
 
   // The product card's minus takes one off the most recently added size of that product.
@@ -474,6 +560,10 @@ export default function PosView() {
 
   const grossTotal = cart.reduce((sum, line) => sum + lineUnitOriginal(line) * line.quantity, 0);
   const discount = Math.max(grossTotal - total, 0);
+  // What the till charges: the pending order's saved total once it exists, otherwise the cart.
+  const orderTotal = Number(pendingOrder?.totalAmount ?? total);
+  const khrRate = exchangeRate ? Number(exchangeRate.khrPerUsdRate) : 0;
+  const rielTotal = khrRate > 0 && orderTotal > 0 ? usdToKhr(orderTotal, khrRate) : null;
 
   const tableStatusLabels: Record<TableStatus, string> = {
     AVAILABLE: t("tables.status.available", "Available"),
@@ -761,44 +851,56 @@ export default function PosView() {
           </div>
         </section>
 
-        <aside id="pos-order-panel" className="pos_order_panel" aria-label={t("pos.order.aria_label", "Order summary")}>
-          <div className="pos_order_header">
-            <div>
+        <aside ref={orderPanelRef} id="pos-order-panel" className="pos_order_panel" aria-label={t("pos.order.aria_label", "Order summary")}>
+          <header className="pos_order_header">
+            <div className="pos_order_heading">
               <h2>{t("pos.order.title", "Order Summary")}</h2>
+              {itemCount > 0 ? (
+                <span className="pos_order_count">
+                  {itemCount === 1
+                    ? t("pos.order.item_count_one", "{count} item", { count: itemCount })
+                    : t("pos.order.item_count_other", "{count} items", { count: itemCount })}
+                </span>
+              ) : null}
             </div>
-            <div className="pos_order_header_actions">
-              <button type="button" aria-label={t("pos.order.clear_aria_label", "Clear order")} onClick={clearCart}>
-                <X />
-              </button>
-            </div>
-          </div>
+            <Button
+              variant="ghost"
+              className="pos_order_clear"
+              onClick={clearCart}
+              disabled={(cart.length === 0 && !pendingOrder) || isCancelling}
+              aria-label={t("pos.order.clear_aria_label", "Clear order")}
+            >
+              <Trash2 aria-hidden />
+              {t("actions.clear", "Clear")}
+            </Button>
+          </header>
 
-          <div className="pos_order_selects">
-            <div className="form_field pos_order_type">
-              <span id="pos-order-type-label" className="form_field_label">
-                {t("pos.order.type_label", "Order type")}
-              </span>
-              <div className="pos_order_type_options" role="radiogroup" aria-labelledby="pos-order-type-label">
-                {(["DINE_IN", "TAKE_AWAY"] as const).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    role="radio"
-                    aria-checked={orderType === type}
-                    disabled={isOrderLocked}
-                    onClick={() => chooseOrderType(type)}
-                    className="pos_order_type_option"
-                  >
-                    {type === "DINE_IN" ? <UtensilsCrossed aria-hidden /> : <ShoppingBag aria-hidden />}
-                    {orderTypeLabels[type]}
-                  </button>
-                ))}
-              </div>
+          <div className="pos_order_setup">
+            <div
+              className="pos_order_type_options"
+              role="radiogroup"
+              aria-label={t("pos.order.type_label", "Order type")}
+            >
+              {(["DINE_IN", "TAKE_AWAY"] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  role="radio"
+                  aria-checked={orderType === type}
+                  disabled={isOrderLocked}
+                  onClick={() => chooseOrderType(type)}
+                  className="pos_order_type_option"
+                >
+                  {type === "DINE_IN" ? <UtensilsCrossed aria-hidden /> : <ShoppingBag aria-hidden />}
+                  {orderTypeLabels[type]}
+                </button>
+              ))}
             </div>
             {isDineIn ? (
               <FormSelect
                 label={t("pos.order.table_label", "Table")}
                 value={tableNumber}
+                disabled={isOrderLocked}
                 onChange={(event) => { if (!isOrderLocked && !confirmingRef.current) setTableNumber(event.target.value); }}
                 placeholder={t("pos.order.table_placeholder", "No table")}
               >
@@ -835,7 +937,7 @@ export default function PosView() {
                       </span>
                     </label>
                     {tableStatus === "CLEANING" ? (
-                      <span className="table_detail_hint">
+                      <span className="pos_table_notice_hint">
                         {t("pos.table.new_guests_hint", "New guests? Mark the table clean on the Tables screen first.")}
                       </span>
                     ) : null}
@@ -873,104 +975,73 @@ export default function PosView() {
 
           <div className="pos_cart_list">
             {cart.length === 0 ? (
-              <p className="p-6 text-center text-sm text-gray-400">
-                {t("pos.cart.empty", "Cart is empty. Tap a product to add it.")}
-              </p>
+              <div className="pos_cart_empty">
+                <span className="pos_cart_empty_icon" aria-hidden>
+                  <ReceiptText />
+                </span>
+                <p className="pos_cart_empty_title">{t("pos.cart.empty_title", "No items yet")}</p>
+                <p>{t("pos.cart.empty_hint", "Tap a product to add it to the order.")}</p>
+              </div>
             ) : (
               cart.map((line) => (
-                <article key={line.key} className="pos_cart_item">
-                  <Thumbnail src={line.product.imageUrl} kind="product" />
-                  <div className="pos_cart_item_content">
-                    <h3>{titleCase(line.product.name)}</h3>
-                    {lineOptions(line) ? <p className="pos_cart_options">{lineOptions(line)}</p> : null}
-                    <div className="pos_cart_price">
-                      {line.product.discountActive ? (
-                        <span className="is_struck">
-                          ${lineUnitOriginal(line).toFixed(2)}
-                        </span>
-                      ) : null}
-                      <strong>${lineUnitPrice(line).toFixed(2)}</strong>
-                      <span>{t("pos.cart.each", "each")}</span>
-                    </div>
-                    <div className="pos_cart_item_bottom">
-                      <QuantityControl
-                        quantity={line.quantity}
-                        variant="cart"
-                        onIncrement={() => changeQuantity(line.key, 1)}
-                        onDecrement={() => changeQuantity(line.key, -1)}
-                      />
-                      <strong className="pos_cart_line_total">
-                        ${(lineUnitPrice(line) * line.quantity).toFixed(2)}
-                      </strong>
-                    </div>
-                  </div>
-                  <div className="pos_cart_item_actions">
-                    {hasDrinkOptions(line.product) ? (
-                      <button
-                        type="button"
-                        className="pos_cart_action is_edit"
-                        aria-haspopup="dialog"
-                        aria-label={t("pos.cart.edit_item", "Change options for {name}", { name: line.product.name })}
-                        onClick={() => editLine(line)}
-                      >
-                        <Pencil />
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="pos_cart_action is_remove"
-                      aria-label={t("pos.cart.remove_item", "Remove {name}", { name: line.product.name })}
-                      onClick={() => removeLine(line.key)}
-                    >
-                      <X />
-                    </button>
-                  </div>
-                </article>
+                <PosCartLine
+                  key={line.key}
+                  line={line}
+                  canChange={!isOrderLocked}
+                  onChange={() => editLine(line)}
+                  onIncrement={() => changeQuantity(line.key, 1)}
+                  onDecrement={() => changeQuantity(line.key, -1)}
+                />
               ))
             )}
           </div>
 
-          <dl className="pos_order_totals">
-            <dt>{t("pos.totals.subtotal", "Subtotal:")}</dt>
-            <dd>
-              ${grossTotal.toFixed(2)} -{" "}
-              {itemCount === 1
-                ? t("pos.totals.items_one", "{count} Item", { count: itemCount })
-                : t("pos.totals.items_other", "{count} Items", { count: itemCount })}
-            </dd>
-            <dt>{t("pos.totals.total_discount", "Total Discount:")}</dt>
-            <dd>${discount.toFixed(2)}</dd>
-            <dt className="is_grand_total">{t("pos.totals.grand_total", "Grand Total:")}</dt>
-            <dd className="is_grand_total">${total.toFixed(2)}</dd>
-          </dl>
-
-          <div className="pos_order_ctas">
+          <footer className="pos_order_footer">
+            <dl className="pos_order_totals">
+              <div>
+                <dt>{t("pos.totals.subtotal", "Subtotal")}</dt>
+                <dd>${grossTotal.toFixed(2)}</dd>
+              </div>
+              {discount > 0 ? (
+                <div className="is_discount">
+                  <dt>{t("pos.totals.total_discount", "Discount")}</dt>
+                  <dd>−${discount.toFixed(2)}</dd>
+                </div>
+              ) : null}
+              <div className="is_total">
+                <dt>{t("pos.totals.grand_total", "Total")}</dt>
+                <dd>
+                  ${orderTotal.toFixed(2)}
+                  {rielTotal !== null ? (
+                    <small title={t("pos.totals.riel_rate", "At 1 USD = {rate} ៛", { rate: khrRate.toLocaleString("en-US") })}>
+                      {t("pos.totals.riel", "≈ {amount}", { amount: rielTotal.toLocaleString("en-US") })}
+                      <span className="pos_riel_sign">៛</span>
+                    </small>
+                  ) : null}
+                </dd>
+              </div>
+            </dl>
             <Button
-             
-              variant="outline"
-              onClick={clearCart}
-              disabled={cart.length === 0}
-            >
-              <ShoppingBag />
-              {t("actions.clear", "Clear")}
-            </Button>
-            <Button
-             
               variant="accent"
+              size="lg"
+              className="pos_charge_button"
               onClick={openPayment}
               disabled={cart.length === 0 || (!isAdmin && !isBarista)}
             >
-              {t("pos.actions.make_payment", "Make a Payment")}
-              <span aria-hidden className="pos_cta_arrow">
-                →
+              <span>
+                {pendingOrder
+                  ? t("pos.pending.resume_payment", "Resume payment")
+                  : t("pos.actions.charge", "Charge")}
               </span>
+              <span className="pos_charge_amount">${orderTotal.toFixed(2)}</span>
+              <ArrowRight aria-hidden />
             </Button>
-          </div>
+          </footer>
         </aside>
       </div>
 
       {/* Phones and iPad portrait: the summary sits below the products, so keep the order one tap away. */}
-      {itemCount > 0 ? (
+      {itemCount > 0 && !orderPanelInView ? (
         <button
           type="button"
           className="pos_mobile_order_bar"

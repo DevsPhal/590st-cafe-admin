@@ -51,21 +51,23 @@
     "table_option_status": "{number} · {status}"
   },
   "cart": {
-    "empty": "Cart is empty. Tap a product to add it.",
     "remove_item": "Remove {name}",
     "each": "each",
-    "edit_item": "Change options for {name}"
+    "edit_item": "Change options for {name}",
+    "empty_title": "No items yet",
+    "empty_hint": "Tap a product to add it to the order.",
+    "change": "Change"
   },
   "totals": {
-    "subtotal": "Subtotal:",
-    "items_one": "{count} Item",
-    "items_other": "{count} Items",
-    "total_discount": "Total Discount:",
-    "grand_total": "Grand Total:"
+    "subtotal": "Subtotal",
+    "total_discount": "Discount",
+    "grand_total": "Total",
+    "riel": "≈ {amount}",
+    "riel_rate": "At 1 USD = {rate} ៛"
   },
   "actions": {
-    "make_payment": "Make a Payment",
-    "view_order": "View order"
+    "view_order": "View order",
+    "charge": "Charge"
   },
   "payment": {
     "title": "Checkout Order Payment",
