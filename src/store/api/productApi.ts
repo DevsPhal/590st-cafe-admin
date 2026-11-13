@@ -1,15 +1,18 @@
 import { baseApi, unwrap } from "./baseApi";
 import type {
+  AttachProductExtraRequest,
   CreateProductRequest,
-  CreateProductSizeOptionRequest,
+  CreateProductVariantRequest,
   PageQuery,
   PageResponse,
+  ProductExtraResponse,
   ProductImportResponse,
   ProductResponse,
-  ProductSizeOptionResponse,
+  ProductVariantResponse,
   SetProductDiscountRequest,
+  UpdateProductExtraRequest,
   UpdateProductRequest,
-  UpdateProductSizeOptionRequest,
+  UpdateProductVariantRequest,
   UUID,
 } from "./types";
 
@@ -138,55 +141,106 @@ export const productApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // ---- size options ----
+    // ---- variants (each carries its own absolute price) ----
 
-    listSizeOptions: builder.query<ProductSizeOptionResponse[], UUID>({
-      query: (productId) => `/api/admin/products/${productId}/size-options`,
-      transformResponse: unwrap<ProductSizeOptionResponse[]>,
-      providesTags: (_r, _e, productId) => [{ type: "SizeOption", id: productId }],
+    listVariants: builder.query<ProductVariantResponse[], UUID>({
+      query: (productId) => `/api/admin/products/${productId}/variants`,
+      transformResponse: unwrap<ProductVariantResponse[]>,
+      providesTags: (_r, _e, productId) => [{ type: "Variant", id: productId }],
     }),
 
-    createSizeOption: builder.mutation<
-      ProductSizeOptionResponse,
-      { productId: UUID; body: CreateProductSizeOptionRequest }
+    createVariant: builder.mutation<
+      ProductVariantResponse,
+      { productId: UUID; body: CreateProductVariantRequest }
     >({
       query: ({ productId, body }) => ({
-        url: `/api/admin/products/${productId}/size-options`,
+        url: `/api/admin/products/${productId}/variants`,
         method: "POST",
         body,
       }),
-      transformResponse: unwrap<ProductSizeOptionResponse>,
+      transformResponse: unwrap<ProductVariantResponse>,
       invalidatesTags: (_r, _e, { productId }) => [
-        { type: "SizeOption", id: productId },
+        { type: "Variant", id: productId },
         { type: "Product", id: productId },
+        { type: "Product", id: "LIST" },
       ],
     }),
 
-    updateSizeOption: builder.mutation<
-      ProductSizeOptionResponse,
-      { productId: UUID; id: UUID; body: UpdateProductSizeOptionRequest }
+    updateVariant: builder.mutation<
+      ProductVariantResponse,
+      { productId: UUID; id: UUID; body: UpdateProductVariantRequest }
     >({
       query: ({ productId, id, body }) => ({
-        url: `/api/admin/products/${productId}/size-options/${id}`,
+        url: `/api/admin/products/${productId}/variants/${id}`,
         method: "PATCH",
         body,
       }),
-      transformResponse: unwrap<ProductSizeOptionResponse>,
+      transformResponse: unwrap<ProductVariantResponse>,
       invalidatesTags: (_r, _e, { productId }) => [
-        { type: "SizeOption", id: productId },
+        { type: "Variant", id: productId },
         { type: "Product", id: productId },
+        { type: "Product", id: "LIST" },
       ],
     }),
 
-    deleteSizeOption: builder.mutation<void, { productId: UUID; id: UUID }>({
+    deleteVariant: builder.mutation<void, { productId: UUID; id: UUID }>({
       query: ({ productId, id }) => ({
-        url: `/api/admin/products/${productId}/size-options/${id}`,
+        url: `/api/admin/products/${productId}/variants/${id}`,
         method: "DELETE",
       }),
       invalidatesTags: (_r, _e, { productId }) => [
-        { type: "SizeOption", id: productId },
+        { type: "Variant", id: productId },
         { type: "Product", id: productId },
+        { type: "Product", id: "LIST" },
       ],
+    }),
+
+    // ---- extras offered on a product (see extraApi for the global add-on catalog) ----
+
+    listProductExtras: builder.query<ProductExtraResponse[], UUID>({
+      query: (productId) => `/api/admin/products/${productId}/extras`,
+      transformResponse: unwrap<ProductExtraResponse[]>,
+      // Also tagged with the catalog-wide LIST id: name/price/image all live on the underlying
+      // Extra, not this attachment, so a catalog edit (extraApi) must refetch this too or an
+      // already-open product page keeps showing the old photo/price for an extra it offers.
+      providesTags: (_r, _e, productId) => [
+        { type: "ProductExtra", id: productId },
+        { type: "ProductExtra", id: "LIST" },
+      ],
+    }),
+
+    attachProductExtra: builder.mutation<
+      ProductExtraResponse,
+      { productId: UUID; body: AttachProductExtraRequest }
+    >({
+      query: ({ productId, body }) => ({
+        url: `/api/admin/products/${productId}/extras`,
+        method: "POST",
+        body,
+      }),
+      transformResponse: unwrap<ProductExtraResponse>,
+      invalidatesTags: (_r, _e, { productId }) => [{ type: "ProductExtra", id: productId }],
+    }),
+
+    updateProductExtra: builder.mutation<
+      ProductExtraResponse,
+      { productId: UUID; id: UUID; body: UpdateProductExtraRequest }
+    >({
+      query: ({ productId, id, body }) => ({
+        url: `/api/admin/products/${productId}/extras/${id}`,
+        method: "PATCH",
+        body,
+      }),
+      transformResponse: unwrap<ProductExtraResponse>,
+      invalidatesTags: (_r, _e, { productId }) => [{ type: "ProductExtra", id: productId }],
+    }),
+
+    detachProductExtra: builder.mutation<void, { productId: UUID; id: UUID }>({
+      query: ({ productId, id }) => ({
+        url: `/api/admin/products/${productId}/extras/${id}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_r, _e, { productId }) => [{ type: "ProductExtra", id: productId }],
     }),
   }),
 });
@@ -202,8 +256,12 @@ export const {
   useUploadProductImageMutation,
   useRemoveProductImageMutation,
   useImportProductsMutation,
-  useListSizeOptionsQuery,
-  useCreateSizeOptionMutation,
-  useUpdateSizeOptionMutation,
-  useDeleteSizeOptionMutation,
+  useListVariantsQuery,
+  useCreateVariantMutation,
+  useUpdateVariantMutation,
+  useDeleteVariantMutation,
+  useListProductExtrasQuery,
+  useAttachProductExtraMutation,
+  useUpdateProductExtraMutation,
+  useDetachProductExtraMutation,
 } = productApi;

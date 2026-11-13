@@ -6,10 +6,7 @@ import { setupListeners } from "@reduxjs/toolkit/query";
 
 import { makeStore, type AppStore } from "./index";
 
-/**
- * One store per browser session. Built in a ref rather than at module scope so that a server
- * render never shares a store between requests — each request gets its own.
- */
+/// A React component that provides the Redux store to its children. It creates a store instance on first render and reuses it for subsequent renders. It also sets up listeners for RTK Query's cache invalidation and refetching.
 export function StoreProvider({ children }: { children: ReactNode }) {
   const storeRef = useRef<AppStore | null>(null);
   if (storeRef.current === null) {

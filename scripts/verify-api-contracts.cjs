@@ -34,8 +34,20 @@ const barista = { id: "barista", role: "BARISTA", fullName: "Contract barista", 
 const admin = { id: "admin", role: "ADMIN", fullName: "Contract admin", email: "admin@example.test", status: "ACTIVE", avatarUrl: null };
 const history = [{ id: "history", orderId, action: "CASH_PAID", actorName: "Contract staff", actorRole: "ADMIN", createdAt: "2026-09-09T12:00:00", note: "Paid" }];
 const finance = { periodStart: "2026-09-09", periodEnd: "2026-09-09", cashIn: 8, bakongIn: 0, totalIn: 8, totalOut: 2, profit: 6 };
-let product = { id: productId, price: 4, finalPrice: 4, quantityOnHand: 2, discountType: null, sizeOptions: [] };
-let sizes = [];
+let feedback = { id: "feedback", customerId: "customer", customerName: "Contract customer", fullName: "Contract customer", email: "customer@example.test", phoneNumber: null, topic: "GENERAL_INQUIRY", message: "Hello", status: "NEW", createdAt: "2026-09-09T08:00:00", updatedAt: "2026-09-09T08:00:00" };
+// A product carries no price of its own — every price lives on one of its variants, and a
+// discount on the product applies on top of each variant's own price to produce its finalPrice.
+let product = { id: productId, stockUnit: "CARTON", sellUnit: "CARTON", unitsPerStock: 1, quantityOnHand: 2, reorderLevel: 1, discountType: null, discountValue: null, discountActive: false, extras: [] };
+let variants = [{ id: "variant0", productId, name: "MEDIUM", price: 4, finalPrice: 4, sortOrder: 0, status: "ACTIVE" }];
+function applyDiscount() {
+  variants = variants.map((v) => ({
+    ...v,
+    finalPrice:
+      product.discountType === "FIXED" ? v.price - product.discountValue
+      : product.discountType === "PERCENTAGE" ? v.price * (1 - product.discountValue / 100)
+      : v.price,
+  }));
+}
 global.fetch = async (request) => {
   const url = new URL(request.url);
   assert.equal(url.origin, "https://admin-contract.invalid");
@@ -79,20 +91,29 @@ global.fetch = async (request) => {
   else if (url.pathname === "/api/admin/attendance") data = page([{ id: attendanceId, baristaName: "Contract staff", open: true, checkInAt: "2026-09-09T08:00:00" }]);
   else if (url.pathname === "/api/admin/inventory/low-stock" || url.pathname === "/api/admin/inventory") data = page([{ productId, quantityOnHand: 2, reorderLevel: 5 }]);
   else if (url.pathname === `/api/admin/inventory/${productId}/movements`) data = page([{ id: "movement", productId }]);
-  else if (url.pathname === "/api/admin/products") data = page([product]);
-  else if (url.pathname === `/api/admin/products/${productId}`) data = product;
+  else if (url.pathname === "/api/admin/products") data = page([{ ...product, variants }]);
+  else if (url.pathname === `/api/admin/products/${productId}`) data = { ...product, variants };
   else if (url.pathname === `/api/admin/products/${productId}/discount`) {
-    product = request.method === "DELETE" ? { ...product, discountType: null, discountValue: null, finalPrice: 4 } : { ...product, ...body, finalPrice: body.discountType === "FIXED" ? 4 - body.discountValue : 4 * (1 - body.discountValue / 100) };
-    data = product;
-  } else if (url.pathname === `/api/admin/products/${productId}/size-options`) {
-    if (request.method === "POST") { const option = { id: "size", productId, status: "ACTIVE", ...body }; sizes.push(option); data = option; }
-    else data = sizes;
-  } else if (url.pathname === `/api/admin/products/${productId}/size-options/size`) {
-    if (request.method === "DELETE") { sizes = []; data = null; }
-    else { sizes[0] = { ...sizes[0], ...body }; data = sizes[0]; }
+    if (request.method === "DELETE") { product.discountType = null; product.discountValue = null; }
+    else { product.discountType = body.discountType; product.discountValue = body.discountValue; }
+    applyDiscount();
+    data = { ...product, variants };
+  } else if (url.pathname === `/api/admin/products/${productId}/variants`) {
+    if (request.method === "POST") { const variant = { id: "variant1", productId, status: "ACTIVE", finalPrice: body.price, ...body }; variants.push(variant); data = variant; }
+    else data = variants;
+  } else if (url.pathname === `/api/admin/products/${productId}/variants/variant1`) {
+    if (request.method === "DELETE") { variants = variants.filter((v) => v.id !== "variant1"); data = null; }
+    else { variants[1] = { ...variants[1], ...body }; data = variants[1]; }
   }
-  else if (url.pathname === `/api/admin/orders/${orderId}/collect-cash` || url.pathname === `/api/barista/orders/${orderId}/pay/cash`) data = { ...order, status: "COMPLETED" };
-  else if (["/api/admin/orders", "/api/admin/orders/awaiting-pickup", "/api/admin/orders/awaiting-bakong-confirmation"].includes(url.pathname)) data = page([order]);
+  else if (url.pathname === `/api/admin/orders/${orderId}/collect-cash` || url.pathname === `/api/barista/orders/${orderId}/pay/cash`) {
+    // Mirrors the real API's @NotNull on CashPaymentRequest.currency — a regression guard
+    // against the "Currency is required" bug (currency silently missing from the request body).
+    if (!body.currency) throw new Error(`${url.pathname}: currency is required`);
+    data = { ...order, status: "COMPLETED" };
+  }
+  else if (["/api/admin/orders", "/api/admin/orders/awaiting-pickup", "/api/admin/orders/awaiting-bakong-confirmation", "/api/admin/orders/awaiting-delivery-fee"].includes(url.pathname)) data = page([order]);
+  else if (url.pathname === "/api/admin/feedback") data = page([feedback]);
+  else if (url.pathname === `/api/admin/feedback/${feedback.id}/status`) { feedback = { ...feedback, status: body.status }; data = feedback; }
   else if (url.pathname === "/api/auth/resend-otp") data = null;
   else throw new Error(`Unexpected contract request: ${request.method} ${url.pathname}`);
   return Response.json({ status: 200, message: "Success", data });
@@ -108,6 +129,7 @@ const { productApi } = require("../src/store/api/productApi.ts");
 const { userApi } = require("../src/store/api/userApi.ts");
 const { attendanceApi } = require("../src/store/api/attendanceApi.ts");
 const { authApi } = require("../src/store/api/authApi.ts");
+const { contactApi } = require("../src/store/api/contactApi.ts");
 const { shopDate, trailingDates } = require("../src/lib/shopDate.ts");
 const { canAccessAdminPage, adminHome } = require("../src/lib/adminAccess.ts");
 const store = makeStore();
@@ -216,15 +238,20 @@ async function verify() {
     query(orderApi.endpoints.listOrders, { status: "PENDING", page: 1, size: 5 }),
     query(orderApi.endpoints.listAwaitingPickup, { page: 1, size: 10 }),
     query(orderApi.endpoints.listAwaitingBakongConfirmation, { page: 1, size: 10 }),
+    query(orderApi.endpoints.listAwaitingDeliveryFee, { page: 1, size: 10 }),
     query(inventoryApi.endpoints.listLowStock, { page: 1, size: 5 }),
     query(inventoryApi.endpoints.listStockMovements, { productId, page: 1, size: 10 }),
     query(productApi.endpoints.listProducts, { page: 1, size: 10 }),
     query(reportApi.endpoints.getDailyFinance, { date: "2026-09-09" }),
   ];
   await Promise.all(subscriptions.map((subscription) => subscription.unwrap()));
+  // Regression guard: this dedicated queue (a delivery order with no fee quoted yet has no
+  // paymentMethod, so it never shows up in the pickup/Bakong queues above) went unused by the
+  // frontend even though the API had it, so staff had no direct way to see who was waiting.
+  assert.ok(calls.some((call) => call.path === "/api/admin/orders/awaiting-delivery-fee"));
   for (const endpoint of [orderApi.endpoints.collectCash, baristaOrderApi.endpoints.payOrderCash]) {
     const before = calls.length;
-    await query(endpoint, { id: orderId, body: { amountTendered: 10 } }).unwrap();
+    await query(endpoint, { id: orderId, body: { currency: "USD", amountTendered: 10 } }).unwrap();
     await Promise.all(store.dispatch(baseApi.util.getRunningQueriesThunk()));
     const refreshed = calls.slice(before).filter((call) => call.method === "GET").map((call) => call.path);
     for (const expected of ["/api/admin/orders", "/api/admin/reports/daily", "/api/barista/reports/daily", "/api/admin/finance/daily", "/api/admin/inventory/low-stock", "/api/admin/products", `/api/admin/orders/${orderId}/history`, `/api/admin/inventory/${productId}/movements`]) {
@@ -232,26 +259,30 @@ async function verify() {
     }
   }
   await query(productApi.endpoints.getProduct, productId).unwrap();
-  await query(productApi.endpoints.listSizeOptions, productId).unwrap();
+  await query(productApi.endpoints.listVariants, productId).unwrap();
   await query(productApi.endpoints.setProductDiscount, { id: productId, body: { discountType: "FIXED", discountValue: 1 } }).unwrap();
   await Promise.all(store.dispatch(baseApi.util.getRunningQueriesThunk()));
-  assert.equal(productApi.endpoints.getProduct.select(productId)(store.getState()).data.finalPrice, 3);
+  assert.equal(productApi.endpoints.getProduct.select(productId)(store.getState()).data.variants[0].finalPrice, 3);
   await query(productApi.endpoints.clearProductDiscount, productId).unwrap();
   await Promise.all(store.dispatch(baseApi.util.getRunningQueriesThunk()));
   assert.equal(productApi.endpoints.getProduct.select(productId)(store.getState()).data.discountType, null);
-  await query(productApi.endpoints.createSizeOption, { productId, body: { name: "Large", priceDelta: 1.25, sortOrder: 2 } }).unwrap();
+  assert.equal(productApi.endpoints.getProduct.select(productId)(store.getState()).data.variants[0].finalPrice, 4);
+  await query(productApi.endpoints.createVariant, { productId, body: { name: "LARGE", price: 1.25, sortOrder: 2 } }).unwrap();
   await Promise.all(store.dispatch(baseApi.util.getRunningQueriesThunk()));
-  assert.equal(productApi.endpoints.listSizeOptions.select(productId)(store.getState()).data[0].priceDelta, 1.25);
-  await query(productApi.endpoints.updateSizeOption, { productId, id: "size", body: { status: "INACTIVE" } }).unwrap();
+  assert.equal(productApi.endpoints.listVariants.select(productId)(store.getState()).data[1].price, 1.25);
+  await query(productApi.endpoints.updateVariant, { productId, id: "variant1", body: { status: "INACTIVE" } }).unwrap();
   await Promise.all(store.dispatch(baseApi.util.getRunningQueriesThunk()));
-  assert.equal(productApi.endpoints.listSizeOptions.select(productId)(store.getState()).data[0].status, "INACTIVE");
-  await query(productApi.endpoints.deleteSizeOption, { productId, id: "size" }).unwrap();
+  assert.equal(productApi.endpoints.listVariants.select(productId)(store.getState()).data[1].status, "INACTIVE");
+  await query(productApi.endpoints.deleteVariant, { productId, id: "variant1" }).unwrap();
   await Promise.all(store.dispatch(baseApi.util.getRunningQueriesThunk()));
-  assert.equal(productApi.endpoints.listSizeOptions.select(productId)(store.getState()).data.length, 0);
+  assert.equal(productApi.endpoints.listVariants.select(productId)(store.getState()).data.length, 1);
   assert.ok(canAccessAdminPage("SUPER_ADMIN", "/customers"));
   assert.ok(canAccessAdminPage("ADMIN", "/reports"));
   assert.ok(!canAccessAdminPage("ADMIN", "/users"));
-  assert.ok(!canAccessAdminPage("ADMIN", "/pos"));
+  // Both admin and barista ring up walk-in sales against their own endpoint pair
+  // (/api/admin/orders vs /api/barista/orders) — POS is a staffed till, not barista-only.
+  assert.ok(canAccessAdminPage("ADMIN", "/pos"));
+  assert.ok(canAccessAdminPage("SUPER_ADMIN", "/pos"));
   assert.ok(canAccessAdminPage("BARISTA", "/pos"));
   assert.ok(canAccessAdminPage("BARISTA", "/stock-alerts"));
   for (const route of ["/categories", "/products", "/products/", "/inventory", "/inventory/record", "/reports", "/attendance"]) {
@@ -267,7 +298,24 @@ async function verify() {
   }
   assert.ok(!canAccessAdminPage("CUSTOMER", "/"));
   assert.equal(adminHome("BARISTA"), "/barista-queue");
-  console.log("PASS: staff/self photo multipart uploads and cache refresh, report totals/dates/errors, own barista reports, user updates/deletion and cache refresh, customer pagination/filter/errors, audit history, OTP resend, payment-driven cache refresh, size CRUD, product discounts, staff navigation roles.");
+
+  // Regression guard: this screen was built against a path that never existed on the API
+  // (/api/admin/contact-messages, status "RECEIVED") until it was corrected to the real
+  // "feedback" domain (/api/admin/feedback, status "NEW") — every customer message a staff
+  // member tried to read 403'd until this was fixed.
+  const beforeList = calls.length;
+  const feedbackList = await query(contactApi.endpoints.listContactMessages, { page: 1, size: 10, status: "NEW" }).unwrap();
+  assert.equal(feedbackList.content[0].id, "feedback");
+  assert.equal(calls[beforeList].path, "/api/admin/feedback");
+  assert.equal(calls[beforeList].params.status, "NEW");
+  const beforeUpdate = calls.length;
+  const resolved = await query(contactApi.endpoints.updateContactStatus, { id: "feedback", status: "RESOLVED" }).unwrap();
+  assert.equal(resolved.status, "RESOLVED");
+  // The mutation's own call, not whatever cache-invalidation refetch it triggers afterward.
+  assert.equal(calls[beforeUpdate].path, "/api/admin/feedback/feedback/status");
+  assert.equal(calls[beforeUpdate].method, "PATCH");
+
+  console.log("PASS: staff/self photo multipart uploads and cache refresh, report totals/dates/errors, own barista reports, user updates/deletion and cache refresh, customer pagination/filter/errors, audit history, OTP resend, payment-driven cache refresh, size CRUD, product discounts, staff navigation roles, customer feedback inbox.");
 }
 
 verify().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => store.dispatch(baseApi.util.resetApiState()));

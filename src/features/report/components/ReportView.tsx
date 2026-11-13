@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { shopDate } from "@/lib/shopDate";
+import { titleCase } from "@/lib/utils";
 import { useCurrentRole } from "@/store/api/useCurrentRole";
 import BaristaReportView from "./BaristaReportView";
 import { PageShell } from "@/components/common/PageShell";
@@ -25,6 +25,7 @@ import {
   useGetMonthlyFinanceQuery,
   useGetYearlyFinanceQuery,
 } from "@/store/api/reportApi";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 const BARISTA_HEADERS = [
   "Barista",
@@ -58,17 +59,19 @@ export default function ReportView() {
 }
 
 function AdminReportView() {
-  const [date, setDate] = useState(todayIso());
-  const [period, setPeriod] = useState<Period>("DAILY");
-  const [year, setYear] = useState(Number(todayIso().slice(0, 4)));
-  const [month, setMonth] = useState(Number(todayIso().slice(5, 7)));
+  const [date, setDate] = usePersistentState("reports:date", todayIso());
+  const [period, setPeriod] = usePersistentState<Period>("reports:period", "DAILY");
+  const [year, setYear] = usePersistentState("reports:year", Number(todayIso().slice(0, 4)));
+  const [month, setMonth] = usePersistentState("reports:month", Number(todayIso().slice(5, 7)));
 
   const {
     currentData: report,
-    isFetching: isLoadingReport,
+    isFetching: isFetchingReport,
     error: reportError,
     refetch: refetchReport,
   } = useGetDailyReportQuery({ date });
+  // Only a first load (or a new date) shows placeholders; a background refresh keeps the numbers.
+  const isLoadingReport = isFetchingReport && !report;
 
   const dailyFinance = useGetDailyFinanceQuery({ date }, { skip: period !== "DAILY" });
   const monthlyFinance = useGetMonthlyFinanceQuery(
@@ -84,7 +87,7 @@ function AdminReportView() {
       ? monthlyFinance
       : yearlyFinance;
   const finance = activeFinance.currentData;
-  const isLoadingFinance = activeFinance.isFetching;
+  const isLoadingFinance = activeFinance.isFetching && !finance;
   const financeValue = (value: number | undefined) => activeFinance.error ? "Unavailable" : isLoadingFinance || !finance ? "..." : formatUsd(Number(value ?? 0));
 
   const baristas = report?.baristas ?? [];
@@ -201,7 +204,7 @@ function AdminReportView() {
             !reportError &&
             baristas.map((barista, index) => (
               <Row key={barista.baristaId} striped={index % 2 === 1}>
-                <Cell className="font-semibold">{barista.baristaName}</Cell>
+                <Cell className="font-semibold">{titleCase(barista.baristaName)}</Cell>
                 <Cell>{barista.totalOrders}</Cell>
                 <Cell>{formatUsd(Number(barista.cashTotal))}</Cell>
                 <Cell>{formatUsd(Number(barista.bakongTotal))}</Cell>

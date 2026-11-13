@@ -6,6 +6,7 @@ import {
   CircleUserRound,
   Coffee,
   Home,
+  Images,
   Bell,
   CalendarDays,
   CreditCard,
@@ -71,6 +72,7 @@ const navigationSections = [
       },
       { name: "Stock alerts", href: "/stock-alerts", icon: TriangleAlert, label: "nav_stock_alerts" },
       { name: "Events", href: "/events", icon: CalendarDays, label: "nav_events" },
+      { name: "Banners", href: "/banners", icon: Images, label: "nav_banners" },
     ],
   },
   {

@@ -5,6 +5,11 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 
 export const enFontOptions = [
   {
+    value: "google-sans",
+    label: "Google Sans Flex",
+    fontFamily: "var(--font-google-sans)",
+  },
+  {
     value: "sfdisplaypro",
     label: "SF Pro Display",
     fontFamily: "var(--font-sfdisplaypro)",
@@ -38,6 +43,11 @@ export const enFontOptions = [
 
 export const khmerFontOptions = [
   {
+    value: "noto-sans-khmer",
+    label: "Noto Sans Khmer",
+    fontFamily: "var(--font-noto-sans-khmer)",
+  },
+  {
     value: "koh-santepheap",
     label: "Koh Santepheap",
     fontFamily: "var(--font-koh-santepheap)",
@@ -68,8 +78,8 @@ interface FontContextType {
 const FontContext = createContext<FontContextType | undefined>(undefined);
 
 export function FontProvider({ children }: { children: React.ReactNode }) {
-  const [englishFont, setEnglishFont] = useState("sfdisplaypro");
-  const [khmerFont, setKhmerFont] = useState("koh-santepheap");
+  const [englishFont, setEnglishFont] = useState("google-sans");
+  const [khmerFont, setKhmerFont] = useState("noto-sans-khmer");
 
   // Load saved font preferences on mount
   useEffect(() => {
@@ -119,12 +129,12 @@ export function FontProvider({ children }: { children: React.ReactNode }) {
 
   const getCurrentEnglishFontFamily = () => {
     const selectedFont = enFontOptions.find((f) => f.value === englishFont);
-    return selectedFont?.fontFamily || "var(--font-sfdisplaypro)";
+    return selectedFont?.fontFamily || "var(--font-google-sans)";
   };
 
   const getCurrentKhmerFontFamily = () => {
     const selectedFont = khmerFontOptions.find((f) => f.value === khmerFont);
-    return selectedFont?.fontFamily || "var(--font-koh-santepheap)";
+    return selectedFont?.fontFamily || "var(--font-noto-sans-khmer)";
   };
 
   return (

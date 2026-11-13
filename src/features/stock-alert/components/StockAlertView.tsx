@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -15,9 +15,13 @@ import {
   StatTile,
   StatusBadge,
   TableState,
+  listLoadState,
 } from "@/components/common/AdminKit";
 import { useListLowStockQuery } from "@/store/api/inventoryApi";
 import { usePageSize } from "@/contexts/AdminPreferencesContext";
+import { humanise, titleCase } from "@/lib/utils";
+import { useInventoryAlerts } from "@/hooks/useInventoryAlerts";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 const STOCK_ALERT_HEADERS = [
   "No",
@@ -36,13 +40,19 @@ const STOCK_ALERT_HEADERS = [
  */
 export default function StockAlertView() {
   const router = useRouter();
-  const [page, setPage] = useState(1);
+  const [page, setPage] = usePersistentState("stock-alerts:page", 1);
   const [size, setSize] = usePageSize();
 
-  const { data: alertPage, isFetching, error, refetch } = useListLowStockQuery({
+  const { data: alertPage, currentData, isFetching, error, refetch } = useListLowStockQuery({
     page,
     size,
   });
+  const list = listLoadState({ isFetching, currentData, error });
+
+  // A stock movement anywhere can push a product at or below (or back above) its reorder
+  // level, so this list reaches that the instant it happens instead of on the next manual
+  // refresh — this page has no polling of its own to fall back on otherwise.
+  useInventoryAlerts(useCallback(() => { void refetch(); }, [refetch]));
 
   const alerts = alertPage?.content ?? [];
   const outOfStock = alerts.filter((a) => Number(a.quantityOnHand) <= 0).length;
@@ -79,14 +89,13 @@ export default function StockAlertView() {
         <SimpleTable headers={[...STOCK_ALERT_HEADERS]}>
           <TableState
             colSpan={STOCK_ALERT_HEADERS.length}
-            isLoading={isFetching}
-            error={error}
+            isLoading={list.isLoading}
+            error={list.error}
             isEmpty={alerts.length === 0}
             emptyLabel="Nothing is below its reorder level. Stock levels are healthy."
             onRetry={refetch}
           />
-          {!isFetching &&
-            !error &&
+          {list.showRows &&
             alerts.map((alert, index) => {
               const onHand = Number(alert.quantityOnHand);
               const reorder = Number(alert.reorderLevel);
@@ -96,11 +105,11 @@ export default function StockAlertView() {
               return (
                 <Row key={alert.productId} striped={index % 2 === 1}>
                   <Cell>{(page - 1) * size + index + 1}</Cell>
-                  <Cell className="font-semibold">{alert.productName}</Cell>
+                  <Cell className="font-semibold">{titleCase(alert.productName)}</Cell>
                   <Cell className={isOut ? "font-semibold text-red-600" : undefined}>
                     {onHand.toLocaleString()}
                   </Cell>
-                  <Cell>{alert.unit}</Cell>
+                  <Cell>{humanise(alert.unit)}</Cell>
                   <Cell>{reorder.toLocaleString()}</Cell>
                   <Cell>{shortfall.toLocaleString()}</Cell>
                   <Cell>

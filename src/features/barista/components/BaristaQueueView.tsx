@@ -1,15 +1,20 @@
 "use client";
 import { OrderFulfillmentDetails } from "@/components/common/OrderFulfillmentDetails";
 
-import { useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import {
+  Banknote,
+  Bike,
   ChefHat,
   ChevronDown,
   Clock,
   Eye,
-  Loader2,
+  Globe,
   MessageSquareText,
+  QrCode,
+  ShoppingBag,
+  Store,
   X,
 } from "lucide-react";
 import { PageShell } from "@/components/common/PageShell";
@@ -21,8 +26,11 @@ import {
   DetailModal,
   FormInput,
   FormModal,
+  FormSelect,
   ModalGrid,
+  SkeletonBlock,
   StatTile,
+  listLoadState,
 } from "@/components/common/AdminKit";
 import { apiErrorMessage } from "@/store/api/baseApi";
 import {
@@ -30,9 +38,11 @@ import {
   useCompleteBaristaOrderMutation,
   useDispatchBaristaOrderMutation,
   useMarkDeliveredBaristaOrderMutation,
-  useConfirmBakongPaymentMutation,
+  useAcceptBaristaBakongMutation,
+  useCollectBaristaCashMutation,
   useListAllBaristaOrdersQuery,
   usePayOrderCashMutation,
+  useSetBaristaOrderDeliveryFeeMutation,
   useStartPreparingBaristaOrderMutation,
 } from "@/store/api/baristaOrderApi";
 import {
@@ -43,11 +53,21 @@ import {
   useDispatchAdminOrderMutation,
   useMarkDeliveredAdminOrderMutation,
   useListOrdersQuery,
+  usePayAdminOrderCashMutation,
+  useSetOrderDeliveryFeeMutation,
   useStartPreparingOrderMutation,
 } from "@/store/api/orderApi";
+import { useGetExchangeRateQuery } from "@/store/api/reportApi";
 import { useCurrentRole } from "@/store/api/useCurrentRole";
-import type { OrderResponse, OrderStatus } from "@/store/api/types";
-import { cn } from "@/lib/utils";
+import { useGetCurrentUserQuery } from "@/store/api/authApi";
+import { useStaffOrderAlerts } from "@/hooks/useStaffOrderAlerts";
+import type { Currency, OrderResponse, OrderStatus } from "@/store/api/types";
+import { cn, formatByCurrency, formatLevel, humanise, timeAgo, titleCase } from "@/lib/utils";
+import { InvoiceActions, PrintInvoiceIconButton, toastPaidWithInvoice } from "@/components/common/InvoiceActions";
+import { useOrderInvoice } from "@/hooks/useOrderInvoice";
+import { buildCashPaymentSchema, firstIssueMessage } from "@/lib/validation";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 const money = (value: number | null | undefined) =>
   value == null ? "-" : `$${Number(value).toFixed(2)}`;
@@ -62,16 +82,6 @@ function formatDateTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function timeAgo(value: string) {
-  const then = new Date(value).getTime();
-  if (Number.isNaN(then)) return "";
-  const minutes = Math.max(0, Math.round((Date.now() - then) / 60000));
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
-  return `${Math.floor(hours / 24)} d ago`;
 }
 
 const STATUS_CLASSES: Record<OrderStatus, string> = {
@@ -104,9 +114,16 @@ function OrderCard({
   onOpen,
   isBusy,
   highlight,
+  hint,
+  secondaryLabel,
+  onSecondary,
 }: {
   order: OrderResponse;
   actionLabel?: string;
+  secondaryLabel?: string;
+  onSecondary?: () => void;
+  /** Shown instead of a button when the next step is someone else's (usually the customer's). */
+  hint?: string;
   onAction?: () => void;
   onCancel?: () => void;
   onOpen?: () => void;
@@ -131,7 +148,7 @@ function OrderCard({
           aria-label={`View order ${order.id.slice(0, 8).toUpperCase()}`}
         >
           <h4 className="inline-flex items-center gap-1.5 text-base font-bold text-gray-900 group-hover:underline">
-            {order.customerName ?? "Walk-in"}
+            {order.customerName ? titleCase(order.customerName) : "Walk-in"}
             <Eye className="h-3.5 w-3.5 shrink-0 text-gray-400" />
           </h4>
           <p className="font-mono text-xs text-gray-400">
@@ -139,6 +156,7 @@ function OrderCard({
           </p>
         </button>
         <div className="flex items-center gap-2">
+          <PrintInvoiceIconButton order={order} />
           <span
             className={cn(
               "rounded-full px-3 py-1 text-xs font-semibold",
@@ -147,6 +165,20 @@ function OrderCard({
           >
             {STATUS_LABELS[order.status]}
           </span>
+          {order.fulfillmentMethod === "DELIVERY" && order.deliveryFeeSetAt == null && (
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+              Fee needed
+            </span>
+          )}
+          {/* Past the unpaid column but the cash hasn't been taken yet (pay-at-counter). */}
+          {order.paymentMethod === "CASH" &&
+            order.paidAt == null &&
+            order.status !== "PENDING" &&
+            order.status !== "CANCELLED" && (
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                Cash due
+              </span>
+            )}
           {/* Only ever passed for unpaid orders — see the board below. */}
           {onCancel && (
             <button
@@ -169,15 +201,30 @@ function OrderCard({
         </span>
       </div>
 
+      {/* Where the order came from and how it will be paid — an online order is served
+          differently from a walk-in (the customer may still be on their way, or paying by QR). */}
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        <OrderChip icon={order.customerId ? Globe : Store}>{order.customerId ? "Online" : "Walk-in"}</OrderChip>
+        {order.fulfillmentMethod ? (
+          <OrderChip icon={order.fulfillmentMethod === "DELIVERY" ? Bike : ShoppingBag}>
+            {humanise(order.fulfillmentMethod)}
+          </OrderChip>
+        ) : null}
+        <OrderChip icon={order.paymentMethod === "BAKONG" ? QrCode : Banknote}>
+          {order.paymentMethod ? humanise(order.paymentMethod) : "Payment not chosen"}
+        </OrderChip>
+      </div>
+
       <div className="mt-4 space-y-3">
         {order.items.map((item) => (
           <div key={item.id} className="border-b border-dashed border-gray-200 pb-3">
             <p className="text-xs font-semibold text-gray-900">
               {[
-                item.sizeOptionName,
-                item.sugarLevel && `Sugar ${item.sugarLevel}`,
-                item.iceLevel && `Ice ${item.iceLevel}`,
-                item.milkType && item.milkType !== "NONE" ? item.milkType : null,
+                item.variantName ? humanise(item.variantName) : null,
+                item.sugarLevel && `Sugar ${formatLevel(item.sugarLevel)}`,
+                item.iceLevel && `Ice ${formatLevel(item.iceLevel)}`,
+                item.milkType && item.milkType !== "NONE" ? humanise(item.milkType) : null,
+                ...item.extras.map((extra) => titleCase(extra.name)),
               ]
                 .filter(Boolean)
                 .join(" · ") || "Standard"}
@@ -185,7 +232,7 @@ function OrderCard({
             <div className="mt-1 flex items-center justify-between text-sm">
               <span className="text-gray-500">
                 <span className="font-bold text-gray-900">{item.quantity}x</span>{" "}
-                {item.productName}
+                {titleCase(item.productName)}
               </span>
               <span className="font-bold text-gray-900">{money(item.subtotal)}</span>
             </div>
@@ -212,18 +259,41 @@ function OrderCard({
         <p className="text-sm text-gray-500">
           Total : <span className="font-bold text-gray-900">{money(order.totalAmount)}</span>
         </p>
-        {actionLabel && (
-          <button
-            type="button"
-            onClick={onAction}
-            disabled={isBusy}
-            className="btn_primary_black text-xs font-medium disabled:opacity-50"
-          >
-            {actionLabel}
-          </button>
-        )}
+        {actionLabel ? (
+          <div className="flex flex-wrap justify-end gap-2">
+            {secondaryLabel ? (
+              <button
+                type="button"
+                onClick={onSecondary}
+                disabled={isBusy}
+                className="btn_outline_black text-xs font-medium disabled:opacity-50"
+              >
+                {secondaryLabel}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onAction}
+              disabled={isBusy}
+              className="btn_primary_black text-xs font-medium disabled:opacity-50"
+            >
+              {actionLabel}
+            </button>
+          </div>
+        ) : hint ? (
+          <p className="w-full rounded-lg bg-gray-50 px-3 py-2 text-center text-xs text-gray-500">{hint}</p>
+        ) : null}
       </div>
     </article>
+  );
+}
+
+function OrderChip({ icon: Icon, children }: { icon: typeof Globe; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+      <Icon className="h-3 w-3" />
+      {children}
+    </span>
   );
 }
 
@@ -234,6 +304,7 @@ function QueueColumn({
   isLoading,
   emptyLabel,
   renderCard,
+  fullWidth = false,
 }: {
   title: string;
   accent: string;
@@ -241,9 +312,11 @@ function QueueColumn({
   isLoading: boolean;
   emptyLabel: string;
   renderCard: (order: OrderResponse) => React.ReactNode;
+  /** Spans the whole board and lays its cards out in the board's own columns (Completed). */
+  fullWidth?: boolean;
 }) {
   return (
-    <div>
+    <div className={cn(fullWidth && "col-span-full")}>
       <div className="mb-4 flex items-center gap-2">
         <span className={cn("h-2.5 w-6 rounded-full", accent)} />
         <h3 className="text-base font-bold text-gray-900">{title}</h3>
@@ -251,11 +324,20 @@ function QueueColumn({
       </div>
       <div className="space-y-4">
         {isLoading ? (
-          <p className="flex items-center gap-2 py-8 text-sm text-gray-400">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading...
-          </p>
+          <div role="status" aria-label={`Loading ${title}`} className="space-y-4">
+            {[0, 1].map((i) => (
+              <div key={i} className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
+                <SkeletonBlock className="h-5 w-2/3" />
+                <SkeletonBlock className="h-3 w-1/3" />
+                <SkeletonBlock className="h-4 w-full" />
+                <SkeletonBlock className="ml-auto h-9 w-32" />
+              </div>
+            ))}
+          </div>
         ) : orders.length === 0 ? (
           <p className="py-8 text-sm text-gray-400">{emptyLabel}</p>
+        ) : fullWidth ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">{orders.map(renderCard)}</div>
         ) : (
           orders.map(renderCard)
         )}
@@ -313,6 +395,7 @@ function useQueue(
  */
 export default function BaristaQueueView() {
   const { isAdmin, isBarista, isLoading: isLoadingRole } = useCurrentRole();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const roles = { isAdmin, isBarista };
 
   // Unpaid and paid-but-unmade are what the barista is actively waiting on, so they poll
@@ -325,12 +408,31 @@ export default function BaristaQueueView() {
   const deliveredQuery = useQueue("DELIVERED", { ...roles, size: 20, pollingInterval: 30000 });
   const cancelledQuery = useQueue("CANCELLED", { ...roles, size: 20 });
 
+  // A new walk-in, a customer's own checkout, or any status/fee change reaches every column
+  // the instant the API broadcasts it, rather than waiting on that column's own poll interval.
+  useStaffOrderAlerts(
+    useCallback(() => {
+      void pendingQuery.refetch();
+      void paidQuery.refetch();
+      void preparingQuery.refetch();
+      void outForDeliveryQuery.refetch();
+      void completedQuery.refetch();
+      void deliveredQuery.refetch();
+      void cancelledQuery.refetch();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+  );
+
   const { error, refetch } = pendingQuery;
 
+  // Two ways to take cash, per role: "collect" works on any order whose customer chose cash
+  // (their online orders included), "pay" only on a walk-in this staff member rang up and that
+  // has no payment method yet. Bakong is always "accept", which works on any order.
   const [baristaPayCash, { isLoading: isPayingBarista }] = usePayOrderCashMutation();
-  const [adminCollectCash, { isLoading: isPayingAdmin }] = useCollectCashMutation();
-  const [baristaConfirmBakong, { isLoading: isConfirmingBarista }] =
-    useConfirmBakongPaymentMutation();
+  const [baristaCollectCash, { isLoading: isCollectingBarista }] = useCollectBaristaCashMutation();
+  const [adminPayCash, { isLoading: isPayingAdmin }] = usePayAdminOrderCashMutation();
+  const [adminCollectCash, { isLoading: isCollectingAdmin }] = useCollectCashMutation();
+  const [baristaAcceptBakong, { isLoading: isConfirmingBarista }] = useAcceptBaristaBakongMutation();
   const [adminAcceptBakong, { isLoading: isConfirmingAdmin }] =
     useAcceptBakongPaymentMutation();
   const [baristaCancel, { isLoading: isCancellingBarista }] =
@@ -349,16 +451,59 @@ export default function BaristaQueueView() {
   const [baristaDeliver, { isLoading: isDeliveringBarista }] =
     useMarkDeliveredBaristaOrderMutation();
   const [adminDeliver, { isLoading: isDeliveringAdmin }] = useMarkDeliveredAdminOrderMutation();
+  const [baristaSetDeliveryFee, { isLoading: isSettingFeeBarista }] =
+    useSetBaristaOrderDeliveryFeeMutation();
+  const [adminSetDeliveryFee, { isLoading: isSettingFeeAdmin }] = useSetOrderDeliveryFeeMutation();
+  const { printInvoice } = useOrderInvoice();
 
-  const payCash = isAdmin ? adminCollectCash : baristaPayCash;
-  const confirmBakong = isAdmin ? adminAcceptBakong : baristaConfirmBakong;
+  const { data: currentUser } = useGetCurrentUserQuery();
+  const cashMutationFor = (order: OrderResponse) =>
+    order.paymentMethod === "CASH"
+      ? isAdmin ? adminCollectCash : baristaCollectCash
+      : isAdmin ? adminPayCash : baristaPayCash;
+  const confirmBakong = isAdmin ? adminAcceptBakong : baristaAcceptBakong;
+  // Staff can cancel their own unpaid walk-ins; a customer's online order is the customer's to
+  // cancel (admins keep the override).
+  const canCancel = (order: OrderResponse) =>
+    isAdmin || (order.customerId == null && order.handledById === currentUser?.id);
+
+  /**
+   * The one thing to do next with an unpaid order, mirroring the API's rules:
+   *  - a delivery order can't be paid or started until its fee is set;
+   *  - Bakong must clear before anything is made;
+   *  - a customer who chose cash can have the drink started now and pay at pickup/delivery
+   *    (cash can also be taken straight away if they're at the counter);
+   *  - with no payment method yet, only a walk-in you rang up can be paid here — an online
+   *    customer still has to choose on their phone.
+   */
+  const awaitingPaymentStep = (
+    order: OrderResponse
+  ):
+    | { kind: "fee" | "bakong" | "prepare" | "cash"; label: string }
+    | { kind: "waiting"; hint: string } => {
+    if (order.fulfillmentMethod === "DELIVERY" && order.deliveryFeeSetAt == null) {
+      return { kind: "fee", label: "Set Delivery Fee" };
+    }
+    if (order.paymentMethod === "BAKONG") return { kind: "bakong", label: "Check Bakong Payment" };
+    if (order.paymentMethod === "CASH") {
+      return order.customerId != null
+        ? { kind: "prepare", label: "Start Preparing" }
+        : { kind: "cash", label: "Take Cash" };
+    }
+    if (order.customerId == null && order.handledById === currentUser?.id) {
+      return { kind: "cash", label: "Take Cash" };
+    }
+    return { kind: "waiting", hint: "Waiting for the customer to choose how to pay." };
+  };
   const cancelOrder = isAdmin ? adminCancel : baristaCancel;
   const startPreparing = isAdmin ? adminStartPreparing : baristaStartPreparing;
   const completeOrder = isAdmin ? adminComplete : baristaComplete;
   const dispatchOrder = isAdmin ? adminDispatch : baristaDispatch;
   const deliverOrder = isAdmin ? adminDeliver : baristaDeliver;
+  const setDeliveryFee = isAdmin ? adminSetDeliveryFee : baristaSetDeliveryFee;
+  const isSettingFee = isSettingFeeAdmin || isSettingFeeBarista;
 
-  const isPaying = isPayingAdmin || isPayingBarista;
+  const isPaying = isPayingAdmin || isPayingBarista || isCollectingAdmin || isCollectingBarista;
   const isBusy =
     isPaying ||
     isConfirmingAdmin ||
@@ -372,12 +517,46 @@ export default function BaristaQueueView() {
     isDispatchingAdmin ||
     isDispatchingBarista ||
     isDeliveringAdmin ||
-    isDeliveringBarista;
+    isDeliveringBarista ||
+    isSettingFee;
+
+  // Exchange rate management is admin-only; a barista till stays USD-only until this query
+  // has something to convert with (mirrors the POS's own cash tab).
+  const { data: exchangeRate } = useGetExchangeRateQuery(undefined, { skip: !isAdmin });
+  const khrPerUsdRate = exchangeRate ? Number(exchangeRate.khrPerUsdRate) : null;
 
   const [cashOrder, setCashOrder] = useState<OrderResponse | null>(null);
   const [amountTendered, setAmountTendered] = useState("");
+  const [cashCurrency, setCashCurrency] = useState<Currency>("USD");
   const [detailOrder, setDetailOrder] = useState<OrderResponse | null>(null);
-  const [showCancelled, setShowCancelled] = useState(false);
+  const [showCancelled, setShowCancelled] = usePersistentState("barista-queue:showCancelled", false);
+
+  // What's actually owed, converted into whichever currency is selected — totalAmount itself
+  // is always the USD-equivalent figure, never the KHR one.
+  const payableDue = (order: OrderResponse, targetCurrency: Currency): number =>
+    targetCurrency === "USD" || !khrPerUsdRate
+      ? Number(order.totalAmount)
+      : Number(order.totalAmount) * khrPerUsdRate;
+
+  const exactAmountFor = (order: OrderResponse, targetCurrency: Currency): string => {
+    const due = payableDue(order, targetCurrency);
+    return targetCurrency === "KHR" ? String(Math.round(due)) : due.toFixed(2);
+  };
+
+  const openCashModal = (order: OrderResponse) => {
+    setCashOrder(order);
+    setCashCurrency("USD");
+    setAmountTendered(exactAmountFor(order, "USD"));
+  };
+
+  // Switching currency mid-entry must reseed the amount too — a USD figure left over after
+  // flipping to KHR would look like a valid tender while being off by ~4000x.
+  const handleCashCurrencyChange = (next: Currency) => {
+    setCashCurrency(next);
+    if (cashOrder) setAmountTendered(exactAmountFor(cashOrder, next));
+  };
+
+  const cashDue = cashOrder ? payableDue(cashOrder, cashCurrency) : 0;
 
   const pending = pendingQuery.data?.content ?? [];
   const paid = paidQuery.data?.content ?? [];
@@ -395,20 +574,25 @@ export default function BaristaQueueView() {
 
   const handlePayCash = async () => {
     if (!cashOrder) return;
-    const tendered = Number(amountTendered);
-    if (!Number.isFinite(tendered) || tendered < Number(cashOrder.totalAmount)) {
-      toast.error("Amount tendered must cover the total");
+    const parsed = buildCashPaymentSchema(cashDue).safeParse({
+      currency: cashCurrency,
+      amountTendered,
+    });
+    if (!parsed.success) {
+      toast.error(firstIssueMessage(parsed.error));
       return;
     }
     try {
-      const updated = await payCash({
+      const updated = await cashMutationFor(cashOrder)({
         id: cashOrder.id,
-        body: { amountTendered: tendered },
+        body: parsed.data,
       }).unwrap();
-      toast.success(
+      toastPaidWithInvoice(
         Number(updated.changeDue) > 0
-          ? `Paid. Change: ${money(updated.changeDue)}`
-          : "Payment recorded"
+          ? `Paid. Change: ${formatByCurrency(updated.changeDue, updated.changeCurrency ?? cashCurrency)}`
+          : "Payment recorded",
+        updated.id,
+        printInvoice
       );
       setCashOrder(null);
     } catch (err) {
@@ -422,7 +606,7 @@ export default function BaristaQueueView() {
       // than by failing, so success here does not mean the money arrived — paidAt does.
       const updated = await confirmBakong(order.id).unwrap();
       if (updated.paidAt) {
-        toast.success("Bakong payment confirmed");
+        toastPaidWithInvoice("Bakong payment confirmed", updated.id, printInvoice);
       } else {
         toast.error("No payment received for this order yet.");
       }
@@ -432,15 +616,13 @@ export default function BaristaQueueView() {
   };
 
   const handleCancel = async (order: OrderResponse) => {
-    if (
-      !window.confirm(
-        `Cancel order #${order.id
-          .slice(0, 8)
-          .toUpperCase()}? Only unpaid orders can be cancelled.`
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: "Cancel order",
+      description: `Cancel order #${order.id.slice(0, 8).toUpperCase()}? Only unpaid orders can be cancelled.`,
+      confirmLabel: "Cancel order",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     try {
       await cancelOrder(order.id).unwrap();
       toast.success("Order cancelled");
@@ -489,6 +671,15 @@ export default function BaristaQueueView() {
     }
   };
 
+  const handleSetDeliveryFee = async (order: OrderResponse, fee: number) => {
+    try {
+      await setDeliveryFee({ id: order.id, body: { fee } }).unwrap();
+      toast.success("Delivery fee saved");
+    } catch (err) {
+      toast.error(apiErrorMessage(err as never, "Could not save the delivery fee."));
+    }
+  };
+
   return (
     <PageShell>
       <PageHeader
@@ -533,28 +724,30 @@ export default function BaristaQueueView() {
           title="Awaiting Payment"
           accent="bg-amber-500"
           orders={pending}
-          isLoading={isLoadingRole || pendingQuery.isFetching}
+          isLoading={isLoadingRole || listLoadState(pendingQuery).isLoading}
           emptyLabel="Nothing waiting to be paid."
-          renderCard={(order) => (
-            <OrderCard
-              key={order.id}
-              order={order}
-              isBusy={isBusy}
-              actionLabel={
-                order.paymentMethod === "BAKONG" ? "Confirm Bakong" : "Take Cash"
-              }
-              onAction={() => {
-                if (order.paymentMethod === "BAKONG") {
-                  handleConfirmBakong(order);
-                } else {
-                  setCashOrder(order);
-                  setAmountTendered(String(Number(order.totalAmount).toFixed(2)));
-                }
-              }}
-              onCancel={() => handleCancel(order)}
-              onOpen={() => setDetailOrder(order)}
-            />
-          )}
+          renderCard={(order) => {
+            const step = awaitingPaymentStep(order);
+            return (
+              <OrderCard
+                key={order.id}
+                order={order}
+                isBusy={isBusy}
+                actionLabel={step.kind === "waiting" ? undefined : step.label}
+                hint={step.kind === "waiting" ? step.hint : undefined}
+                onAction={() => {
+                  if (step.kind === "fee") setDetailOrder(order);
+                  else if (step.kind === "bakong") handleConfirmBakong(order);
+                  else if (step.kind === "prepare") handleStartPreparing(order);
+                  else if (step.kind === "cash") openCashModal(order);
+                }}
+                secondaryLabel={step.kind === "prepare" ? "Take Cash" : undefined}
+                onSecondary={() => openCashModal(order)}
+                onCancel={canCancel(order) ? () => handleCancel(order) : undefined}
+                onOpen={() => setDetailOrder(order)}
+              />
+            );
+          }}
         />
 
         {/* Paid and untouched: the customer has been charged and is waiting on a drink
@@ -564,7 +757,7 @@ export default function BaristaQueueView() {
           title="New — Paid"
           accent="bg-blue-500"
           orders={paid}
-          isLoading={isLoadingRole || paidQuery.isFetching}
+          isLoading={isLoadingRole || listLoadState(paidQuery).isLoading}
           emptyLabel="No new paid orders."
           renderCard={(order) => (
             <OrderCard
@@ -583,49 +776,81 @@ export default function BaristaQueueView() {
           title="Preparing"
           accent="bg-violet-500"
           orders={preparing}
-          isLoading={isLoadingRole || preparingQuery.isFetching}
+          isLoading={isLoadingRole || listLoadState(preparingQuery).isLoading}
           emptyLabel="Nothing on the bar."
-          renderCard={(order) => (
-            <OrderCard
-              key={order.id}
-              order={order}
-              isBusy={isBusy}
-              actionLabel={
-                order.fulfillmentMethod === "DELIVERY"
-                  ? "Out for Delivery"
-                  : "Mark Completed"
-              }
-              onAction={() => handleComplete(order)}
-              onOpen={() => setDetailOrder(order)}
-            />
-          )}
+          renderCard={(order) => {
+            // A pickup order paid in cash at the counter reaches this column unpaid, and the
+            // API refuses to complete it until the cash is in — so take the cash first. A
+            // delivery order can still be dispatched unpaid; its cash is collected on arrival.
+            const needsCash =
+              order.paymentMethod === "CASH" &&
+              order.paidAt == null &&
+              order.fulfillmentMethod !== "DELIVERY";
+            return (
+              <OrderCard
+                key={order.id}
+                order={order}
+                isBusy={isBusy}
+                actionLabel={
+                  needsCash
+                    ? "Collect Cash"
+                    : order.fulfillmentMethod === "DELIVERY"
+                      ? "Out for Delivery"
+                      : "Mark Completed"
+                }
+                onAction={() => {
+                  if (needsCash) {
+                    openCashModal(order);
+                  } else {
+                    handleComplete(order);
+                  }
+                }}
+                onOpen={() => setDetailOrder(order)}
+              />
+            );
+          }}
         />
 
-        {/* With a courier: made and paid for, but not yet in the customer's hands. Without
-            this column a delivery order would look finished the moment it left the bar. */}
+        {/* With a courier, not yet in the customer's hands. A cash order can be dispatched
+            unpaid (collected on arrival), so this column has two different next steps: collect
+            the cash first if it's still owed, otherwise mark it delivered. The API rejects
+            "delivered" on an unpaid order, so offering that button unconditionally was a dead
+            end — the courier had already left with an order nothing here could ever close out. */}
         <QueueColumn
           title="Out for Delivery"
           accent="bg-cyan-500"
           orders={outForDelivery}
-          isLoading={isLoadingRole || outForDeliveryQuery.isFetching}
+          isLoading={isLoadingRole || listLoadState(outForDeliveryQuery).isLoading}
           emptyLabel="Nothing out for delivery."
-          renderCard={(order) => (
-            <OrderCard
-              key={order.id}
-              order={order}
-              isBusy={isBusy}
-              actionLabel="Mark Delivered"
-              onAction={() => handleDelivered(order)}
-              onOpen={() => setDetailOrder(order)}
-            />
-          )}
+          renderCard={(order) => {
+            const needsCash = order.paymentMethod === "CASH" && order.paidAt == null;
+            return (
+              <OrderCard
+                key={order.id}
+                order={order}
+                isBusy={isBusy}
+                actionLabel={needsCash ? "Collect Cash" : "Mark Delivered"}
+                onAction={() => {
+                  if (needsCash) {
+                    openCashModal(order);
+                  } else {
+                    handleDelivered(order);
+                  }
+                }}
+                onOpen={() => setDetailOrder(order)}
+              />
+            );
+          }}
         />
 
+        {/* A fifth lane would wrap into the first column of the four-column board and stack its
+            cards in a quarter of the width, so it runs the full width below the live lanes. */}
         <QueueColumn
+          fullWidth
           title="Completed"
           accent="bg-green-500"
           orders={completed}
-          isLoading={isLoadingRole || completedQuery.isFetching}
+          isLoading={isLoadingRole || listLoadState(completedQuery).isLoading}
           emptyLabel="No completed orders yet."
           renderCard={(order) => (
             <OrderCard key={order.id} order={order} onOpen={() => setDetailOrder(order)} />
@@ -684,12 +909,24 @@ export default function BaristaQueueView() {
         <ModalGrid>
           <FormInput
             label="Total Due"
-            value={cashOrder ? money(cashOrder.totalAmount) : ""}
+            value={cashOrder ? formatByCurrency(cashDue, cashCurrency) : ""}
             readOnly
           />
+          <FormSelect
+            label="Currency"
+            value={cashCurrency}
+            onChange={(e) => handleCashCurrencyChange(e.target.value as Currency)}
+          >
+            <option value="USD">USD</option>
+            <option value="KHR" disabled={!khrPerUsdRate}>
+              KHR{!khrPerUsdRate ? " (rate unavailable)" : ""}
+            </option>
+          </FormSelect>
           <FormInput
-            label="Amount Tendered (USD)"
+            label="Amount Tendered"
             type="number"
+            step={cashCurrency === "KHR" ? "1" : "0.01"}
+            placeholder={cashCurrency === "KHR" ? "0" : "0.00"}
             value={amountTendered}
             onChange={(e) => setAmountTendered(e.target.value)}
             required
@@ -697,8 +934,8 @@ export default function BaristaQueueView() {
           <FormInput
             label="Change Due"
             value={
-              cashOrder && Number(amountTendered) >= Number(cashOrder.totalAmount)
-                ? money(Number(amountTendered) - Number(cashOrder.totalAmount))
+              cashOrder && Number(amountTendered) >= cashDue
+                ? formatByCurrency(Number(amountTendered) - cashDue, cashCurrency)
                 : "-"
             }
             readOnly
@@ -734,21 +971,21 @@ export default function BaristaQueueView() {
                 </span>
               </DetailItem>
               <DetailItem label="Customer">
-                {detailOrder.customerName ?? "Walk-in"}
+                {detailOrder.customerName ? titleCase(detailOrder.customerName) : "Walk-in"}
               </DetailItem>
               <DetailItem label="Placed">
                 {formatDateTime(detailOrder.createdAt)}
               </DetailItem>
               <DetailItem label="Payment Method">
-                {detailOrder.paymentMethod ?? "Not chosen yet"}
+                {detailOrder.paymentMethod ? humanise(detailOrder.paymentMethod) : "Not chosen yet"}
               </DetailItem>
               <DetailItem label="Paid At">
                 {detailOrder.paidAt ? formatDateTime(detailOrder.paidAt) : "Not paid yet"}
               </DetailItem>
               <DetailItem label="Handled By">
                 {detailOrder.handledByName
-                  ? `${detailOrder.handledByName}${
-                      detailOrder.handledByRole ? ` (${detailOrder.handledByRole})` : ""
+                  ? `${titleCase(detailOrder.handledByName)}${
+                      detailOrder.handledByRole ? ` (${humanise(detailOrder.handledByRole)})` : ""
                     }`
                   : "-"}
               </DetailItem>
@@ -756,10 +993,10 @@ export default function BaristaQueueView() {
               {detailOrder.paymentMethod === "CASH" ? (
                 <>
                   <DetailItem label="Amount Tendered">
-                    {money(detailOrder.amountTendered)}
+                    {formatByCurrency(detailOrder.amountTendered, detailOrder.amountTenderedCurrency)}
                   </DetailItem>
                   <DetailItem label="Change Given">
-                    {money(detailOrder.changeDue)}
+                    {formatByCurrency(detailOrder.changeDue, detailOrder.changeCurrency)}
                   </DetailItem>
                 </>
               ) : null}
@@ -774,7 +1011,13 @@ export default function BaristaQueueView() {
               ) : null}
             </DetailGrid>
 
-            <OrderFulfillmentDetails order={detailOrder} />
+            <InvoiceActions order={detailOrder} className="mt-4" />
+
+            <OrderFulfillmentDetails
+              order={detailOrder}
+              onSetDeliveryFee={(fee) => handleSetDeliveryFee(detailOrder, fee)}
+              isSettingFee={isSettingFee}
+            />
             {detailOrder.note ? (
               <div className="mt-6 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
                 <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
@@ -800,14 +1043,15 @@ export default function BaristaQueueView() {
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-gray-900">
-                        {item.quantity}x {item.productName}
+                        {item.quantity}x {titleCase(item.productName)}
                       </p>
                       <p className="mt-0.5 text-xs text-gray-500">
                         {[
-                          item.sizeOptionName,
-                          item.sugarLevel && `Sugar ${item.sugarLevel}`,
-                          item.iceLevel && `Ice ${item.iceLevel}`,
-                          item.milkType && item.milkType !== "NONE" ? item.milkType : null,
+                          item.variantName ? humanise(item.variantName) : null,
+                          item.sugarLevel && `Sugar ${formatLevel(item.sugarLevel)}`,
+                          item.iceLevel && `Ice ${formatLevel(item.iceLevel)}`,
+                          item.milkType && item.milkType !== "NONE" ? humanise(item.milkType) : null,
+                          ...item.extras.map((extra) => titleCase(extra.name)),
                         ]
                           .filter(Boolean)
                           .join(" · ") || "Standard"}
@@ -826,6 +1070,7 @@ export default function BaristaQueueView() {
           </div>
         )}
       </DetailModal>
+      {confirmDialog}
     </PageShell>
   );
 }

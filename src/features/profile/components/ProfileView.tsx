@@ -9,7 +9,6 @@ import {
   Loader2,
   Mail,
   Send,
-  ShieldCheck,
   Trash2,
   Upload,
   UserRound,
@@ -22,8 +21,11 @@ import {
   DataCard,
   DetailGrid,
   DetailItem,
+  ErrorState,
   FormInput,
+  FormPhoneInput,
   FormSelect,
+  SkeletonBlock,
   StatusBadge,
 } from "@/components/common/AdminKit";
 import { apiErrorMessage } from "@/store/api/baseApi";
@@ -36,6 +38,8 @@ import {
 } from "@/store/api/authApi";
 import type { Gender, UpdateProfileRequest } from "@/store/api/types";
 import { humanise, statusTone } from "@/features/user/components/UserManagementView";
+import { titleCase } from "@/lib/utils";
+import { formatPhoneInput, isValidPhone, PHONE_INVALID_MESSAGE, samePhone } from "@/lib/phone";
 
 const GENDERS: Gender[] = ["MALE", "FEMALE", "OTHER"];
 
@@ -60,7 +64,7 @@ const EMPTY_PASSWORD_FORM = { current: "", next: "", confirm: "" };
  * remain configuration, and only those two are disabled here.
  */
 export default function ProfileView() {
-  const { data: user, isLoading, error, refetch } = useGetCurrentUserQuery();
+  const { data: user, isLoading, isFetching, error, refetch } = useGetCurrentUserQuery();
 
   const [updateProfile, { isLoading: isSaving }] = useUpdateProfileMutation();
   const [changePassword, { isLoading: isChangingPassword }] = useChangePasswordMutation();
@@ -85,14 +89,14 @@ export default function ProfileView() {
   useEffect(() => {
     if (!user) return;
     setFullName(user.fullName ?? "");
-    setPhoneNumber(user.phoneNumber ?? "");
+    setPhoneNumber(formatPhoneInput(user.phoneNumber));
     setGender(user.gender ?? "");
   }, [user]);
 
   const isDirty =
     !!user &&
     (fullName !== (user.fullName ?? "") ||
-      phoneNumber !== (user.phoneNumber ?? "") ||
+      !samePhone(phoneNumber, user.phoneNumber) ||
       gender !== (user.gender ?? ""));
 
   const handleSaveProfile = async () => {
@@ -108,7 +112,13 @@ export default function ProfileView() {
     // phone number should not be re-validated against the Cambodian format on every save.
     const body: UpdateProfileRequest = {};
     if (trimmedName !== user.fullName) body.fullName = trimmedName;
-    if (phoneNumber.trim() !== (user.phoneNumber ?? "")) body.phoneNumber = phoneNumber.trim();
+    if (!samePhone(phoneNumber, user.phoneNumber)) {
+      if (!isValidPhone(phoneNumber)) {
+        toast.error(PHONE_INVALID_MESSAGE);
+        return;
+      }
+      body.phoneNumber = phoneNumber.trim();
+    }
     if (gender && gender !== user.gender) body.gender = gender as Gender;
 
     if (Object.keys(body).length === 0) {
@@ -127,7 +137,7 @@ export default function ProfileView() {
   const handleResetForm = () => {
     if (!user) return;
     setFullName(user.fullName ?? "");
-    setPhoneNumber(user.phoneNumber ?? "");
+    setPhoneNumber(formatPhoneInput(user.phoneNumber));
     setGender(user.gender ?? "");
   };
 
@@ -194,17 +204,19 @@ export default function ProfileView() {
     }
   };
 
+  const header = (
+    <PageHeader
+      title="My Profile"
+      breadcrumbs={[{ label: "Home", href: "/" }, { label: "Profile" }]}
+      rightSlot={<AdminTopActions />}
+    />
+  );
+
   if (isLoading) {
     return (
       <PageShell>
-        <PageHeader
-          title="My Profile"
-          breadcrumbs={[{ label: "Home", href: "/" }, { label: "Profile" }]}
-          rightSlot={<AdminTopActions />}
-        />
-        <div className="flex min-h-[240px] items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-        </div>
+        {header}
+        <ProfileSkeleton />
       </PageShell>
     );
   }
@@ -212,21 +224,13 @@ export default function ProfileView() {
   if (error || !user) {
     return (
       <PageShell>
-        <PageHeader
-          title="My Profile"
-          breadcrumbs={[{ label: "Home", href: "/" }, { label: "Profile" }]}
-          rightSlot={<AdminTopActions />}
+        {header}
+        <ErrorState
+          error={error}
+          fallback="Could not load your account."
+          onRetry={() => refetch()}
+          isRetrying={isFetching}
         />
-        <DataCard title="Profile">
-          <div className="p-6 text-sm" role="alert">
-            <p className="text-red-500">
-              {apiErrorMessage(error as never, "Could not load your account.")}
-            </p>
-            <button type="button" className="mt-3 underline" onClick={() => refetch()}>
-              Retry
-            </button>
-          </div>
-        </DataCard>
       </PageShell>
     );
   }
@@ -235,33 +239,7 @@ export default function ProfileView() {
 
   return (
     <PageShell>
-      <PageHeader
-        title="My Profile"
-        breadcrumbs={[{ label: "Home", href: "/" }, { label: "Profile" }]}
-        rightSlot={<AdminTopActions />}
-      />
-
-      {isSuperAdmin ? (
-        <div
-          className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4"
-          role="status"
-        >
-          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-          <div className="text-sm">
-            <p className="font-semibold text-amber-900">
-              The super admin signs in from configuration
-            </p>
-            <p className="mt-1 text-amber-800">
-              Your name, phone, gender and photo are yours to edit here. The email and password
-              come from{" "}
-              <code className="rounded bg-amber-100 px-1">SUPER_ADMIN_EMAIL</code> and{" "}
-              <code className="rounded bg-amber-100 px-1">SUPER_ADMIN_PASSWORD</code> instead of
-              the database — that is what keeps the shop from ever being locked out of its own
-              admin — so change those two in the deployment environment.
-            </p>
-          </div>
-        </div>
-      ) : null}
+      {header}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="space-y-6 lg:col-span-1">
@@ -324,7 +302,7 @@ export default function ProfileView() {
             </div>
           </DataCard>
 
-          <DataCard title="Account" meta="Managed by a super admin.">
+          <DataCard title="Account" meta={isSuperAdmin ? undefined : "Managed by a super admin."}>
             <div className="admin_modal_form_wrap p-2">
               <DetailGrid>
                 <DetailItem label="Role">{humanise(user.role)}</DetailItem>
@@ -334,19 +312,19 @@ export default function ProfileView() {
                     tone={statusTone(user.status)}
                   />
                 </DetailItem>
-                <DetailItem label="Telegram">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Send className="h-3.5 w-3.5 text-gray-400" />
-                    {user.telegramLinked ? "Linked" : "Not linked"}
-                  </span>
-                </DetailItem>
+                {/* The super admin is a configuration account with no Telegram to link. */}
+                {!isSuperAdmin ? (
+                  <DetailItem label="Telegram">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Send className="h-3.5 w-3.5 text-gray-400" />
+                      {user.telegramLinked ? "Linked" : "Not linked"}
+                    </span>
+                  </DetailItem>
+                ) : null}
                 <DetailItem label="Created By">
                   {user.createdByName
-                    ? `${user.createdByName} (${humanise(user.createdByRole ?? "")})`
+                    ? `${titleCase(user.createdByName)} (${humanise(user.createdByRole ?? "")})`
                     : "Self-registered"}
-                </DetailItem>
-                <DetailItem label="Account ID">
-                  <span className="break-all font-mono text-xs">{user.id}</span>
                 </DetailItem>
               </DetailGrid>
             </div>
@@ -373,12 +351,7 @@ export default function ProfileView() {
                   readOnly
                   placeholder="—"
                 />
-                <FormInput
-                  label="Phone Number"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="072 345 5674"
-                />
+                <FormPhoneInput value={phoneNumber} onChange={setPhoneNumber} />
                 <FormSelect
                   label="Gender"
                   value={gender}
@@ -489,5 +462,46 @@ export default function ProfileView() {
         </section>
       </div>
     </PageShell>
+  );
+}
+
+/** Same grid as the loaded page, so nothing jumps when the profile arrives. */
+function ProfileSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3" role="status" aria-label="Loading your profile">
+      <section className="space-y-6 lg:col-span-1">
+        <DataCard title="Photo">
+          <div className="flex flex-col items-center gap-4 p-2 pb-4">
+            <SkeletonBlock className="h-28 w-28 rounded-full" />
+            <SkeletonBlock className="h-3 w-32" />
+            <SkeletonBlock className="h-10 w-28" />
+          </div>
+        </DataCard>
+        <DataCard title="Account">
+          <div className="grid grid-cols-2 gap-5 p-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <SkeletonBlock className="h-3 w-16" />
+                <SkeletonBlock className="h-5 w-24" />
+              </div>
+            ))}
+          </div>
+        </DataCard>
+      </section>
+      <section className="space-y-6 lg:col-span-2">
+        {["Personal Information", "Password"].map((title) => (
+          <DataCard key={title} title={title}>
+            <div className="grid grid-cols-1 gap-5 p-2 pb-4 md:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <SkeletonBlock className="h-3 w-24" />
+                  <SkeletonBlock className="h-11 w-full" />
+                </div>
+              ))}
+            </div>
+          </DataCard>
+        ))}
+      </section>
+    </div>
   );
 }

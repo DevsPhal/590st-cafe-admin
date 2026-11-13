@@ -1,11 +1,6 @@
 import { PlugZap } from "lucide-react";
 
-/**
- * Marks a screen that is still running on placeholder data because the API has no endpoint
- * behind it. Every screen with a real endpoint was migrated to RTK Query; these are the ones
- * that could not be, and this banner keeps that visible instead of letting mock rows read as
- * production data.
- */
+//notice for not wired feature
 export function NotWiredNotice({
   feature,
   detail,

@@ -10,7 +10,9 @@ import {
   type ReactNode,
 } from "react";
 
+import { usePathname } from "next/navigation";
 import { useGetCurrentUserQuery } from "@/store/api/authApi";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 /** Kept a subset of PAGE_SIZE_CHOICES in AdminKit's PaginationFooter, so the size a screen
  *  opens with is always one the footer can also switch back to. */
@@ -40,7 +42,9 @@ interface AdminPreferencesValue {
   resetPreferences: () => void;
 }
 
-const AdminPreferencesContext = createContext<AdminPreferencesValue | null>(null);
+const AdminPreferencesContext = createContext<AdminPreferencesValue | null>(
+  null,
+);
 
 /**
  * Keyed by account id so two people sharing a terminal don't inherit each other's settings.
@@ -62,7 +66,9 @@ function read(userId: string | undefined): AdminPreferences {
       pageSize: PAGE_SIZE_OPTIONS.includes(parsed.pageSize as never)
         ? (parsed.pageSize as number)
         : DEFAULT_PREFERENCES.pageSize,
-      refreshSeconds: REFRESH_SECONDS_OPTIONS.includes(parsed.refreshSeconds as never)
+      refreshSeconds: REFRESH_SECONDS_OPTIONS.includes(
+        parsed.refreshSeconds as never,
+      )
         ? (parsed.refreshSeconds as number)
         : DEFAULT_PREFERENCES.refreshSeconds,
       pauseRefreshWhenHidden:
@@ -80,11 +86,17 @@ function read(userId: string | undefined): AdminPreferences {
  * AuthGuard), so it only ever renders client-side and the localStorage read cannot produce a
  * hydration mismatch.
  */
-export function AdminPreferencesProvider({ children }: { children: ReactNode }) {
+export function AdminPreferencesProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const { data: user } = useGetCurrentUserQuery();
   const userId = user?.id;
 
-  const [preferences, setState] = useState<AdminPreferences>(() => read(undefined));
+  const [preferences, setState] = useState<AdminPreferences>(() =>
+    read(undefined),
+  );
 
   // The account id arrives one render after mount, so re-read under the real key once it does.
   useEffect(() => {
@@ -103,7 +115,7 @@ export function AdminPreferencesProvider({ children }: { children: ReactNode }) 
         return next;
       });
     },
-    [userId]
+    [userId],
   );
 
   const resetPreferences = useCallback(() => {
@@ -117,7 +129,7 @@ export function AdminPreferencesProvider({ children }: { children: ReactNode }) 
 
   const value = useMemo(
     () => ({ preferences, setPreferences, resetPreferences }),
-    [preferences, setPreferences, resetPreferences]
+    [preferences, setPreferences, resetPreferences],
   );
 
   return (
@@ -130,7 +142,9 @@ export function AdminPreferencesProvider({ children }: { children: ReactNode }) 
 export function useAdminPreferences(): AdminPreferencesValue {
   const context = useContext(AdminPreferencesContext);
   if (!context) {
-    throw new Error("useAdminPreferences must be used inside AdminPreferencesProvider");
+    throw new Error(
+      "useAdminPreferences must be used inside AdminPreferencesProvider",
+    );
   }
   return context;
 }
@@ -140,18 +154,14 @@ export function useDefaultPageSize(): number {
   return useAdminPreferences().preferences.pageSize;
 }
 
-/**
- * Drop-in replacement for `useState(10)` on the list screens: reads the saved preference until
- * the user picks a different size from that screen's own footer, after which the screen keeps
- * their choice for the rest of the visit.
- *
- * It has to track the override separately rather than seed `useState` with the preference —
- * the account id lands one render after mount, so a seeded initial value would freeze in
- * whatever was read before the per-account key was known.
- */
+//it the real time, the unseen count is the total count minus the last-seen count. The last-seen count is stored in localStorage so it persists across tabs and reloads. The unseen count is undefined until the first poll returns a real count, so the badge doesn't flash "0" on first load.
 export function usePageSize(): [number, (next: number) => void] {
   const preferred = useDefaultPageSize();
-  const [override, setOverride] = useState<number | null>(null);
+  // Kept per screen across a refresh, like the page number beside it.
+  const [override, setOverride] = usePersistentState<number | null>(
+    `${usePathname()}:pageSize`,
+    null,
+  );
   return [override ?? preferred, setOverride];
 }
 

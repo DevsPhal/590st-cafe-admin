@@ -1,17 +1,16 @@
 "use client";
 
-import { useState } from "react";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
-import { AdminTopActions, DataCard, FilterActions, FilterPanel, StatTile, TextField } from "@/components/common/AdminKit";
+import { AdminTopActions, DataCard, ErrorState, FilterActions, FilterPanel, SkeletonBlock, StatTile, TextField } from "@/components/common/AdminKit";
 import { useRefreshOptions } from "@/contexts/AdminPreferencesContext";
 import { shopDate } from "@/lib/shopDate";
-import { apiErrorMessage } from "@/store/api/baseApi";
 import { useGetOwnDailyReportQuery } from "@/store/api/reportApi";
 import type { Numeric } from "@/store/api/types";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 export default function BaristaReportView() {
-  const [date, setDate] = useState(shopDate);
+  const [date, setDate] = usePersistentState("barista-report:date", shopDate);
   const refresh = useRefreshOptions();
   const { currentData: report, isFetching, error, refetch } = useGetOwnDailyReportQuery({ date }, refresh);
   const money = (value: Numeric | undefined) => `$${Number(value ?? 0).toFixed(2)}`;
@@ -24,13 +23,20 @@ export default function BaristaReportView() {
         <FilterActions onClear={() => setDate(shopDate())} onSearch={refetch} />
       </FilterPanel>
       <DataCard title="My Sales" meta={date}>
-        {error ? (
-          <div role="alert" className="p-4">
-            <p>{apiErrorMessage("status" in error ? error : undefined, "Could not load your daily report.")}</p>
-            <button type="button" className="mt-2 underline" onClick={refetch}>Retry</button>
+        {/* A background refresh keeps the last numbers; placeholders only before the first answer. */}
+        {!report && error ? (
+          <div className="p-4">
+            <ErrorState error={error} fallback="Could not load your daily report." onRetry={refetch} isRetrying={isFetching} />
           </div>
-        ) : isFetching || !report ? (
-          <p role="status" className="p-4">Loading your daily report...</p>
+        ) : !report ? (
+          <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-4" role="status" aria-label="Loading your daily report">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-3 rounded-xl bg-white p-5">
+                <SkeletonBlock className="h-4 w-24" />
+                <SkeletonBlock className="h-8 w-20" />
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-4">
             <StatTile title="Paid Orders" value={String(report.totalOrders)} tone="gray" />

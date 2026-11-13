@@ -1,16 +1,7 @@
 import { useGetCurrentUserQuery } from "./authApi";
 import type { Role } from "./types";
 
-/**
- * The API splits order handling into two mutually exclusive role scopes (SecurityConfig):
- *
- *   /api/admin/orders/**    hasRole("ADMIN")     — admins and super admins; 403 for baristas
- *   /api/barista/orders/**  hasRole("BARISTA")   — baristas only; 403 for admins
- *
- * Product, category and inventory reads overlap (`hasAnyRole("ADMIN","BARISTA")` on GET).
- * Screens that touch orders therefore have to pick their endpoint by role rather than
- * assuming one, which is what this hook is for.
- */
+/// A simple hook to get the current user's role and whether they are an admin or barista. It uses the `useGetCurrentUserQuery` hook from the authApi slice, which fetches the current user's data from the API. The hook returns the role, isLoading, isAdmin, and isBarista flags.
 export function useCurrentRole() {
   const { data: user, isLoading } = useGetCurrentUserQuery();
   const role: Role | undefined = user?.role;

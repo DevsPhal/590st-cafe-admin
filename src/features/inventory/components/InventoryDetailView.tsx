@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback } from "react";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
 import {
@@ -14,6 +14,7 @@ import {
   StatTile,
   StatusBadge,
   TableState,
+  listLoadState,
 } from "@/components/common/AdminKit";
 import {
   useGetInventoryByProductQuery,
@@ -22,7 +23,9 @@ import {
 import { useGetProductQuery } from "@/store/api/productApi";
 import { usePageSize } from "@/contexts/AdminPreferencesContext";
 import type { StockMovementType } from "@/store/api/types";
-import { cn } from "@/lib/utils";
+import { cn, formatSku, humanise, productPriceLabel, titleCase } from "@/lib/utils";
+import { useInventoryAlerts } from "@/hooks/useInventoryAlerts";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 const MOVEMENT_TABLE_HEADERS = [
   "Date",
@@ -76,28 +79,39 @@ function formatDateTime(value: string) {
 }
 
 export default function InventoryDetailView({ productId }: { productId: string }) {
-  const [page, setPage] = useState(1);
+  const [page, setPage] = usePersistentState(`inventory-${productId}:page`, 1);
   const [size, setSize] = usePageSize();
 
   const {
     data: item,
-    isFetching: isLoadingItem,
+    isLoading: isLoadingItem,
     error: itemError,
+    refetch: refetchItem,
   } = useGetInventoryByProductQuery(productId);
 
   const { data: product } = useGetProductQuery(productId);
 
-  const {
-    data: movementPage,
-    isFetching: isLoadingMovements,
-    error: movementError,
-    refetch,
-  } = useListStockMovementsQuery({ productId, page, size });
+  const movementsQuery = useListStockMovementsQuery({ productId, page, size });
+  const { data: movementPage, refetch } = movementsQuery;
+  const movements = listLoadState(movementsQuery);
+
+  // Only this product's own stock changes matter here — a stock-in/cut elsewhere reaches every
+  // other open tab on this same product instantly instead of on the next manual refresh.
+  useInventoryAlerts(
+    useCallback(
+      (message) => {
+        if (message.id !== productId) return;
+        void refetchItem();
+        void refetch();
+      },
+      [productId, refetchItem, refetch]
+    )
+  );
 
   const breadcrumbs = [
     { label: "Home", href: "/" },
     { label: "Inventory", href: "/inventory" },
-    { label: item?.productName ?? "Detail" },
+    { label: item?.productName ? titleCase(item.productName) : "Detail" },
   ];
 
   if (itemError) {
@@ -127,7 +141,7 @@ export default function InventoryDetailView({ productId }: { productId: string }
   return (
     <PageShell>
       <PageHeader
-        title={item?.productName ?? "Inventory Detail"}
+        title={item?.productName ? titleCase(item.productName) : "Inventory Detail"}
         breadcrumbs={breadcrumbs}
         rightSlot={<AdminTopActions />}
       />
@@ -135,20 +149,25 @@ export default function InventoryDetailView({ productId }: { productId: string }
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <StatTile
           title="On Hand"
-          value={isLoadingItem ? "..." : `${onHand} ${item?.unit ?? ""}`}
+          value={isLoadingItem ? "..." : `${onHand} ${item?.unit ? humanise(item.unit) : ""}`}
           tone={level === "OK" ? "green" : level === "LOW" ? "orange" : "red"}
         />
         <StatTile
           title="Reorder Level"
-          value={isLoadingItem ? "..." : `${reorder} ${item?.unit ?? ""}`}
+          value={isLoadingItem ? "..." : `${reorder} ${item?.unit ? humanise(item.unit) : ""}`}
           tone="gray"
         />
         <StatTile
-          title="Unit Price"
-          value={product ? `$${Number(product.price).toFixed(2)}` : "-"}
+          title="Price"
+          value={product ? productPriceLabel(product.variants) : "-"}
           tone="gray"
         />
-        <StatTile title="SKU" value={product?.sku ?? "-"} tone="gray" />
+        <StatTile
+          title="SKU"
+          value={product?.sku ? formatSku(product.sku) : "-"}
+          tone="gray"
+          size="compact"
+        />
       </div>
 
       <DataCard
@@ -166,14 +185,13 @@ export default function InventoryDetailView({ productId }: { productId: string }
         <SimpleTable headers={[...MOVEMENT_TABLE_HEADERS]}>
           <TableState
             colSpan={MOVEMENT_TABLE_HEADERS.length}
-            isLoading={isLoadingMovements}
-            error={movementError}
+            isLoading={movements.isLoading}
+            error={movements.error}
             isEmpty={(movementPage?.content.length ?? 0) === 0}
             emptyLabel="No stock movements recorded for this product yet."
             onRetry={refetch}
           />
-          {!isLoadingMovements &&
-            !movementError &&
+          {movements.showRows &&
             (movementPage?.content ?? []).map((movement, index) => (
               <Row key={movement.id} striped={index % 2 === 1}>
                 <Cell>{formatDateTime(movement.createdAt)}</Cell>
@@ -188,8 +206,8 @@ export default function InventoryDetailView({ productId }: { productId: string }
                   />
                 </Cell>
                 <Cell>
-                  {movement.performedByName ?? "-"}
-                  {movement.performedByRole ? ` (${movement.performedByRole})` : ""}
+                  {movement.performedByName ? titleCase(movement.performedByName) : "-"}
+                  {movement.performedByRole ? ` (${humanise(movement.performedByRole)})` : ""}
                 </Cell>
                 <Cell>{movement.note || "-"}</Cell>
               </Row>

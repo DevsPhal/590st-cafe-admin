@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import toast from "react-hot-toast";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -26,6 +26,7 @@ import {
   StatusBadge,
   TableActions,
   TableState,
+  listLoadState,
   TextField,
 } from "@/components/common/AdminKit";
 import { apiErrorMessage } from "@/store/api/baseApi";
@@ -38,7 +39,13 @@ import {
 } from "@/store/api/categoryApi";
 import { useListProductsQuery } from "@/store/api/productApi";
 import { useCurrentRole } from "@/store/api/useCurrentRole";
-import type { CategoryResponse, Status } from "@/store/api/types";
+import type { CategoryGroup, CategoryResponse, Status } from "@/store/api/types";
+import { humanise, titleCase } from "@/lib/utils";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { useCatalogAlerts } from "@/hooks/useCatalogAlerts";
+import { usePersistentState } from "@/hooks/usePersistentState";
+
+const CATEGORY_GROUPS: CategoryGroup[] = ["FRESH_DRINK", "BEVERAGE", "SNACK"];
 
 const CATEGORY_TABLE_HEADERS = [
   "No",
@@ -55,12 +62,16 @@ type CategoryFormFields = {
   name: string;
   description: string;
   status: Status;
+  // Blank means an internal category (e.g. stock-in materials) that customers never order
+  // from directly, and that accepts no sugar/ice/milk customisation.
+  categoryGroup: CategoryGroup | "";
 };
 
 const EMPTY_FORM: CategoryFormFields = {
   name: "",
   description: "",
   status: "ACTIVE",
+  categoryGroup: "",
 };
 
 function formatCreatedDate(date: string | null) {
@@ -82,30 +93,42 @@ function statusLabel(status: Status) {
 
 export default function Categories() {
   const { isAdmin } = useCurrentRole();
-  const [page, setPage] = useState(1);
+  const { confirm, confirmDialog } = useConfirmDialog();
+  const [page, setPage] = usePersistentState("categories:page", 1);
   const [size, setSize] = usePageSize();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [searchTerm, setSearchTerm] = usePersistentState("categories:searchTerm", "");
+  const [filterStatus, setFilterStatus] = usePersistentState("categories:filterStatus", "");
 
   const {
     data: categoryPage,
+    currentData,
     isFetching,
     error,
     refetch,
   } = useListCategoriesQuery({ page, size });
+  const list = listLoadState({ isFetching, currentData, error });
 
   // The category endpoint has no product count, so derive it from the product list. One extra
   // request, and it stays correct as products move between categories.
-  const { data: productPage } = useListProductsQuery({ page: 1, size: 500 });
+  const { data: productPage, refetch: refetchProducts } = useListProductsQuery({ page: 1, size: 500 });
+
+  // A category, product or extra changed anywhere reaches this page instantly instead of only
+  // on its own next mutation or a manual refresh — the product-count column depends on both.
+  useCatalogAlerts(
+    useCallback(() => {
+      void refetch();
+      void refetchProducts();
+    }, [refetch, refetchProducts])
+  );
 
   const [createCategory, { isLoading: isCreating }] = useCreateCategoryMutation();
   const [updateCategory, { isLoading: isUpdating }] = useUpdateCategoryMutation();
   const [deleteCategory] = useDeleteCategoryMutation();
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [selected, setSelected] = useState<CategoryResponse | null>(null);
-  const [formFields, setFormFields] = useState<CategoryFormFields>(EMPTY_FORM);
+  const [formOpen, setFormOpen] = usePersistentState("categories:formOpen", false);
+  const [detailOpen, setDetailOpen] = usePersistentState("categories:detailOpen", false);
+  const [selected, setSelected] = usePersistentState<CategoryResponse | null>("categories:selected", null);
+  const [formFields, setFormFields] = usePersistentState<CategoryFormFields>("categories:formFields", EMPTY_FORM);
 
   const categories = useMemo(() => categoryPage?.content ?? [], [categoryPage]);
 
@@ -141,6 +164,7 @@ export default function Categories() {
             name: category.name,
             description: category.description ?? "",
             status: category.status,
+            categoryGroup: category.categoryGroup ?? "",
           }
         : EMPTY_FORM
     );
@@ -162,16 +186,17 @@ export default function Categories() {
     }
 
     const description = formFields.description.trim() || undefined;
+    const categoryGroup = formFields.categoryGroup || undefined;
 
     try {
       if (selected) {
         await updateCategory({
           id: selected.id,
-          body: { name, description, status: formFields.status },
+          body: { name, description, status: formFields.status, categoryGroup },
         }).unwrap();
         toast.success("Category updated");
       } else {
-        await createCategory({ name, description }).unwrap();
+        await createCategory({ name, description, categoryGroup }).unwrap();
         toast.success("Category created");
       }
       handleCloseForm();
@@ -182,7 +207,7 @@ export default function Categories() {
 
   const handleDelete = async (category: CategoryResponse) => {
     if (!isAdmin) return;
-    if (!window.confirm(`Delete category "${category.name}"?`)) return;
+    if (!(await confirm({ title: "Delete category", description: `Delete category "${category.name}"?`, confirmLabel: "Delete", tone: "danger" }))) return;
     try {
       await deleteCategory(category.id).unwrap();
       toast.success("Category deleted");
@@ -251,22 +276,21 @@ export default function Categories() {
         <SimpleTable headers={[...CATEGORY_TABLE_HEADERS]}>
           <TableState
             colSpan={CATEGORY_TABLE_HEADERS.length}
-            isLoading={isFetching}
-            error={error}
+            isLoading={list.isLoading}
+            error={list.error}
             isEmpty={visibleCategories.length === 0}
             emptyLabel={isAdmin ? "No categories yet. Use Register to add the first one." : "No categories found."}
             onRetry={refetch}
           />
-          {!isFetching &&
-            !error &&
+          {list.showRows &&
             visibleCategories.map((category, index) => (
               <Row key={category.id} striped={index % 2 === 1}>
                 <Cell>{(page - 1) * size + index + 1}</Cell>
-                <Cell className="font-semibold">{category.name}</Cell>
+                <Cell className="font-semibold">{titleCase(category.name)}</Cell>
                 <Cell>{category.description || "-"}</Cell>
                 <Cell>{productCountByCategory.get(category.id) ?? 0}</Cell>
                 <Cell>{formatCreatedDate(category.createdAt)}</Cell>
-                <Cell>{category.createdByName ?? "-"}</Cell>
+                <Cell>{category.createdByName ? titleCase(category.createdByName) : "-"}</Cell>
                 <Cell>
                   <StatusBadge
                     label={statusLabel(category.status)}
@@ -321,6 +345,20 @@ export default function Categories() {
               setFormFields({ ...formFields, description: e.target.value })
             }
           />
+          <FormSelect
+            label="Menu Group"
+            placeholder="Internal (not on the customer menu)"
+            value={formFields.categoryGroup}
+            onChange={(e) =>
+              setFormFields({ ...formFields, categoryGroup: e.target.value as CategoryGroup })
+            }
+          >
+            {CATEGORY_GROUPS.map((group) => (
+              <option key={group} value={group}>
+                {humanise(group)}
+              </option>
+            ))}
+          </FormSelect>
           {/* Status is update-only: the API always creates a category ACTIVE. */}
           {selected ? (
             <FormSelect
@@ -354,8 +392,11 @@ export default function Categories() {
         {selected && (
           <div className="admin_modal_form_wrap">
             <DetailGrid>
-              <DetailItem label="Category Name">{selected.name}</DetailItem>
+              <DetailItem label="Category Name">{titleCase(selected.name)}</DetailItem>
               <DetailItem label="Description">{selected.description || "-"}</DetailItem>
+              <DetailItem label="Menu Group">
+                {selected.categoryGroup ? humanise(selected.categoryGroup) : "Internal (not on the customer menu)"}
+              </DetailItem>
               <DetailItem label="Total Products">
                 {productCountByCategory.get(selected.id) ?? 0}
               </DetailItem>
@@ -367,16 +408,17 @@ export default function Categories() {
               </DetailItem>
               <DetailItem label="Created">
                 {formatCreatedDate(selected.createdAt)}
-                {selected.createdByName ? ` by ${selected.createdByName}` : ""}
+                {selected.createdByName ? ` by ${titleCase(selected.createdByName)}` : ""}
               </DetailItem>
               <DetailItem label="Last Updated">
                 {formatCreatedDate(selected.updatedAt)}
-                {selected.updatedByName ? ` by ${selected.updatedByName}` : ""}
+                {selected.updatedByName ? ` by ${titleCase(selected.updatedByName)}` : ""}
               </DetailItem>
             </DetailGrid>
           </div>
         )}
       </DetailModal>
+      {confirmDialog}
     </PageShell>
   );
 }

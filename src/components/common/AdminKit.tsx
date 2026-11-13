@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { ReactNode, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import { Children, isValidElement, ReactElement, ReactNode, useId, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import {
@@ -15,16 +16,20 @@ import {
   ChevronsRight,
   Download,
   Eye,
+  Printer,
   Filter,
   Loader2,
   Pencil,
   Plus,
+  RotateCcw,
   Search,
   SlidersHorizontal,
   Trash2,
   TriangleAlert,
+  Upload,
   X,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import {
   Dialog,
   DialogContent,
@@ -50,8 +55,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useI18n } from "@/contexts/I18nContext";
-import { cn } from "@/lib/utils";
+import { cn, formatSku, titleCase } from "@/lib/utils";
+import { formatPhoneInput, PHONE_MAX_LENGTH, PHONE_PLACEHOLDER } from "@/lib/phone";
 import { apiErrorMessage } from "@/store/api/baseApi";
 
 import { OperationalAlertsContent, useOperationalAlerts } from "./OperationalAlerts";
@@ -105,6 +112,10 @@ export function AdminTopActions() {
   const { locale, setLocale } = useI18n();
   const currentLang =
     LANGUAGES.find((lang) => lang.code === locale) ?? LANGUAGES[0];
+  const pathname = usePathname();
+  // The Current Alerts page already shows this exact content full-size — opening the same
+  // list again in a slide-over on top of it is pure duplication, not a second view of anything.
+  const onAlertsPage = pathname === "/notifications";
 
   return (
     <>
@@ -113,7 +124,7 @@ export function AdminTopActions() {
           type="button"
           onClick={() => {
             alerts.markSeen();
-            setOpen(true);
+            if (!onAlertsPage) setOpen(true);
           }}
           className="header_action_btn header_notify_btn"
           aria-label="Notifications"
@@ -130,7 +141,7 @@ export function AdminTopActions() {
               aria-label="Language"
             >
               <LanguageFlag src={currentLang.flag} alt={currentLang.flagAlt} />
-              <span>{currentLang.label}</span>
+              <span className="header_lang_label">{currentLang.label}</span>
               <ChevronDown className="h-4 w-4 shrink-0" />
             </button>
           </DropdownMenuTrigger>
@@ -240,6 +251,41 @@ export function TextField({
   );
 }
 
+type SelectOptionProps = { value?: string | number; children?: ReactNode; disabled?: boolean };
+
+/** Radix disallows an actual empty-string item value (that's reserved to mean "nothing
+ * selected" internally), so a blank/"All ..." choice is tracked under this sentinel instead and
+ * translated back to "" at the SelectField/FormSelect boundary — otherwise, once someone picked
+ * a real option, there would be no item left in the list to click back to clear it. */
+const UNSET = "__unset__";
+
+/**
+ * SelectField/FormSelect take plain <option> children — the natural, idiomatic API — but render
+ * them through Radix's Select so the open list is fully custom-styled instead of the browser's
+ * own unstyled native listbox (which ignores the app's theme entirely, mismatched fonts and
+ * all). This walks the <option> children into the {value, label} pairs Radix needs.
+ */
+function optionsFromChildren(children: ReactNode): { value: string; label: ReactNode; disabled?: boolean }[] {
+  return Children.toArray(children)
+    .filter((child): child is ReactElement<SelectOptionProps> => isValidElement(child) && child.type === "option")
+    .map((child) => {
+      const raw = child.props.value;
+      // A bare <option>Text</option> with no value attribute defaults to its own text, same as
+      // a native <select>; an explicit value="" is the one reserved for "nothing selected".
+      const text = typeof child.props.children === "string" ? child.props.children : "";
+      const value = raw === "" ? UNSET : raw != null ? String(raw) : text || UNSET;
+      return { value, label: child.props.children, disabled: child.props.disabled };
+    });
+}
+
+/** Ensures exactly one clickable "blank" item exists — the caller's own `<option value="">`
+ * (e.g. "All staff") if they supplied one, else one synthesised from `placeholder`. */
+function withUnsetOption(options: { value: string; label: ReactNode; disabled?: boolean }[], placeholder: string) {
+  return options.some((option) => option.value === UNSET)
+    ? options
+    : [{ value: UNSET, label: placeholder }, ...options];
+}
+
 export function SelectField({
   label,
   placeholder = "Select Method",
@@ -253,27 +299,45 @@ export function SelectField({
   onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   children?: React.ReactNode;
 }) {
+  const id = useId();
+  const rawOptions = children
+    ? optionsFromChildren(children)
+    : optionsFromChildren(
+        <>
+          <option>Paid</option>
+          <option>Pending</option>
+          <option>Enabled</option>
+        </>
+      );
+  const options = withUnsetOption(rawOptions, placeholder);
   return (
-    <label className="form_field">
-      <span className="form_field_label">{label}</span>
-      <span className="form_field_control_wrap">
-        <select
-          value={value || ""}
-          onChange={onChange}
-          className="form_field_control form_field_select"
-        >
-          <option value="">{placeholder}</option>
-          {children || (
-            <>
-              <option>Paid</option>
-              <option>Pending</option>
-              <option>Enabled</option>
-            </>
-          )}
-        </select>
-        <ChevronDown className="form_field_icon" />
-      </span>
-    </label>
+    <div className="form_field">
+      <label htmlFor={id} className="form_field_label">
+        {label}
+      </label>
+      <Select
+        value={value ? String(value) : undefined}
+        onValueChange={(next) =>
+          onChange?.({ target: { value: next === UNSET ? "" : next } } as React.ChangeEvent<HTMLSelectElement>)
+        }
+      >
+        <SelectTrigger id={id} className="form_field_select_trigger">
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent className="form_field_select_content">
+          {options.map((option) => (
+            <SelectItem
+              key={option.value}
+              value={option.value}
+              disabled={option.disabled}
+              className="form_field_select_item"
+            >
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
@@ -443,6 +507,111 @@ export function TableActions({
   );
 }
 
+/** Shape shared by every bulk-Excel-import endpoint (products, stock-in, ...) — same three
+ * counters plus one error per row that failed, the rest still get created. */
+export interface ExcelImportResult {
+  totalRows: number;
+  created: number;
+  failed: number;
+  errors: { rowNumber: number; sku?: string; message: string }[];
+}
+
+/**
+ * File picker + upload button for the admin's Excel-import endpoints. Handles the mutation call,
+ * the summary toast, and a results dialog listing which rows failed and why — every import
+ * screen wants the same three things, so this is the one place that does them.
+ */
+export function ExcelImportButton({
+  label = "Import Excel",
+  columnsHint,
+  onImport,
+}: {
+  label?: string;
+  /** Plain-English column order, shown in the results dialog so a fix-and-retry doesn't need
+   * to go spelunking in the API docs. */
+  columnsHint: string;
+  onImport: (file: File) => Promise<ExcelImportResult>;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isBusy, setIsBusy] = useState(false);
+  const [result, setResult] = useState<ExcelImportResult | null>(null);
+
+  const handleFile = async (file: File) => {
+    setIsBusy(true);
+    try {
+      const response = await onImport(file);
+      setResult(response);
+      if (response.failed === 0) {
+        toast.success(`Imported ${response.created} of ${response.totalRows} row(s).`);
+      } else {
+        toast.error(`${response.created} imported, ${response.failed} failed — see details.`);
+      }
+    } catch (error) {
+      toast.error(apiErrorMessage(error as never, "Could not import the file."));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={isBusy}
+        className="btn_outline_black"
+      >
+        {isBusy ? "Importing..." : label}
+        <Upload />
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void handleFile(file);
+        }}
+      />
+
+      <Dialog open={result !== null} onOpenChange={(open) => { if (!open) setResult(null); }}>
+        <DialogContent className="admin_modal sm:max-w-[560px]">
+          <DialogHeader className="admin_modal_header">
+            <DialogTitle className="admin_modal_title">Import results</DialogTitle>
+          </DialogHeader>
+          <div className="admin_modal_body space-y-3">
+            {result && (
+              <>
+                <p className="text-sm">
+                  {result.created} of {result.totalRows} row(s) imported
+                  {result.failed > 0 ? `, ${result.failed} failed.` : "."}
+                </p>
+                {result.errors.length > 0 && (
+                  <div className="max-h-64 space-y-2 overflow-y-auto">
+                    {result.errors.map((issue, index) => (
+                      <div key={index} className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+                        Row {issue.rowNumber}{issue.sku ? ` (${issue.sku})` : ""}: {issue.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">Columns: {columnsHint}</p>
+              </>
+            )}
+          </div>
+          <DialogFooter className="admin_modal_footer">
+            <button type="button" onClick={() => setResult(null)} className="btn_primary_yellow">
+              Close
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export function DataCard({
   title,
   meta,
@@ -604,7 +773,7 @@ export function StaffIdentityCell({
         {avatarUrl ? <Image src={avatarUrl} alt="" fill sizes="40px" className="object-cover" /> : name.charAt(0).toUpperCase()}
       </span>
       <div className="staff_identity_text">
-        <p className="staff_identity_name">{name}</p>
+        <p className="staff_identity_name">{titleCase(name)}</p>
         <p className="staff_identity_email">{email}</p>
       </div>
     </div>
@@ -616,16 +785,20 @@ export function RowActions({
   onEdit,
   onDelete,
   onHistory,
+  onPrint,
   isLoading = false,
 }: {
   onView?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onHistory?: () => void;
+  /** Print the row's invoice — pass only for a paid order. */
+  onPrint?: () => void;
   isLoading?: boolean;
 }) {
   const actions = [
     [Eye, onView, "View"],
+    [Printer, onPrint, "Print invoice"],
     [Pencil, onEdit, "Edit"],
     [onHistory ? Clock : Trash2, onHistory ?? onDelete, onHistory ? "Disable" : "Delete"],
   ] as const;
@@ -682,43 +855,27 @@ export function PaginationFooter({
   const pages = pageWindow(page, Math.max(totalPages, 1));
   const canPrev = page > 1;
   const canNext = page < totalPages;
-  const [sizeOpen, setSizeOpen] = useState(false);
 
   return (
     <div className="table_pagination">
       <div className="pagination_per_page">
         Show Per Page:
-        <span className="relative inline-block">
-          <button
-            type="button"
-            className="pagination_btn"
-            onClick={() => setSizeOpen((open) => !open)}
-            disabled={!onSizeChange}
-          >
-            {size}
-            <ChevronDown />
-          </button>
-          {sizeOpen && onSizeChange ? (
-            <span className="absolute bottom-full left-0 z-10 mb-1 flex flex-col rounded-md border border-border bg-background shadow-lg">
-              {PAGE_SIZE_CHOICES.map((choice) => (
-                <button
-                  key={choice}
-                  type="button"
-                  className={cn(
-                    "px-4 py-1.5 text-left text-sm hover:bg-muted",
-                    choice === size && "font-semibold"
-                  )}
-                  onClick={() => {
-                    onSizeChange(choice);
-                    setSizeOpen(false);
-                  }}
-                >
-                  {choice}
-                </button>
-              ))}
-            </span>
-          ) : null}
-        </span>
+        <Select
+          value={String(size)}
+          onValueChange={(next) => onSizeChange?.(Number(next))}
+          disabled={!onSizeChange}
+        >
+          <SelectTrigger className="form_field_select_trigger is_compact">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="form_field_select_content">
+            {PAGE_SIZE_CHOICES.map((choice) => (
+              <SelectItem key={choice} value={String(choice)} className="form_field_select_item">
+                {choice}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {typeof totalElements === "number" ? (
           <span className="ml-3 text-muted-foreground">{totalElements} total</span>
         ) : null}
@@ -776,9 +933,74 @@ export function PaginationFooter({
   );
 }
 
+/** A grey placeholder bar/block while data is on its way. */
+export function SkeletonBlock({ className }: { className?: string }) {
+  return <span aria-hidden className={cn("block animate-pulse rounded-md bg-gray-200", className)} />;
+}
+
 /**
- * The single row a table shows instead of data while loading, after a failure, or when the
- * server returned nothing. Keeps every screen's empty/error handling identical.
+ * Placeholder for a DataCard's body while its data loads — a few lines of varying width, so
+ * the page keeps its shape instead of jumping when the data arrives.
+ */
+export function CardSkeleton({ lines = 3, className }: { lines?: number; className?: string }) {
+  const widths = ["w-2/3", "w-full", "w-1/2", "w-5/6", "w-3/4"];
+  return (
+    <div className={cn("space-y-3 p-2 pb-4", className)} role="status" aria-label="Loading">
+      {Array.from({ length: lines }).map((_, i) => (
+        <SkeletonBlock key={i} className={cn("h-4", widths[i % widths.length])} />
+      ))}
+    </div>
+  );
+}
+
+/** The one way a card/page reports a failed load: the API's message plus a retry. */
+export function ErrorState({
+  error,
+  fallback = "Could not load this data.",
+  onRetry,
+  isRetrying,
+}: {
+  error?: unknown;
+  fallback?: string;
+  onRetry?: () => void;
+  isRetrying?: boolean;
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-col items-center gap-3 rounded-xl border border-red-100 bg-red-50/60 px-4 py-8 text-center"
+    >
+      <TriangleAlert className="h-6 w-6 text-red-500" />
+      <p className="text-sm text-red-600">{apiErrorMessage(error as never, fallback)}</p>
+      {onRetry ? (
+        <button type="button" className="btn_outline_black" onClick={onRetry} disabled={isRetrying}>
+          {isRetrying ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+          {isRetrying ? "Retrying..." : "Try again"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Splits a list query's state into "first load" and "background refresh". Polling, tab focus
+ * and post-save refetches keep the rows on screen (no flash of skeleton rows); the skeleton only
+ * shows when there is nothing yet for the current page/filters, and a failed refresh keeps the
+ * last good rows rather than replacing them with an error (the app-wide toast covers outages).
+ */
+export function listLoadState(query: { isFetching: boolean; currentData?: unknown; error?: unknown }) {
+  const hasData = query.currentData !== undefined;
+  return {
+    isLoading: query.isFetching && !hasData,
+    error: hasData ? undefined : query.error,
+    showRows: hasData,
+  };
+}
+
+/**
+ * What a table shows instead of data while loading, after a failure, or when the server
+ * returned nothing. Loading draws skeleton rows the width of the table, so every list has the
+ * same look while it waits.
  */
 export function TableState({
   colSpan,
@@ -787,6 +1009,7 @@ export function TableState({
   isEmpty,
   emptyLabel = "No records found.",
   onRetry,
+  skeletonRows = 5,
 }: {
   colSpan: number;
   isLoading?: boolean;
@@ -794,18 +1017,30 @@ export function TableState({
   isEmpty?: boolean;
   emptyLabel?: string;
   onRetry?: () => void;
+  skeletonRows?: number;
 }) {
   if (!isLoading && !error && !isEmpty) return null;
+
+  if (isLoading) {
+    return (
+      <>
+        {Array.from({ length: skeletonRows }).map((_, row) => (
+          <tr key={row} aria-hidden={row > 0} role={row === 0 ? "status" : undefined}>
+            {Array.from({ length: colSpan }).map((_, col) => (
+              <td key={col} className="px-4 py-4">
+                <SkeletonBlock className={cn("h-4", col === 0 ? "w-8" : (row + col) % 2 ? "w-3/4" : "w-1/2")} />
+              </td>
+            ))}
+          </tr>
+        ))}
+      </>
+    );
+  }
 
   return (
     <tr>
       <td colSpan={colSpan} className="py-10 text-center text-sm text-muted-foreground">
-        {isLoading ? (
-          <span className="inline-flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading...
-          </span>
-        ) : error ? (
+        {error ? (
           <span className="inline-flex flex-col items-center gap-2">
             <span className="text-destructive">{apiErrorMessage(error as never)}</span>
             {onRetry ? (
@@ -827,11 +1062,15 @@ export function StatTile({
   value,
   hint,
   tone = "gray",
+  size = "default",
 }: {
   title: string;
   value: string;
   hint?: string;
   tone?: "green" | "yellow" | "orange" | "red" | "gray";
+  /** "compact" is for text-heavy values (a SKU, a code) that would otherwise wrap awkwardly at
+   * the default large numeric-stat size. */
+  size?: "default" | "compact";
 }) {
   const color = {
     green: "text-green-600",
@@ -845,7 +1084,7 @@ export function StatTile({
     <div className="metric_card">
       <div className="metric_card_content">
         <p className="metric_title">{title}</p>
-        <p className={cn("metric_value", color)}>{value}</p>
+        <p className={cn("metric_value", size === "compact" && "is_compact", color)}>{value}</p>
         {hint && <p className="metric_hint">{hint}</p>}
       </div>
     </div>
@@ -1032,6 +1271,65 @@ export function DetailModal({
   );
 }
 
+/**
+ * The app's own replacement for `window.confirm` — same "are you sure?" guard, but styled
+ * like everything else instead of the browser's native dialog. Rendered by `useConfirmDialog`,
+ * which also supplies the promise-based `confirm()` call that makes the swap a one-line change
+ * at each call site.
+ */
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  tone = "default",
+  onConfirm,
+  onCancel,
+  isLoading = false,
+}: {
+  open: boolean;
+  title: string;
+  description?: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  tone?: "default" | "danger";
+  onConfirm: () => void;
+  onCancel: () => void;
+  isLoading?: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(next) => { if (!next && !isLoading) onCancel(); }}>
+      <DialogContent className="admin_modal is_confirm_modal sm:max-w-[420px]" showCloseButton={false}>
+        <div className="confirm_modal_body">
+          {tone === "danger" && (
+            <span className="confirm_modal_icon is_danger" aria-hidden>
+              <TriangleAlert />
+            </span>
+          )}
+          <DialogHeader className="confirm_modal_header">
+            <DialogTitle className="confirm_modal_title">{title}</DialogTitle>
+          </DialogHeader>
+          {description && <p className="confirm_modal_description">{description}</p>}
+        </div>
+        <DialogFooter className="confirm_modal_footer">
+          <button type="button" onClick={onCancel} disabled={isLoading} className="btn_outline_black">
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isLoading}
+            className={tone === "danger" ? "btn_danger" : "btn_primary_yellow"}
+          >
+            {isLoading ? "Working..." : confirmLabel}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ModalGrid({ children }: { children: ReactNode }) {
   return <div className="admin_modal_form_wrap is_form_grid">{children}</div>;
 }
@@ -1084,6 +1382,9 @@ export function FormInput({
   maxLength,
   min,
   max,
+  step,
+  inputMode,
+  autoComplete,
 }: {
   label: string;
   value?: string | number;
@@ -1097,6 +1398,9 @@ export function FormInput({
   maxLength?: number;
   min?: string | number;
   max?: string | number;
+  step?: string | number;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  autoComplete?: string;
 }) {
   return (
     <label className="form_field">
@@ -1115,6 +1419,9 @@ export function FormInput({
         maxLength={maxLength}
         min={min}
         max={max}
+        step={step}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
         className={cn(
           "form_field_control",
           active && "is_active",
@@ -1123,6 +1430,42 @@ export function FormInput({
         )}
       />
     </label>
+  );
+}
+
+/**
+ * The one phone field for the dashboard: formats to "012 345 6789" as staff type, caps at
+ * 10 digits and opens the numeric keypad on tablets. `onChange` receives the formatted value.
+ */
+export function FormPhoneInput({
+  label = "Phone Number",
+  value,
+  onChange,
+  required = false,
+  readOnly = false,
+  disabled = false,
+}: {
+  label?: string;
+  value?: string | null;
+  onChange?: (value: string) => void;
+  required?: boolean;
+  readOnly?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <FormInput
+      label={label}
+      type="tel"
+      inputMode="numeric"
+      autoComplete="tel-national"
+      value={value ?? ""}
+      onChange={onChange ? (e) => onChange(formatPhoneInput(e.target.value)) : undefined}
+      placeholder={PHONE_PLACEHOLDER}
+      maxLength={PHONE_MAX_LENGTH}
+      required={required}
+      readOnly={readOnly}
+      disabled={disabled}
+    />
   );
 }
 
@@ -1143,26 +1486,38 @@ export function FormSelect({
   placeholder?: string;
   disabled?: boolean;
 }) {
+  const id = useId();
+  const options = withUnsetOption(optionsFromChildren(children), placeholder);
   return (
-    <label className="form_field">
-      <span className="form_field_label">
+    <div className="form_field">
+      <label htmlFor={id} className="form_field_label">
         {label}
         {required && <span className="form_field_required"> *</span>}
-      </span>
-      <span className="form_field_control_wrap">
-        <select
-          value={value ?? ""}
-          onChange={onChange}
-          required={required}
-          disabled={disabled}
-          className={cn("form_field_control form_field_select", disabled && "is_disabled")}
-        >
-          <option value="">{placeholder}</option>
-          {children}
-        </select>
-        <ChevronDown className="form_field_icon" />
-      </span>
-    </label>
+      </label>
+      <Select
+        value={value ? String(value) : undefined}
+        onValueChange={(next) =>
+          onChange?.({ target: { value: next === UNSET ? "" : next } } as React.ChangeEvent<HTMLSelectElement>)
+        }
+        disabled={disabled}
+      >
+        <SelectTrigger id={id} className={cn("form_field_select_trigger", disabled && "is_disabled")}>
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent className="form_field_select_content">
+          {options.map((option) => (
+            <SelectItem
+              key={option.value}
+              value={option.value}
+              disabled={option.disabled}
+              className="form_field_select_item"
+            >
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
@@ -1215,7 +1570,7 @@ export function FormProductSelect({
     }
   };
 
-  const inputValue = open ? search : value?.name ?? "";
+  const inputValue = open ? search : value ? titleCase(value.name) : "";
 
   return (
     <div className="form_field form_field_product_select">
@@ -1267,9 +1622,9 @@ export function FormProductSelect({
                       onClick={() => handleSelect(product)}
                     >
                       <div className="form_product_select_item_main">
-                        <span className="form_product_select_name">{product.name}</span>
+                        <span className="form_product_select_name">{titleCase(product.name)}</span>
                         <span className="form_product_select_meta">
-                          SKU: {product.sku} · {product.currentStock} {product.unit}
+                          SKU: {formatSku(product.sku)} · {product.currentStock} {product.unit}
                         </span>
                       </div>
                       {isSelected && (
@@ -1340,22 +1695,25 @@ export function FormCategoryMultiSelect({
               })
             )}
           </div>
+          {/* Same Radix dropdown as SelectField/FormSelect, not a native <select>. Held at ""
+              so it always shows its prompt: picking an item adds a tag rather than selecting it. */}
           {available.length > 0 && (
-            <select
-              className="form_multi_select_add"
-              value=""
-              onChange={(e) => addCategory(e.target.value)}
-              aria-label={`Add ${label}`}
-            >
-              <option value="">
-                {value.length === 0 ? placeholder : "Add category"}
-              </option>
-              {available.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <Select value="" onValueChange={addCategory}>
+              <SelectTrigger className="form_multi_select_add" aria-label={`Add ${label}`}>
+                <SelectValue placeholder={value.length === 0 ? placeholder : "Add category"} />
+              </SelectTrigger>
+              <SelectContent className="form_field_select_content">
+                {available.map((option) => (
+                  <SelectItem
+                    key={option.value}
+                    value={option.value}
+                    className="form_field_select_item"
+                  >
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
         <ChevronDown className="form_field_icon" />
@@ -1457,11 +1815,11 @@ export function FormImageUpload({
 export function LogoMark() {
   return (
     <Image
-      src="/logos/logo.svg"
+      src="/logos/logo-black.png"
       alt="590st CAFE"
-      width={82}
-      height={40}
-      className="h-10 w-auto"
+      width={800}
+      height={539}
+      className="h-12 w-auto"
       priority
     />
   );

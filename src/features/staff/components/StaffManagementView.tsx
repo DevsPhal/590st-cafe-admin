@@ -16,6 +16,7 @@ import {
   FilterActions,
   FilterPanel,
   FormInput,
+  FormPhoneInput,
   FormImageUpload,
   FormModal,
   FormSelect,
@@ -30,6 +31,7 @@ import {
   StatusBadge,
   TableActions,
   TableState,
+  listLoadState,
   TextField,
 } from "@/components/common/AdminKit";
 import { apiErrorMessage } from "@/store/api/baseApi";
@@ -39,19 +41,27 @@ import {
   useCreateBaristaMutation,
   useDeleteAdminMutation,
   useDeleteBaristaMutation,
+  useInviteAdminViaTelegramMutation,
+  useInviteBaristaViaTelegramMutation,
   useListAdminsQuery,
   useListBaristasQuery,
+  useResendAdminTelegramInviteMutation,
+  useResendBaristaTelegramInviteMutation,
   useUpdateAdminMutation,
   useUpdateBaristaMutation,
   useUploadStaffAvatarMutation,
 } from "@/store/api/userApi";
 import { humanise, statusTone } from "@/features/user/components/UserManagementView";
-import type { Gender, UserResponse, UserStatus } from "@/store/api/types";
+import { titleCase } from "@/lib/utils";
+import type { Gender, TelegramLinkCodeResponse, UserResponse, UserStatus } from "@/store/api/types";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { formatPhone, formatPhoneInput, isValidPhone, PHONE_INVALID_MESSAGE } from "@/lib/phone";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 const STAFF_TABLE_HEADERS = [
   "No",
   "Staff",
-  "Phone",
+  "Phone Number",
   "Gender",
   "Role",
   "Created By",
@@ -61,6 +71,9 @@ const STAFF_TABLE_HEADERS = [
 
 /** Admins and baristas are separate endpoints, so the screen tabs between them. */
 type StaffKind = "ADMIN" | "BARISTA";
+
+/** Telegram invitees have no email/password — they verify by phone over Telegram instead. */
+type CreationMode = "PASSWORD" | "TELEGRAM";
 
 type StaffFormFields = {
   fullName: string;
@@ -82,13 +95,14 @@ const EMPTY_FORM: StaffFormFields = {
 
 export default function Staff() {
   const { role, isAdmin } = useCurrentRole();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const canManageAdmins = role === "SUPER_ADMIN";
-  const [kind, setKind] = useState<StaffKind>("BARISTA");
-  const [formKind, setFormKind] = useState<StaffKind>("BARISTA");
-  const [page, setPage] = useState(1);
+  const [kind, setKind] = usePersistentState<StaffKind>("staff:kind", "BARISTA");
+  const [formKind, setFormKind] = usePersistentState<StaffKind>("staff:formKind", "BARISTA");
+  const [page, setPage] = usePersistentState("staff:page", 1);
   const [size, setSize] = usePageSize();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [searchTerm, setSearchTerm] = usePersistentState("staff:searchTerm", "");
+  const [statusFilter, setStatusFilter] = usePersistentState("staff:statusFilter", "");
 
   const adminQuery = useListAdminsQuery(
     { page, size },
@@ -99,6 +113,7 @@ export default function Staff() {
     { skip: !isAdmin || kind !== "BARISTA" }
   );
   const active = kind === "ADMIN" ? adminQuery : baristaQuery;
+  const list = listLoadState(active);
 
   const [createAdmin, { isLoading: isCreatingAdmin }] = useCreateAdminMutation();
   const [createBarista, { isLoading: isCreatingBarista }] = useCreateBaristaMutation();
@@ -107,14 +122,21 @@ export default function Staff() {
   const [deleteAdmin] = useDeleteAdminMutation();
   const [deleteBarista] = useDeleteBaristaMutation();
   const [uploadAvatar, { isLoading: isUploadingAvatar }] = useUploadStaffAvatarMutation();
+  const [inviteAdmin, { isLoading: isInvitingAdmin }] = useInviteAdminViaTelegramMutation();
+  const [inviteBarista, { isLoading: isInvitingBarista }] = useInviteBaristaViaTelegramMutation();
+  const [resendAdminInvite, { isLoading: isResendingAdmin }] = useResendAdminTelegramInviteMutation();
+  const [resendBaristaInvite, { isLoading: isResendingBarista }] = useResendBaristaTelegramInviteMutation();
   const submitting = useRef(false);
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [selected, setSelected] = useState<UserResponse | null>(null);
-  const [form, setForm] = useState<StaffFormFields>(EMPTY_FORM);
+  const [formOpen, setFormOpen] = usePersistentState("staff:formOpen", false);
+  const [detailOpen, setDetailOpen] = usePersistentState("staff:detailOpen", false);
+  const [selected, setSelected] = usePersistentState<UserResponse | null>("staff:selected", null);
+  const [form, setForm] = usePersistentState<StaffFormFields>("staff:form", EMPTY_FORM);
+  const [creationMode, setCreationMode] = usePersistentState<CreationMode>("staff:creationMode", "PASSWORD");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>();
+  const [inviteResult, setInviteResult] = usePersistentState<TelegramLinkCodeResponse | null>("staff:inviteResult", null);
+  const [inviteResultOpen, setInviteResultOpen] = usePersistentState("staff:inviteResultOpen", false);
 
   useEffect(() => {
     if (!imageFile) {
@@ -162,6 +184,7 @@ export default function Staff() {
     if (!isAdmin || (targetKind === "ADMIN" && !canManageAdmins)) return;
     setFormKind(targetKind);
     setImageFile(null);
+    setCreationMode("PASSWORD");
     setSelected(member ?? null);
     setForm(
       member
@@ -169,7 +192,7 @@ export default function Staff() {
             fullName: member.fullName,
             email: member.email,
             password: "",
-            phoneNumber: member.phoneNumber ?? "",
+            phoneNumber: formatPhoneInput(member.phoneNumber),
             gender: member.gender ?? "",
             status: member.status,
           }
@@ -187,6 +210,34 @@ export default function Staff() {
     const fullName = form.fullName.trim();
     if (!fullName) {
       toast.error("Full name is required");
+      return;
+    }
+    if (!isValidPhone(form.phoneNumber)) {
+      toast.error(PHONE_INVALID_MESSAGE);
+      return;
+    }
+
+    if (!selected && formKind && creationMode === "TELEGRAM") {
+      const phoneNumber = form.phoneNumber.trim();
+      if (!phoneNumber) {
+        toast.error("Phone number is required to invite via Telegram");
+        return;
+      }
+      submitting.current = true;
+      try {
+        const body = { fullName, phoneNumber, gender: (form.gender || undefined) as Gender | undefined };
+        const result = formKind === "ADMIN" ? await inviteAdmin(body).unwrap() : await inviteBarista(body).unwrap();
+        setKind(formKind);
+        setPage(1);
+        setFormOpen(false);
+        setForm(EMPTY_FORM);
+        setInviteResult(result);
+        setInviteResultOpen(true);
+      } catch (err) {
+        toast.error(apiErrorMessage(err as never, "Could not send the Telegram invite."));
+      } finally {
+        submitting.current = false;
+      }
       return;
     }
 
@@ -252,9 +303,22 @@ export default function Staff() {
     }
   };
 
+  const handleResendInvite = async (member: UserResponse) => {
+    try {
+      const result = member.role === "ADMIN"
+        ? await resendAdminInvite(member.id).unwrap()
+        : await resendBaristaInvite(member.id).unwrap();
+      setDetailOpen(false);
+      setInviteResult(result);
+      setInviteResultOpen(true);
+    } catch (err) {
+      toast.error(apiErrorMessage(err as never, "Could not resend the Telegram invite."));
+    }
+  };
+
   const handleDelete = async (member: UserResponse) => {
     if (!isAdmin || (member.role === "ADMIN" && !canManageAdmins)) return;
-    if (!window.confirm(`Remove ${member.fullName}?`)) return;
+    if (!(await confirm({ title: "Remove staff member", description: `Remove ${member.fullName}?`, confirmLabel: "Remove", tone: "danger" }))) return;
     try {
       if (member.role === "ADMIN") {
         await deleteAdmin(member.id).unwrap();
@@ -268,7 +332,9 @@ export default function Staff() {
   };
 
   const isSaving =
-    isCreatingAdmin || isCreatingBarista || isUpdatingAdmin || isUpdatingBarista || isUploadingAvatar;
+    isCreatingAdmin || isCreatingBarista || isUpdatingAdmin || isUpdatingBarista || isUploadingAvatar ||
+    isInvitingAdmin || isInvitingBarista;
+  const isResendingInvite = isResendingAdmin || isResendingBarista;
 
   return (
     <PageShell>
@@ -336,24 +402,23 @@ export default function Staff() {
         <SimpleTable headers={[...STAFF_TABLE_HEADERS]}>
           <TableState
             colSpan={STAFF_TABLE_HEADERS.length}
-            isLoading={active.isFetching}
-            error={active.error}
+            isLoading={list.isLoading}
+            error={list.error}
             isEmpty={visibleStaff.length === 0}
             emptyLabel={`No ${kind === "ADMIN" ? "admins" : "baristas"} yet.`}
             onRetry={active.refetch}
           />
-          {!active.isFetching &&
-            !active.error &&
+          {list.showRows &&
             visibleStaff.map((member, index) => (
               <Row key={member.id} striped={index % 2 === 1}>
                 <Cell>{(page - 1) * size + index + 1}</Cell>
                 <Cell>
                   <StaffIdentityCell name={member.fullName} email={member.email} avatarUrl={member.avatarUrl} />
                 </Cell>
-                <Cell>{member.phoneNumber || "-"}</Cell>
+                <Cell className="tabular-nums whitespace-nowrap">{formatPhone(member.phoneNumber) || "-"}</Cell>
                 <Cell>{member.gender ? humanise(member.gender) : "-"}</Cell>
                 <Cell>{humanise(member.role)}</Cell>
-                <Cell>{member.createdByName ?? "-"}</Cell>
+                <Cell>{member.createdByName ? titleCase(member.createdByName) : "-"}</Cell>
                 <Cell>
                   <StatusBadge
                     label={humanise(member.status)}
@@ -412,13 +477,26 @@ export default function Staff() {
             <option value="BARISTA">Barista</option>
             {canManageAdmins && <option value="ADMIN">Admin</option>}
           </FormSelect>
-          <div className="md:col-span-3">
-            {(imagePreview || selected?.avatarUrl) && <DetailImage src={imagePreview || selected?.avatarUrl || undefined} alt="Staff profile photo" />}
-            <FormImageUpload label="Profile Photo" file={imageFile} onChange={handlePickImage} disabled={isSaving}
-              accept="image/jpeg,image/png,image/webp,image/gif" emptyLabel={selected?.avatarUrl ? "Choose a photo to replace the current one" : "No photo selected"} />
-            <p className="mt-2 text-sm text-muted-foreground">Optional. JPEG, PNG, WebP, or GIF, up to 5 MB. Saved when you submit.</p>
-            {imageFile && <button type="button" className="mt-2 text-sm underline" disabled={isSaving} onClick={() => setImageFile(null)}>Clear selected photo</button>}
-          </div>
+          {!selected && (
+            <FormSelect
+              label="Setup Method"
+              value={creationMode}
+              disabled={isSaving}
+              onChange={(event) => setCreationMode(event.target.value as CreationMode)}
+            >
+              <option value="PASSWORD">Email &amp; Password</option>
+              <option value="TELEGRAM">Invite via Telegram</option>
+            </FormSelect>
+          )}
+          {(selected || creationMode === "PASSWORD") && (
+            <div className="md:col-span-3">
+              {(imagePreview || selected?.avatarUrl) && <DetailImage src={imagePreview || selected?.avatarUrl || undefined} alt="Staff profile photo" />}
+              <FormImageUpload label="Profile Photo" file={imageFile} onChange={handlePickImage} disabled={isSaving}
+                accept="image/jpeg,image/png,image/webp,image/gif" emptyLabel={selected?.avatarUrl ? "Choose a photo to replace the current one" : "No photo selected"} />
+              <p className="mt-2 text-sm text-muted-foreground">Optional. JPEG, PNG, WebP, or GIF, up to 5 MB. Saved when you submit.</p>
+              {imageFile && <button type="button" className="mt-2 text-sm underline" disabled={isSaving} onClick={() => setImageFile(null)}>Clear selected photo</button>}
+            </div>
+          )}
           <FormInput
             label="Full Name"
             placeholder="e.g. Sophal Nem"
@@ -426,17 +504,19 @@ export default function Staff() {
             onChange={(e) => setForm({ ...form, fullName: e.target.value })}
             required
           />
-          <FormInput
-            label="Email"
-            type="email"
-            placeholder="user@gmail.com"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            readOnly={Boolean(selected)}
-            required={!selected}
-          />
+          {(selected || creationMode === "PASSWORD") && (
+            <FormInput
+              label="Email"
+              type="email"
+              placeholder="user@gmail.com"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              readOnly={Boolean(selected)}
+              required={!selected}
+            />
+          )}
           {/* Only set at creation — the API offers no password change on this resource. */}
-          {selected ? null : (
+          {!selected && creationMode === "PASSWORD" && (
             <FormInput
               label="Password"
               type="password"
@@ -446,12 +526,18 @@ export default function Staff() {
               required
             />
           )}
-          <FormInput
-            label="Phone Number"
-            placeholder="072 345 5674"
+          <FormPhoneInput
             value={form.phoneNumber}
-            onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
+            onChange={(phoneNumber) => setForm({ ...form, phoneNumber })}
+            required={!selected && creationMode === "TELEGRAM"}
           />
+          {!selected && creationMode === "TELEGRAM" && (
+            <p className="md:col-span-3 text-sm text-muted-foreground">
+              No email or password needed — {formKind === "ADMIN" ? "the admin" : "the barista"} activates
+              their account by opening the Telegram invite link and confirming this phone number, then
+              signs in on the login page under the <span className="font-semibold">Phone number</span> tab.
+            </p>
+          )}
           <FormSelect
             label="Gender"
             placeholder="Select gender"
@@ -495,9 +581,9 @@ export default function Staff() {
           <div className="admin_modal_form_wrap">
             {selected.avatarUrl && <DetailImage src={selected.avatarUrl} alt={`${selected.fullName}'s profile photo`} />}
             <DetailGrid>
-              <DetailItem label="Full Name">{selected.fullName}</DetailItem>
+              <DetailItem label="Full Name">{titleCase(selected.fullName)}</DetailItem>
               <DetailItem label="Email">{selected.email}</DetailItem>
-              <DetailItem label="Phone">{selected.phoneNumber || "-"}</DetailItem>
+              <DetailItem label="Phone Number">{formatPhone(selected.phoneNumber) || "-"}</DetailItem>
               <DetailItem label="Gender">
                 {selected.gender ? humanise(selected.gender) : "-"}
               </DetailItem>
@@ -509,17 +595,74 @@ export default function Staff() {
                 />
               </DetailItem>
               <DetailItem label="Telegram">
-                {selected.telegramLinked ? "Linked" : "Not linked"}
+                <div className="flex items-center gap-3">
+                  <span>{selected.telegramLinked ? "Linked" : "Not linked"}</span>
+                  {!selected.telegramLinked && (
+                    <button
+                      type="button"
+                      className="text-sm underline disabled:opacity-50"
+                      disabled={isResendingInvite}
+                      onClick={() => handleResendInvite(selected)}
+                    >
+                      {isResendingInvite ? "Sending..." : "Send Telegram invite"}
+                    </button>
+                  )}
+                </div>
               </DetailItem>
               <DetailItem label="Created By">
                 {selected.createdByName
-                  ? `${selected.createdByName} (${selected.createdByRole})`
+                  ? `${titleCase(selected.createdByName)} (${humanise(selected.createdByRole ?? "")})`
                   : "-"}
               </DetailItem>
             </DetailGrid>
           </div>
         )}
       </DetailModal>
+
+      <DetailModal
+        open={inviteResultOpen}
+        onOpenChange={(open) => {
+          setInviteResultOpen(open);
+          if (!open) setInviteResult(null);
+        }}
+        title="Telegram Invite Sent"
+      >
+        {inviteResult && (
+          <div className="admin_modal_form_wrap">
+            <DetailGrid>
+              <DetailItem label="Invite Link">
+                <a href={inviteResult.deepLink} target="_blank" rel="noopener noreferrer" className="underline break-all">
+                  {inviteResult.deepLink}
+                </a>
+              </DetailItem>
+              <DetailItem label="Code">{inviteResult.code}</DetailItem>
+              <DetailItem label="Expires In">
+                {Math.round(inviteResult.expiresInSeconds / 60)} minute(s)
+              </DetailItem>
+            </DetailGrid>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Share this link with the invitee. After they open it and share their phone number in
+              Telegram, the account is active and they sign in on the login page under{" "}
+              <span className="font-semibold">Phone number</span> — the code arrives in Telegram.
+            </p>
+            <button
+              type="button"
+              className="btn_outline_black mt-3"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(inviteResult.deepLink);
+                  toast.success("Link copied");
+                } catch {
+                  toast.error("Could not copy the link");
+                }
+              }}
+            >
+              Copy Link
+            </button>
+          </div>
+        )}
+      </DetailModal>
+      {confirmDialog}
     </PageShell>
   );
 }

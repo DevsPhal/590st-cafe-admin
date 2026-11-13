@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { MapPin } from "lucide-react";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
 import {
@@ -28,9 +29,11 @@ import {
   StatusBadge,
   TableActions,
   TableState,
+  listLoadState,
   TextField,
   Thumbnail,
 } from "@/components/common/AdminKit";
+import { LocationPickerModal } from "@/components/common/LocationPickerModal";
 import { apiErrorMessage } from "@/store/api/baseApi";
 import { usePageSize } from "@/contexts/AdminPreferencesContext";
 import {
@@ -41,11 +44,15 @@ import {
   useUploadEventImageMutation,
 } from "@/store/api/eventApi";
 import type { EventResponse, Status } from "@/store/api/types";
+import { titleCase } from "@/lib/utils";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 const EVENT_TABLE_HEADERS = [
   "No",
   "Image",
   "Title",
+  "Venue",
   "Starts",
   "Ends",
   "Window",
@@ -56,6 +63,11 @@ const EVENT_TABLE_HEADERS = [
 type EventFormFields = {
   title: string;
   description: string;
+  // Kept as strings for the form's own numeric inputs; parsed to numbers only on submit. Must
+  // be given together, or both left blank — mirrors the API's own latitude/longitude pairing
+  // rule (400s otherwise).
+  latitude: string;
+  longitude: string;
   startAt: string;
   endAt: string;
   status: Status;
@@ -64,6 +76,8 @@ type EventFormFields = {
 const EMPTY_FORM: EventFormFields = {
   title: "",
   description: "",
+  latitude: "",
+  longitude: "",
   startAt: "",
   endAt: "",
   status: "ACTIVE",
@@ -104,27 +118,31 @@ const WINDOW_TONE: Record<Window, "info" | "success" | "neutral"> = {
 };
 
 export default function EventManagementView() {
-  const [page, setPage] = useState(1);
+  const { confirm, confirmDialog } = useConfirmDialog();
+  const [page, setPage] = usePersistentState("events:page", 1);
   const [size, setSize] = usePageSize();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [searchTerm, setSearchTerm] = usePersistentState("events:searchTerm", "");
+  const [statusFilter, setStatusFilter] = usePersistentState("events:statusFilter", "");
 
   const {
     data: eventPage,
+    currentData,
     isFetching,
     error,
     refetch,
   } = useListEventsQuery({ page, size });
+  const list = listLoadState({ isFetching, currentData, error });
 
   const [createEvent, { isLoading: isCreating }] = useCreateEventMutation();
   const [updateEvent, { isLoading: isUpdating }] = useUpdateEventMutation();
   const [deleteEvent] = useDeleteEventMutation();
   const [uploadImage, { isLoading: isUploading }] = useUploadEventImageMutation();
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [selected, setSelected] = useState<EventResponse | null>(null);
-  const [form, setForm] = useState<EventFormFields>(EMPTY_FORM);
+  const [formOpen, setFormOpen] = usePersistentState("events:formOpen", false);
+  const [detailOpen, setDetailOpen] = usePersistentState("events:detailOpen", false);
+  const [mapPickerOpen, setMapPickerOpen] = useState(false);
+  const [selected, setSelected] = usePersistentState<EventResponse | null>("events:selected", null);
+  const [form, setForm] = usePersistentState<EventFormFields>("events:form", EMPTY_FORM);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   const events = useMemo(() => eventPage?.content ?? [], [eventPage]);
@@ -150,6 +168,8 @@ export default function EventManagementView() {
         ? {
             title: event.title,
             description: event.description ?? "",
+            latitude: event.latitude != null ? String(event.latitude) : "",
+            longitude: event.longitude != null ? String(event.longitude) : "",
             startAt: toInputValue(event.startAt),
             endAt: toInputValue(event.endAt),
             status: event.status,
@@ -174,6 +194,27 @@ export default function EventManagementView() {
       return;
     }
 
+    const lat = form.latitude.trim();
+    const lng = form.longitude.trim();
+    if (Boolean(lat) !== Boolean(lng)) {
+      toast.error("Latitude and longitude must be given together");
+      return;
+    }
+    let latitude: number | undefined;
+    let longitude: number | undefined;
+    if (lat && lng) {
+      latitude = Number(lat);
+      longitude = Number(lng);
+      if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+        toast.error("Latitude must be between -90 and 90");
+        return;
+      }
+      if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+        toast.error("Longitude must be between -180 and 180");
+        return;
+      }
+    }
+
     try {
       let eventId: string;
       if (selected) {
@@ -182,6 +223,8 @@ export default function EventManagementView() {
           body: {
             title,
             description: form.description.trim() || undefined,
+            latitude,
+            longitude,
             startAt: form.startAt,
             endAt: form.endAt,
             status: form.status,
@@ -192,6 +235,8 @@ export default function EventManagementView() {
         const created = await createEvent({
           title,
           description: form.description.trim() || undefined,
+          latitude,
+          longitude,
           startAt: form.startAt,
           endAt: form.endAt,
         }).unwrap();
@@ -213,7 +258,7 @@ export default function EventManagementView() {
   };
 
   const handleDelete = async (event: EventResponse) => {
-    if (!window.confirm(`Delete event "${event.title}"?`)) return;
+    if (!(await confirm({ title: "Delete event", description: `Delete event "${event.title}"?`, confirmLabel: "Delete", tone: "danger" }))) return;
     try {
       await deleteEvent(event.id).unwrap();
       toast.success("Event deleted");
@@ -274,14 +319,13 @@ export default function EventManagementView() {
         <SimpleTable headers={[...EVENT_TABLE_HEADERS]}>
           <TableState
             colSpan={EVENT_TABLE_HEADERS.length}
-            isLoading={isFetching}
-            error={error}
+            isLoading={list.isLoading}
+            error={list.error}
             isEmpty={visibleEvents.length === 0}
             emptyLabel="No events yet. Use Add Event to create the first one."
             onRetry={refetch}
           />
-          {!isFetching &&
-            !error &&
+          {list.showRows &&
             visibleEvents.map((event, index) => {
               const win = eventWindow(event);
               return (
@@ -290,7 +334,22 @@ export default function EventManagementView() {
                   <Cell>
                     <Thumbnail src={event.imageUrl ?? undefined} />
                   </Cell>
-                  <Cell className="font-semibold">{event.title}</Cell>
+                  <Cell className="font-semibold">{titleCase(event.title)}</Cell>
+                  <Cell>
+                    {event.latitude != null && event.longitude != null ? (
+                      <a
+                        href={`https://www.google.com/maps?q=${event.latitude},${event.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 underline"
+                        title="View venue on map"
+                      >
+                        <MapPin className="h-3.5 w-3.5" /> View
+                      </a>
+                    ) : (
+                      "-"
+                    )}
+                  </Cell>
                   <Cell>{formatDateTime(event.startAt)}</Cell>
                   <Cell>{formatDateTime(event.endAt)}</Cell>
                   <Cell>
@@ -355,6 +414,45 @@ export default function EventManagementView() {
             onChange={(e) => setForm({ ...form, title: e.target.value })}
             required
           />
+          <div className="form_field md:col-span-3">
+            <span className="form_field_label">Venue</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setMapPickerOpen(true)}
+                className="btn_outline_black inline-flex items-center gap-2 text-xs"
+              >
+                <MapPin className="h-3.5 w-3.5" />
+                {form.latitude.trim() && form.longitude.trim() ? "Change Pin on Map" : "Pin on Map"}
+              </button>
+              {form.latitude.trim() && form.longitude.trim() ? (
+                <>
+                  <span className="text-xs text-gray-600">
+                    {Number(form.latitude).toFixed(6)}, {Number(form.longitude).toFixed(6)}
+                  </span>
+                  <a
+                    href={`https://www.google.com/maps?q=${form.latitude.trim()},${form.longitude.trim()}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs underline"
+                  >
+                    Preview
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, latitude: "", longitude: "" })}
+                    className="text-xs text-red-600 underline"
+                  >
+                    Clear
+                  </button>
+                </>
+              ) : (
+                <span className="text-xs text-gray-500">
+                  No fixed venue set — optional, leave blank for an announcement with no venue.
+                </span>
+              )}
+            </div>
+          </div>
           <FormInput
             label="Starts At"
             type="datetime-local"
@@ -396,6 +494,16 @@ export default function EventManagementView() {
         </ModalGrid>
       </FormModal>
 
+      <LocationPickerModal
+        open={mapPickerOpen}
+        onOpenChange={setMapPickerOpen}
+        initialLat={form.latitude.trim() ? Number(form.latitude) : null}
+        initialLng={form.longitude.trim() ? Number(form.longitude) : null}
+        onConfirm={(lat, lng) =>
+          setForm((prev) => ({ ...prev, latitude: lat.toFixed(6), longitude: lng.toFixed(6) }))
+        }
+      />
+
       <DetailModal
         open={detailOpen}
         onOpenChange={(open) => {
@@ -412,8 +520,22 @@ export default function EventManagementView() {
         {selected && (
           <div className="admin_modal_form_wrap">
             <DetailGrid>
-              <DetailItem label="Title">{selected.title}</DetailItem>
+              <DetailItem label="Title">{titleCase(selected.title)}</DetailItem>
               <DetailItem label="Description">{selected.description || "-"}</DetailItem>
+              <DetailItem label="Venue">
+                {selected.latitude != null && selected.longitude != null ? (
+                  <a
+                    href={`https://www.google.com/maps?q=${selected.latitude},${selected.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    View on map
+                  </a>
+                ) : (
+                  "No fixed venue"
+                )}
+              </DetailItem>
               <DetailItem label="Starts At">{formatDateTime(selected.startAt)}</DetailItem>
               <DetailItem label="Ends At">{formatDateTime(selected.endAt)}</DetailItem>
               <DetailItem label="Status">
@@ -423,7 +545,7 @@ export default function EventManagementView() {
                 />
               </DetailItem>
               <DetailItem label="Created By">
-                {selected.createdByName ?? "-"}
+                {selected.createdByName ? titleCase(selected.createdByName) : "-"}
               </DetailItem>
               <div className="detail_item">
                 <p className="detail_item_label">Image :</p>
@@ -433,6 +555,7 @@ export default function EventManagementView() {
           </div>
         )}
       </DetailModal>
+      {confirmDialog}
     </PageShell>
   );
 }

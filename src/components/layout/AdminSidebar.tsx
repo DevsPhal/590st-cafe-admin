@@ -35,7 +35,8 @@ export function Sidebar() {
 
   const logo = (
     <Link href={adminHome(role)} onClick={handleNavClick} className="logo_link">
-      <Image src="/logos/logo.svg" alt="590st CAFE Logo" width={72} height={34} priority/>
+      {/* White mark: the sidebar and mobile header are both brand-ink. */}
+      <Image src="/logos/logo-white.png" alt="590st CAFE" width={800} height={539} className="h-11 w-auto" priority />
     </Link>
   );
 

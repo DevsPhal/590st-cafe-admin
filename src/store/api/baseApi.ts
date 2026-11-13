@@ -6,7 +6,14 @@ import {
   type FetchBaseQueryError,
 } from "@reduxjs/toolkit/query/react";
 
-import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "@/lib/authStorage";
+import toast from "react-hot-toast";
+
+import {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+} from "@/lib/authStorage";
 import type { ApiEnvelope, ApiErrorBody, AuthTokenResponse } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -22,7 +29,7 @@ export function unwrap<T>(response: ApiEnvelope<T>): T {
 /** Pulls the human-readable message out of an `ErrorResponse` body for toasts. */
 export function apiErrorMessage(
   error: FetchBaseQueryError | undefined,
-  fallback = "Something went wrong. Please try again."
+  fallback = "Something went wrong. Please try again.",
 ): string {
   if (!error) return fallback;
   if ("status" in error && error.status === "FETCH_ERROR") {
@@ -41,11 +48,7 @@ const rawBaseQuery = fetchBaseQuery({
   },
 });
 
-/**
- * Serialises refresh attempts: without it, several 401s arriving together would each fire
- * their own /refresh-token call and all but the first would present an already-rotated token.
- * Deliberately tiny — the only thing needed is "is a refresh in flight, and let me await it".
- */
+/// The base query with automatic token refresh and a single app-wide "server down" toast. It wraps
 const refreshLock = {
   pending: null as Promise<void> | null,
   isLocked() {
@@ -66,10 +69,59 @@ const refreshLock = {
   },
 };
 
+// A single toast that appears when the API is unreachable, and disappears once it is reachable again. It is not a "retry" toast — the base query itself retries automatically, so this is just a status indicator.
+const SERVER_STATUS_TOAST_ID = "server-status";
+let serverDown = false;
+
+function isServerDown(error: FetchBaseQueryError | undefined): boolean {
+  if (!error) return false;
+  return (
+    error.status === "FETCH_ERROR" ||
+    error.status === 502 ||
+    error.status === 503 ||
+    error.status === 504
+  );
+}
+
+function trackServerStatus(error: FetchBaseQueryError | undefined): void {
+  if (typeof window === "undefined") return;
+  if (isServerDown(error)) {
+    if (!serverDown) {
+      serverDown = true;
+      toast.error(
+        "The system is unavailable right now. We'll keep retrying — your data will load once it's back.",
+        {
+          id: SERVER_STATUS_TOAST_ID,
+          duration: Infinity,
+        },
+      );
+    }
+    return;
+  }
+  // Any real answer from the server, even a 4xx, means it is reachable again.
+  if (serverDown) {
+    serverDown = false;
+    toast.success("Connection restored", {
+      id: SERVER_STATUS_TOAST_ID,
+      duration: 3000,
+    });
+  }
+}
+
 /**
  * Wraps the base query so an expired access token is refreshed once and the original request
  * retried. A failed refresh clears the session and sends the user to the login page.
  */
+const baseQueryWithStatus: BaseQueryFn<
+  string | FetchArgs,
+  unknown,
+  FetchBaseQueryError
+> = async (args, api, extraOptions) => {
+  const result = await baseQueryWithReauth(args, api, extraOptions);
+  trackServerStatus(result.error);
+  return result;
+};
+
 const baseQueryWithReauth: BaseQueryFn<
   string | FetchArgs,
   unknown,
@@ -101,10 +153,12 @@ const baseQueryWithReauth: BaseQueryFn<
         body: { refreshToken },
       },
       api,
-      extraOptions
+      extraOptions,
     );
 
-    const tokens = (refreshResult.data as ApiEnvelope<AuthTokenResponse> | undefined)?.data;
+    const tokens = (
+      refreshResult.data as ApiEnvelope<AuthTokenResponse> | undefined
+    )?.data;
     if (!tokens?.accessToken) {
       forceLogout();
       return result;
@@ -121,7 +175,10 @@ const baseQueryWithReauth: BaseQueryFn<
 
 function forceLogout(): void {
   clearTokens();
-  if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {
+  if (
+    typeof window !== "undefined" &&
+    !window.location.pathname.startsWith("/auth")
+  ) {
     window.location.href = "/auth/login";
   }
 }
@@ -132,7 +189,7 @@ function forceLogout(): void {
  */
 export const baseApi = createApi({
   reducerPath: "api",
-  baseQuery: baseQueryWithReauth,
+  baseQuery: baseQueryWithStatus,
   refetchOnFocus: true,
   refetchOnReconnect: true,
   refetchOnMountOrArgChange: 30,
@@ -141,16 +198,20 @@ export const baseApi = createApi({
     "ContactMessage",
     "Auth",
     "Product",
-    "SizeOption",
+    "Variant",
+    "ProductExtra",
+    "Extra",
     "Category",
     "Inventory",
     "StockMovement",
     "Order",
     "OrderHistory",
+    "StaffCall",
     "User",
     "Admin",
     "Barista",
     "Event",
+    "Banner",
     "Report",
     "Finance",
     "ExchangeRate",

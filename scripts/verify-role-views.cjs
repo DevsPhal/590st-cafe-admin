@@ -14,7 +14,7 @@ let role = "BARISTA";
 let queryCalls = [];
 let reportError;
 let mutationHandler;
-const product = { id: "product", name: "Fixture Coffee", sku: "COFFEE", unit: "cup", categoryId: "category", categoryName: "Fixture Category", price: 4, quantityOnHand: 10, reorderLevel: 2, status: "ACTIVE" };
+const product = { id: "product", name: "Fixture Coffee", sku: "COFFEE", stockUnit: "PIECE", sellUnit: "CUP", unitsPerStock: 1, categoryId: "category", categoryName: "Fixture Category", quantityOnHand: 10, reorderLevel: 2, status: "ACTIVE", variants: [{ id: "variant", productId: "product", name: "MEDIUM", price: 4, finalPrice: 4, sortOrder: 0, status: "ACTIVE" }], extras: [] };
 const category = { id: "category", name: "Fixture Category", status: "ACTIVE", createdAt: "2026-09-09T08:00:00" };
 const inventory = { productId: "product", productName: "Fixture Coffee", quantityOnHand: 10, reorderLevel: 2, unit: "cup" };
 const paged = (item) => ({ content: [item], page: 1, size: 10, totalElements: 1, totalPages: 1 });
@@ -144,11 +144,19 @@ async function verifyStaffCreation() {
   React.useMemo = (compute) => compute();
   React.useEffect = noop;
   const render = () => { cursor = 0; return Staff(); };
+  // Walks every prop value, not just `children` — buttons like Staff's Add Admin/Add
+  // Barista live under DataCard's `actions` prop, which is a sibling of `children`, not
+  // part of it.
   function find(node, match) {
     if (!node || typeof node !== "object") return undefined;
     if (Array.isArray(node)) return node.map((child) => find(child, match)).find(Boolean);
     if (match(node)) return node;
-    return find(node.props?.children, match);
+    if (!node.props) return undefined;
+    for (const value of Object.values(node.props)) {
+      const result = find(value, match);
+      if (result) return result;
+    }
+    return undefined;
   }
   const input = (label) => find(render(), (element) => element.props?.label === label);
   try {

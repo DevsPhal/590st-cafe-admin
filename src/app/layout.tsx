@@ -6,6 +6,7 @@ import {
   Inter,
   Poppins,
   Roboto,
+  Google_Sans_Flex,
   Open_Sans,
   Montserrat,
   Lato,
@@ -18,6 +19,7 @@ import {
   Battambang,
   Siemreap,
   Dangrek,
+  Noto_Sans_Khmer,
 } from "next/font/google";
 import ClientProvider from "@/contexts/client-provider";
 
@@ -39,6 +41,16 @@ const roboto = Roboto({
   subsets: ["latin"],
   weight: ["300", "400", "500", "700"],
   variable: "--font-roboto",
+  display: "swap",
+});
+
+// Same pairing as the customer UI (Coffee-Shop-UI): self-hosted by Next.js at build time, no
+// runtime request to Google's servers. Google Sans Flex only ships a latin/latin-ext charset,
+// so Khmer text still needs Noto Sans Khmer layered in behind it — see --current-khmer-font.
+const googleSansFlex = Google_Sans_Flex({
+  subsets: ["latin"],
+  weight: "variable",
+  variable: "--font-google-sans",
   display: "swap",
 });
 
@@ -113,16 +125,28 @@ const dangrek = Dangrek({
   display: "swap",
 });
 
+// Matches the customer UI's Khmer pairing exactly.
+const notoSansKhmer = Noto_Sans_Khmer({
+  subsets: ["khmer"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-noto-sans-khmer",
+  display: "swap",
+});
 
 // favicon project of 590st CAFE
 export const metadata: Metadata = {
-  title: "590st CAFE",
-  description: "590st CAFE Admin Dashboard",
+  title: "590st Cafe Admin Dashboard",
+  description: "590st Cafe Admin Dashboard",
 
+  // White 590st mark on a black tile, so the tab icon reads on light and dark browser chrome.
   icons: {
-    icon: "/logos/logo.svg",
-    shortcut: "/logos/logo.svg",
-},
+    icon: [
+      { url: "/logos/icon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/logos/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    shortcut: "/logos/icon-32.png",
+    apple: { url: "/logos/apple-icon.png", sizes: "180x180" },
+  },
 };
 
 export default function RootLayout({
@@ -135,9 +159,10 @@ export default function RootLayout({
       lang="en"
       suppressHydrationWarning
       className={`
-        ${inter.variable} 
-        ${poppins.variable} 
-        ${roboto.variable} 
+        ${inter.variable}
+        ${poppins.variable}
+        ${roboto.variable}
+        ${googleSansFlex.variable}
         ${openSans.variable}
         ${montserrat.variable}
         ${lato.variable}
@@ -149,6 +174,7 @@ export default function RootLayout({
         ${battambang.variable}
         ${siemreap.variable}
         ${dangrek.variable}
+        ${notoSansKhmer.variable}
       `}
     >
       <body className="font-sans" suppressHydrationWarning>

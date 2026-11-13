@@ -1,0 +1,17 @@
+# Run from this folder (Deployment/local):
+#   docker compose --env-file .env.local -f docker-compose.local.yml up --build
+# --env-file makes compose read .env.local for the ${...} build args below (NEXT_PUBLIC_* are
+# baked in at build time, so env_file alone is too late). The :- fallbacks keep the build
+# working even if --env-file is forgotten.
+services:
+  admin-web:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.590stcafe.shop}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-wss://api.590stcafe.shop/ws}
+        NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME:-FiveNinetyStCafeBot}
+    ports:
+      - "3001:3000"
+    env_file: .env.local

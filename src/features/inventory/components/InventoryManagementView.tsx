@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { PageShell } from "@/components/common/PageShell";
@@ -9,6 +9,7 @@ import {
   AdminTopActions,
   Cell,
   DataCard,
+  ExcelImportButton,
   FilterActions,
   FilterPanel,
   FormInput,
@@ -27,18 +28,24 @@ import {
   StatusBadge,
   TableActions,
   TableState,
+  listLoadState,
   TextField,
 } from "@/components/common/AdminKit";
 import { apiErrorMessage } from "@/store/api/baseApi";
 import { usePageSize } from "@/contexts/AdminPreferencesContext";
 import {
+  useDownloadMonthlyStockExpenseReportMutation,
   useListInventoryQuery,
   useStockCutMutation,
+  useStockInFromExcelMutation,
   useStockInMutation,
 } from "@/store/api/inventoryApi";
 import { useListProductsQuery } from "@/store/api/productApi";
 import { useCurrentRole } from "@/store/api/useCurrentRole";
 import type { InventoryResponse, StockStrategy } from "@/store/api/types";
+import { downloadBlob, humanise, titleCase } from "@/lib/utils";
+import { useInventoryAlerts } from "@/hooks/useInventoryAlerts";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 const INVENTORY_TABLE_HEADERS = [
   "No",
@@ -78,31 +85,51 @@ export default function Inventory() {
   const { isAdmin } = useCurrentRole();
   const router = useRouter();
 
-  const [page, setPage] = useState(1);
+  const [page, setPage] = usePersistentState("inventory:page", 1);
   const [size, setSize] = usePageSize();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [levelFilter, setLevelFilter] = useState("");
+  const [searchTerm, setSearchTerm] = usePersistentState("inventory:searchTerm", "");
+  const [levelFilter, setLevelFilter] = usePersistentState("inventory:levelFilter", "");
+  // yyyy-MM, matching both <input type="month"> and the API's own YearMonth param.
+  const [expenseMonth, setExpenseMonth] = usePersistentState("inventory:expenseMonth", () => new Date().toISOString().slice(0, 7));
 
   const {
     data: inventoryPage,
+    currentData,
     isFetching,
     error,
     refetch,
   } = useListInventoryQuery({ page, size });
+  const list = listLoadState({ isFetching, currentData, error });
+
+  // A stock-in, stock-cut or Excel import from another tab reaches this list instantly instead
+  // of only on this page's own next mutation or a manual refresh.
+  useInventoryAlerts(useCallback(() => { void refetch(); }, [refetch]));
 
   // The inventory rows carry no SKU, so pair them with the product list for the picker.
   const { data: productPage } = useListProductsQuery({ page: 1, size: 500 });
 
   const [stockIn, { isLoading: isStockingIn }] = useStockInMutation();
   const [stockCut, { isLoading: isCutting }] = useStockCutMutation();
+  const [stockInFromExcel] = useStockInFromExcelMutation();
+  const [downloadExpenseReport, { isLoading: isDownloadingExpenseReport }] =
+    useDownloadMonthlyStockExpenseReportMutation();
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<ProductSelectOption | null>(null);
-  const [movementKind, setMovementKind] = useState<MovementKind>("STOCK_IN");
-  const [quantity, setQuantity] = useState("");
-  const [unitCost, setUnitCost] = useState("");
-  const [strategy, setStrategy] = useState<StockStrategy>("FIFO");
-  const [note, setNote] = useState("");
+  const handleDownloadExpenseReport = async () => {
+    try {
+      const blob = await downloadExpenseReport({ month: expenseMonth }).unwrap();
+      downloadBlob(blob, `stock-expenses-${expenseMonth}.xlsx`);
+    } catch (err) {
+      toast.error(apiErrorMessage(err as never, "Could not download the expense report."));
+    }
+  };
+
+  const [formOpen, setFormOpen] = usePersistentState("inventory:formOpen", false);
+  const [selectedProduct, setSelectedProduct] = usePersistentState<ProductSelectOption | null>("inventory:selectedProduct", null);
+  const [movementKind, setMovementKind] = usePersistentState<MovementKind>("inventory:movementKind", "STOCK_IN");
+  const [quantity, setQuantity] = usePersistentState("inventory:quantity", "");
+  const [unitCost, setUnitCost] = usePersistentState("inventory:unitCost", "");
+  const [strategy, setStrategy] = usePersistentState<StockStrategy>("inventory:strategy", "FIFO");
+  const [note, setNote] = usePersistentState("inventory:note", "");
 
   const inventory = useMemo(() => inventoryPage?.content ?? [], [inventoryPage]);
 
@@ -113,7 +140,7 @@ export default function Inventory() {
         name: product.name,
         sku: product.sku,
         currentStock: Number(product.quantityOnHand),
-        unit: product.unit,
+        unit: humanise(product.stockUnit),
       })),
     [productPage]
   );
@@ -140,7 +167,7 @@ export default function Inventory() {
           name: item.productName,
           sku: "-",
           currentStock: Number(item.quantityOnHand),
-          unit: item.unit,
+          unit: humanise(item.unit),
         }
       : null;
     setSelectedProduct(option);
@@ -249,28 +276,57 @@ export default function Inventory() {
         title="Stock Levels"
         meta={`Tracked Products: ${inventoryPage?.totalElements ?? 0}`}
         actions={
-          isAdmin ? <TableActions onRegister={() => handleOpenForm()} primaryLabel="Adjust Stock" /> : undefined
+          isAdmin ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label className="form_field w-auto">
+                  <input
+                    type="month"
+                    value={expenseMonth}
+                    onChange={(e) => setExpenseMonth(e.target.value)}
+                    className="form_field_control"
+                    aria-label="Stock expense report month"
+                    title="Month to export"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleDownloadExpenseReport}
+                  disabled={isDownloadingExpenseReport || !expenseMonth}
+                  className="btn_outline_black text-xs"
+                  title="Every stock-purchase (stock-in) cost recorded this month, as an Excel file"
+                >
+                  {isDownloadingExpenseReport ? "Exporting..." : "Export Stock Expenses"}
+                </button>
+              </div>
+              <ExcelImportButton
+                label="Import Stock-In"
+                columnsHint="sku, quantity, unitCost, note"
+                onImport={(file) => stockInFromExcel(file).unwrap()}
+              />
+              <TableActions onRegister={() => handleOpenForm()} primaryLabel="Adjust Stock" />
+            </div>
+          ) : undefined
         }
       >
         <SimpleTable headers={[...INVENTORY_TABLE_HEADERS]}>
           <TableState
             colSpan={INVENTORY_TABLE_HEADERS.length}
-            isLoading={isFetching}
-            error={error}
+            isLoading={list.isLoading}
+            error={list.error}
             isEmpty={visibleInventory.length === 0}
             emptyLabel="No inventory records. Products get a stock row when they are created."
             onRetry={refetch}
           />
-          {!isFetching &&
-            !error &&
+          {list.showRows &&
             visibleInventory.map((item, index) => {
               const level = stockLevel(item);
               return (
                 <Row key={item.productId} striped={index % 2 === 1}>
                   <Cell>{(page - 1) * size + index + 1}</Cell>
-                  <Cell className="font-semibold">{item.productName}</Cell>
+                  <Cell className="font-semibold">{titleCase(item.productName)}</Cell>
                   <Cell>{Number(item.quantityOnHand).toLocaleString()}</Cell>
-                  <Cell>{item.unit}</Cell>
+                  <Cell>{humanise(item.unit)}</Cell>
                   <Cell>{Number(item.reorderLevel).toLocaleString()}</Cell>
                   <Cell>
                     <StatusBadge label={LEVEL_LABEL[level]} tone={LEVEL_TONE[level]} />

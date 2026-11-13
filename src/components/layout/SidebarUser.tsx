@@ -6,25 +6,37 @@ import { usePathname, useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 
 import { useGetCurrentUserQuery, useLogoutMutation } from "@/store/api/authApi";
+import { humanise, titleCase } from "@/lib/utils";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
-/**
- * The signed-in identity, read from /api/users/me rather than hardcoded, plus the only
- * sign-out control in the admin. The name doubles as the entry point to /profile — that page is
- * the only place an admin or barista can edit their own record, since /api/admin/admins/** is
- * SUPER_ADMIN-only. Logout clears the tokens and resets the RTK Query cache even if the server
- * call fails, so no previous user's data survives into the next session.
- */
+//sidebar user card, with avatar, name, role, and a logout button. Clicking the name takes you to the profile page.
 export function SidebarUser() {
   const router = useRouter();
   const pathname = usePathname();
   const { data: user, isLoading } = useGetCurrentUserQuery();
   const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
+  const { confirm, confirmDialog } = useConfirmDialog();
 
-  const name = user?.fullName ?? (isLoading ? "Loading..." : "Account");
-  const role = user?.role ? user.role.replace(/_/g, " ") : user?.email ?? "";
+  const name = user?.fullName
+    ? titleCase(user.fullName)
+    : isLoading
+      ? "Loading..."
+      : "Account";
+  const role = user?.role ? humanise(user.role) : (user?.email ?? "");
   const isOnProfile = pathname === "/profile";
 
   const handleLogout = async () => {
+    if (
+      !(await confirm({
+        title: "Sign out?",
+        description:
+          "You'll need to log in again to access the admin dashboard.",
+        confirmLabel: "Sign out",
+        tone: "danger",
+      }))
+    ) {
+      return;
+    }
     try {
       await logout().unwrap();
     } catch {
@@ -43,13 +55,21 @@ export function SidebarUser() {
       >
         <span className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-sm font-semibold text-black">
           {user?.avatarUrl ? (
-            <Image src={user.avatarUrl} alt="" fill sizes="36px" className="object-cover" />
+            <Image
+              src={user.avatarUrl}
+              alt=""
+              fill
+              sizes="36px"
+              className="object-cover"
+            />
           ) : (
             name.slice(0, 1).toUpperCase()
           )}
         </span>
         <span className="sidebar_user_text min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-white">{name}</span>
+          <span className="block truncate text-sm font-semibold text-white">
+            {name}
+          </span>
           <span className="block truncate text-xs text-white/65">{role}</span>
         </span>
       </Link>
@@ -63,6 +83,7 @@ export function SidebarUser() {
       >
         <LogOut className="h-4 w-4" />
       </button>
+      {confirmDialog}
     </div>
   );
 }

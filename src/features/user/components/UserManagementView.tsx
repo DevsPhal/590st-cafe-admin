@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import toast from "react-hot-toast";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -15,6 +15,7 @@ import {
   FilterPanel,
   FormModal,
   FormInput,
+  FormPhoneInput,
   FormSelect,
   ModalGrid,
   PaginationFooter,
@@ -25,6 +26,7 @@ import {
   StatTile,
   StatusBadge,
   TableState,
+  listLoadState,
   TextField,
   Thumbnail,
 } from "@/components/common/AdminKit";
@@ -32,13 +34,19 @@ import { apiErrorMessage } from "@/store/api/baseApi";
 import { usePageSize, useRefreshOptions } from "@/contexts/AdminPreferencesContext";
 import { useListUsersQuery, useUpdateUserStatusMutation, useUpdateUserMutation, useDeleteUserMutation } from "@/store/api/userApi";
 import type { Gender, Role, UserResponse, UserStatus } from "@/store/api/types";
+import { humanise, titleCase } from "@/lib/utils";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { formatPhone, formatPhoneInput, isValidPhone, PHONE_INVALID_MESSAGE } from "@/lib/phone";
+import { usePersistentState } from "@/hooks/usePersistentState";
+
+export { humanise };
 
 const USER_TABLE_HEADERS = [
   "No",
   "Avatar",
   "Full Name",
   "Email",
-  "Phone",
+  "Phone Number",
   "Role",
   "Telegram",
   "Status",
@@ -63,15 +71,6 @@ export function statusTone(
   return "danger";
 }
 
-/** PENDING_VERIFICATION -> "Pending Verification" */
-export function humanise(value: string) {
-  return value
-    .toLowerCase()
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
 /**
  * Super admins can view, edit and delete stored accounts here.
  * New staff accounts are created on the Staff screen.
@@ -85,17 +84,19 @@ export default function UserManagementView({
   title?: string;
   emptyLabel?: string;
 } = {}) {
-  const [page, setPage] = useState(1);
+  const { confirm, confirmDialog } = useConfirmDialog();
+  const [page, setPage] = usePersistentState(`users-${role ?? "all"}:page`, 1);
   const [size, setSize] = usePageSize();
   const refresh = useRefreshOptions();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [roleFilter, setRoleFilter] = useState<string>(role ?? "");
+  const [searchTerm, setSearchTerm] = usePersistentState(`users-${role ?? "all"}:searchTerm`, "");
+  const [statusFilter, setStatusFilter] = usePersistentState(`users-${role ?? "all"}:statusFilter`, "");
+  const [roleFilter, setRoleFilter] = usePersistentState<string>(`users-${role ?? "all"}:roleFilter`, role ?? "");
 
   const effectiveRole = (role ?? roleFilter) || undefined;
 
   const {
     data: userPage,
+    currentData,
     isFetching,
     error,
     refetch,
@@ -104,19 +105,20 @@ export default function UserManagementView({
     size,
     ...(effectiveRole ? { role: effectiveRole as Role } : {}),
   }, refresh);
+  const list = listLoadState({ isFetching, currentData, error });
 
   const [updateStatus, { isLoading: isUpdating }] = useUpdateUserStatusMutation();
   const [updateUser, { isLoading: isSavingProfile }] = useUpdateUserMutation();
   const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
 
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
-  const [fullName, setFullName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [gender, setGender] = useState<Gender | "">("");
-  const [selected, setSelected] = useState<UserResponse | null>(null);
-  const [nextStatus, setNextStatus] = useState<UserStatus>("ACTIVE");
+  const [detailOpen, setDetailOpen] = usePersistentState(`users-${role ?? "all"}:detailOpen`, false);
+  const [statusOpen, setStatusOpen] = usePersistentState(`users-${role ?? "all"}:statusOpen`, false);
+  const [editOpen, setEditOpen] = usePersistentState(`users-${role ?? "all"}:editOpen`, false);
+  const [fullName, setFullName] = usePersistentState(`users-${role ?? "all"}:fullName`, "");
+  const [phoneNumber, setPhoneNumber] = usePersistentState(`users-${role ?? "all"}:phoneNumber`, "");
+  const [gender, setGender] = usePersistentState<Gender | "">(`users-${role ?? "all"}:gender`, "");
+  const [selected, setSelected] = usePersistentState<UserResponse | null>(`users-${role ?? "all"}:selected`, null);
+  const [nextStatus, setNextStatus] = usePersistentState<UserStatus>(`users-${role ?? "all"}:nextStatus`, "ACTIVE");
 
   const users = useMemo(() => userPage?.content ?? [], [userPage]);
 
@@ -142,6 +144,10 @@ export default function UserManagementView({
       toast.error("Full name must contain at least two characters.");
       return;
     }
+    if (!isValidPhone(phoneNumber)) {
+      toast.error(PHONE_INVALID_MESSAGE);
+      return;
+    }
     try {
       await updateUser({ id: selected.id, body: {
         fullName: fullName.trim(), phoneNumber: phoneNumber.trim(), ...(gender ? { gender } : {}),
@@ -155,7 +161,12 @@ export default function UserManagementView({
   };
 
   const handleDelete = async (user: UserResponse) => {
-    if (!window.confirm(`Delete ${user.fullName}'s account? They will lose access. Past orders and attendance will be retained.`)) return;
+    if (!(await confirm({
+      title: "Delete user account",
+      description: `Delete ${user.fullName}'s account? They will lose access. Past orders and attendance will be retained.`,
+      confirmLabel: "Delete",
+      tone: "danger",
+    }))) return;
     try {
       await deleteUser(user.id).unwrap();
       toast.success("Account deleted");
@@ -231,23 +242,22 @@ export default function UserManagementView({
         <SimpleTable headers={[...USER_TABLE_HEADERS]}>
           <TableState
             colSpan={USER_TABLE_HEADERS.length}
-            isLoading={isFetching}
-            error={error}
+            isLoading={list.isLoading}
+            error={list.error}
             isEmpty={visibleUsers.length === 0}
             emptyLabel={emptyLabel}
             onRetry={refetch}
           />
-          {!isFetching &&
-            !error &&
+          {list.showRows &&
             visibleUsers.map((user, index) => (
               <Row key={user.id} striped={index % 2 === 1}>
                 <Cell>{(page - 1) * size + index + 1}</Cell>
                 <Cell>
                   <Thumbnail src={user.avatarUrl ?? undefined} />
                 </Cell>
-                <Cell className="font-semibold">{user.fullName}</Cell>
+                <Cell className="font-semibold">{titleCase(user.fullName)}</Cell>
                 <Cell>{user.email}</Cell>
-                <Cell>{user.phoneNumber || "-"}</Cell>
+                <Cell className="tabular-nums whitespace-nowrap">{formatPhone(user.phoneNumber) || "-"}</Cell>
                 <Cell>{humanise(user.role)}</Cell>
                 <Cell>
                   <StatusBadge
@@ -270,7 +280,7 @@ export default function UserManagementView({
                     onEdit={() => {
                       setSelected(user);
                       setFullName(user.fullName);
-                      setPhoneNumber(user.phoneNumber ?? "");
+                      setPhoneNumber(formatPhoneInput(user.phoneNumber));
                       setGender(user.gender ?? "");
                       setEditOpen(true);
                     }}
@@ -297,7 +307,7 @@ export default function UserManagementView({
       <FormModal open={editOpen} onOpenChange={setEditOpen} title="Edit Account" submitLabel="Save" onSubmit={handleSaveProfile} isLoading={isSavingProfile}>
         <ModalGrid>
           <FormInput label="Full Name" value={fullName} onChange={(event) => setFullName(event.target.value)} required />
-          <FormInput label="Phone" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} />
+          <FormPhoneInput value={phoneNumber} onChange={setPhoneNumber} />
           <FormSelect label="Gender" value={gender} onChange={(event) => setGender(event.target.value as Gender | "")}>
             <option value="MALE">Male</option>
             <option value="FEMALE">Female</option>
@@ -342,9 +352,9 @@ export default function UserManagementView({
         {selected && (
           <div className="admin_modal_form_wrap">
             <DetailGrid>
-              <DetailItem label="Full Name">{selected.fullName}</DetailItem>
+              <DetailItem label="Full Name">{titleCase(selected.fullName)}</DetailItem>
               <DetailItem label="Email">{selected.email}</DetailItem>
-              <DetailItem label="Phone">{selected.phoneNumber || "-"}</DetailItem>
+              <DetailItem label="Phone Number">{formatPhone(selected.phoneNumber) || "-"}</DetailItem>
               <DetailItem label="Gender">
                 {selected.gender ? humanise(selected.gender) : "-"}
               </DetailItem>
@@ -360,13 +370,14 @@ export default function UserManagementView({
               </DetailItem>
               <DetailItem label="Created By">
                 {selected.createdByName
-                  ? `${selected.createdByName} (${selected.createdByRole})`
+                  ? `${titleCase(selected.createdByName)} (${humanise(selected.createdByRole ?? "")})`
                   : "Self-registered"}
               </DetailItem>
             </DetailGrid>
           </div>
         )}
       </DetailModal>
+      {confirmDialog}
     </PageShell>
   );
 }

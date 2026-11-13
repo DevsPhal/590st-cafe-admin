@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
 import { AdminTopActions, FormModal, FormInput, FormSelect } from "@/components/common/AdminKit";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCurrentRole } from "@/store/api/useCurrentRole";
 import { useListBaristasQuery } from "@/store/api/userApi";
 import { apiErrorMessage } from "@/store/api/baseApi";
@@ -13,6 +14,9 @@ import {
   useCheckInMutation, useCheckOutMutation, useCreateAttendanceMutation,
   useUpdateAttendanceMutation, type AttendanceResponse, type AttendanceInput,
 } from "@/store/api/attendanceApi";
+import { titleCase } from "@/lib/utils";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 const emptyForm: AttendanceInput = { baristaId: "", checkInAt: "", checkOutAt: "", note: "" };
 const displayTime = (value: string | null) => value ? value.replace("T", " ").slice(0, 19) : "—";
@@ -22,13 +26,14 @@ const toLocalInput = (date: Date) =>
 
 export default function AttendanceView() {
   const { isAdmin, isBarista } = useCurrentRole();
-  const [page, setPage] = useState(1);
-  const [staffId, setStaffId] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [form, setForm] = useState<AttendanceInput>(emptyForm);
-  const [editing, setEditing] = useState<AttendanceResponse | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
+  const { confirm, confirmDialog } = useConfirmDialog();
+  const [page, setPage] = usePersistentState("attendance:page", 1);
+  const [staffId, setStaffId] = usePersistentState("attendance:staffId", "");
+  const [from, setFrom] = usePersistentState("attendance:from", "");
+  const [to, setTo] = usePersistentState("attendance:to", "");
+  const [form, setForm] = usePersistentState<AttendanceInput>("attendance:form", emptyForm);
+  const [editing, setEditing] = usePersistentState<AttendanceResponse | null>("attendance:editing", null);
+  const [formOpen, setFormOpen] = usePersistentState("attendance:formOpen", false);
   // Recomputed whenever the form opens, so the pickers never offer a time that has not happened.
   const [latestAllowed, setLatestAllowed] = useState(() => toLocalInput(new Date()));
   // Which row's one-click check-out is in flight, so only that button shows as busy.
@@ -73,7 +78,7 @@ export default function AttendanceView() {
    * clock, so it can never trip the API's "check-out cannot be in the future" rule.
    */
   const closeShift = async (record: AttendanceResponse) => {
-    if (!window.confirm(`Check ${record.baristaName} out now?`)) return;
+    if (!(await confirm({ title: "Check out", description: `Check ${record.baristaName} out now?` }))) return;
     setClosingId(record.id);
     try {
       await update({
@@ -117,29 +122,48 @@ export default function AttendanceView() {
           {busy ? "Saving..." : currentShift.data ? "Check out" : "Check in"}
         </button>}
     </section>}
-    {isAdmin && <div className="my-4 flex flex-wrap items-end gap-4 rounded-xl border bg-white p-4">
-      <label className="text-sm">Staff<select aria-label="Filter staff" value={staffId} onChange={(event) => { setStaffId(event.target.value); setPage(1); }} className="ml-2 rounded border p-2">
-        <option value="">All staff</option>{staff.data?.content.map((member) => <option key={member.id} value={member.id}>{member.fullName}</option>)}
-      </select></label>
-      <label className="text-sm">From<input type="date" value={from} onChange={(event) => { setFrom(event.target.value); setPage(1); }} className="ml-2 rounded border p-2" /></label>
-      <label className="text-sm">To<input type="date" value={to} onChange={(event) => { setTo(event.target.value); setPage(1); }} className="ml-2 rounded border p-2" /></label>
-      <button type="button" className="btn_primary_yellow" onClick={() => openForm()}>Add missed shift</button>
+    {/* Same field styling as every other filter bar: label above control, one column on a
+        phone, a row from tablet up. */}
+    {isAdmin && <div className="my-4 grid grid-cols-1 items-end gap-4 rounded-xl border bg-white p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+      <label className="form_field">
+        <span className="form_field_label">Staff</span>
+        <Select value={staffId || "__all__"} onValueChange={(next) => { setStaffId(next === "__all__" ? "" : next); setPage(1); }}>
+          <SelectTrigger aria-label="Filter staff" className="form_field_select_trigger">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="form_field_select_content">
+            <SelectItem value="__all__" className="form_field_select_item">All staff</SelectItem>
+            {staff.data?.content.map((member) => (
+              <SelectItem key={member.id} value={member.id} className="form_field_select_item">
+                {titleCase(member.fullName)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </label>
+      <label className="form_field"><span className="form_field_label">From</span>
+        <input type="date" value={from} onChange={(event) => { setFrom(event.target.value); setPage(1); }} className="form_field_control" /></label>
+      <label className="form_field"><span className="form_field_label">To</span>
+        <input type="date" value={to} onChange={(event) => { setTo(event.target.value); setPage(1); }} className="form_field_control" /></label>
+      <button type="button" className="btn_primary_yellow h-9 whitespace-nowrap" onClick={() => openForm()}>Add missed shift</button>
     </div>}
     {records.error && <div role="alert" className="my-3 text-red-600"><p>{apiErrorMessage(records.error as never, "Could not load attendance.")}</p>
       <button type="button" onClick={() => { void records.refetch(); }} className="underline">Retry</button></div>}
     <div className="mt-4 overflow-x-auto rounded-xl border bg-white">
-      <table className="w-full text-left text-sm"><thead><tr className="border-b bg-gray-50">
-        {['Staff', 'Check in', 'Check out', 'Worked', 'Note', ...(isAdmin ? ['Action'] : [])].map((label) => <th key={label} className="p-3">{label}</th>)}
+      {/* min-w: scroll sideways on a phone rather than crushing Note into a sliver that wraps a
+          word per line and stretches every row. */}
+      <table className="w-full min-w-[760px] text-left text-sm"><thead><tr className="border-b bg-gray-50">
+        {['Staff', 'Check in', 'Check out', 'Worked', 'Note', ...(isAdmin ? ['Action'] : [])].map((label) => <th key={label} className="whitespace-nowrap p-3">{label}</th>)}
       </tr></thead><tbody>
         {records.isLoading && <tr><td colSpan={isAdmin ? 6 : 5} className="p-5" role="status">Loading attendance...</td></tr>}
         {!records.isLoading && !records.error && records.data?.content.length === 0 && <tr><td colSpan={isAdmin ? 6 : 5} className="p-5 text-center text-gray-500">No attendance records.</td></tr>}
         {records.data?.content.map((record) => <tr key={record.id} className="border-b last:border-0">
-          <td className="p-3">{record.baristaName}</td><td className="p-3">{displayTime(record.checkInAt)}</td>
-          <td className="p-3">{record.open ? "On shift" : displayTime(record.checkOutAt)}</td>
-          <td className="p-3">{record.workedMinutes == null ? "—" : `${Math.floor(record.workedMinutes / 60)}h ${record.workedMinutes % 60}m`}</td>
-          <td className="max-w-xs whitespace-pre-wrap p-3">{record.note || "—"}</td>
+          <td className="whitespace-nowrap p-3">{titleCase(record.baristaName)}</td><td className="whitespace-nowrap p-3">{displayTime(record.checkInAt)}</td>
+          <td className="whitespace-nowrap p-3">{record.open ? "On shift" : displayTime(record.checkOutAt)}</td>
+          <td className="whitespace-nowrap p-3">{record.workedMinutes == null ? "—" : `${Math.floor(record.workedMinutes / 60)}h ${record.workedMinutes % 60}m`}</td>
+          <td className="min-w-[220px] max-w-xs whitespace-pre-wrap p-3">{record.note || "—"}</td>
           {isAdmin && <td className="p-3">
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3 whitespace-nowrap">
               {record.open && <button type="button" className="btn_primary_yellow px-3 py-1 text-xs" disabled={closingId === record.id}
                 onClick={() => { void closeShift(record); }}>{closingId === record.id ? "Checking out..." : "Check out"}</button>}
               <button type="button" onClick={() => openForm(record)} className="underline">Correct</button>
@@ -155,12 +179,13 @@ export default function AttendanceView() {
       submitLabel="Save attendance" onSubmit={save} isLoading={createState.isLoading || updateState.isLoading}>
       <div className="grid gap-4 p-4 md:grid-cols-2">
         <FormSelect label="Staff member" placeholder="Select staff" value={form.baristaId} disabled={Boolean(editing)} onChange={(event) => setForm({ ...form, baristaId: event.target.value })}>
-          {staff.data?.content.map((member) => <option key={member.id} value={member.id}>{member.fullName}</option>)}
+          {staff.data?.content.map((member) => <option key={member.id} value={member.id}>{titleCase(member.fullName)}</option>)}
         </FormSelect>
         <FormInput label="Check in (Cambodia time)" type="datetime-local" max={latestAllowed} value={form.checkInAt} onChange={(event) => setForm({ ...form, checkInAt: event.target.value })} />
         <FormInput label="Check out (leave empty if still on shift)" type="datetime-local" min={form.checkInAt || undefined} max={latestAllowed} value={form.checkOutAt} onChange={(event) => setForm({ ...form, checkOutAt: event.target.value })} />
         <FormInput label="Correction note" maxLength={255} value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} />
       </div>
     </FormModal>
+    {confirmDialog}
   </PageShell>;
 }
