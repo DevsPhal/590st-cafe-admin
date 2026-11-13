@@ -1,0 +1,102 @@
+{
+  "title": "Staff attendance",
+  "description": "Work shifts for shop staff. Times are shown in Cambodia time.",
+  "my_shift": {
+    "title": "My shift",
+    "loading": "Loading shift...",
+    "load_failed": "Could not load shift.",
+    "checked_in_at": "Checked in at {time}",
+    "checked_out": "You are currently checked out.",
+    "note": "Note: {note}"
+  },
+  "my_shift_form": {
+    "check_in_title": "Check in",
+    "check_out_title": "Check out",
+    "check_in_submit": "Confirm check-in",
+    "check_out_submit": "Confirm check-out",
+    "check_in_hint": "Your check-in time is recorded when you confirm (Cambodia time).",
+    "on_shift_for": "On shift so far",
+    "note": "Note (optional)",
+    "check_in_placeholder": "e.g. Arrived late because of traffic",
+    "check_out_placeholder": "e.g. Leaving early — feeling unwell",
+    "note_from_check_in": "This is the note from your check-in. Edit it if anything changed — leaving it empty keeps it.",
+    "note_help": "Saved with this shift. Your manager can see it."
+  },
+  "actions": {
+    "check_in": "Check in",
+    "check_out": "Check out",
+    "correct": "Correct",
+    "add_missed_attendance": "Add missed attendance"
+  },
+  "filters": {
+    "staff": "Staff",
+    "filter_staff": "Filter staff",
+    "all_staff": "All staff",
+    "from": "From",
+    "to": "To"
+  },
+  "errors": {
+    "load_failed": "Could not load attendance."
+  },
+  "table": {
+    "staff": "Staff",
+    "check_in": "Check in",
+    "check_out": "Check out",
+    "status": "Status",
+    "worked": "Worked",
+    "worked_value": "{hours}h {minutes}m",
+    "on_shift": "On shift",
+    "completed": "Completed",
+    "loading": "Loading attendance..."
+  },
+  "empty": {
+    "no_records": "No attendance records."
+  },
+  "pagination": {
+    "page_of": "Page {page} of {total}"
+  },
+  "check_in_form": {
+    "title": "Check in staff",
+    "submit": "Save check-in",
+    "staff_member": "Staff member",
+    "staff_placeholder": "Select staff",
+    "check_in_at": "Check-in date & time (Cambodia time)",
+    "no_eligible_staff": "Every active staff member is already on shift."
+  },
+  "check_out_form": {
+    "title": "Check out staff",
+    "submit": "Save check-out",
+    "staff_member": "Staff member on shift",
+    "staff_placeholder": "Select staff on shift",
+    "checked_in_at": "Checked in at (Cambodia time)",
+    "checked_in_placeholder": "Select a staff member first",
+    "nobody_on_shift": "No one is on shift right now — check someone in first.",
+    "check_out_at": "Check-out date & time (Cambodia time)",
+    "shift_length": "Shift length"
+  },
+  "form": {
+    "title_correct": "Correct staff attendance",
+    "title_add": "Add missed attendance",
+    "missed_hint": "For a past shift that was never recorded. Enter both check-in and check-out times — use Check in for a shift that is still running.",
+    "submit": "Save attendance",
+    "staff_member": "Staff member",
+    "staff_placeholder": "Select staff",
+    "check_in": "Check in (Cambodia time)",
+    "check_out": "Check out (leave empty if still on shift)",
+    "check_out_required": "Check out (Cambodia time)",
+    "note": "Correction note",
+    "note_optional": "Correction note (optional)",
+    "note_placeholder": "Reason, if recorded late or on their behalf"
+  },
+  "toast": {
+    "checked_out": "Checked out",
+    "checked_in": "Checked in",
+    "record_failed": "Could not record attendance.",
+    "member_checked_in": "{name} checked in",
+    "member_checked_out": "{name} checked out",
+    "check_in_failed": "Could not check this staff member in.",
+    "check_out_failed": "Could not check this shift out.",
+    "saved": "Attendance saved",
+    "save_failed": "Could not save attendance."
+  }
+}

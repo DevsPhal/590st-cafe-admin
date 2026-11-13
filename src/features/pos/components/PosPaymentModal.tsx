@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Delete } from "lucide-react";
+import { useMemo, useState } from "react";
+import Image from "next/image";
+import { Banknote, Delete, Loader2, QrCode, RefreshCw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, formatByCurrency } from "@/lib/utils";
+import { amountDue, changeDue } from "@/lib/khr";
+import type { Currency } from "@/store/api/types";
+import { useI18n } from "@/contexts/I18nContext";
+import { Button } from "@/components/common/Button";
+import { Loader } from "@/components/common/Loader";
 
 export type PosCartItem = {
   id: string;
@@ -20,6 +26,25 @@ export type PosCartItem = {
   accent: string;
 };
 
+export type PosPaymentMethod = "cash" | "bakong";
+
+export type PosBakongState = {
+  currency: Currency;
+  onCurrencyChange: (currency: Currency) => void;
+  qrDataUrl: string | null;
+  amount: number | null;
+  isGenerating: boolean;
+  secondsLeft: number | null;
+  failure: string | null;
+  onRetry: () => void;
+};
+
+export type PosCashState = {
+  currency: Currency;
+  onCurrencyChange: (currency: Currency) => void;
+  khrPerUsdRate: number | null;
+};
+
 type PosPaymentModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -27,9 +52,12 @@ type PosPaymentModalProps = {
   total: number;
   orderTable?: string;
   orderId?: string;
-  /** Receives the cash tendered on the numpad; resolves once the API call settles. */
-  onConfirm?: (amountTendered: number) => void | Promise<void>;
+  method: PosPaymentMethod;
+  onMethodChange: (method: PosPaymentMethod) => void;
+  onConfirm?: (currency: Currency, amountTendered: number) => void | Promise<void>;
   isLoading?: boolean;
+  cash: PosCashState;
+  bakong: PosBakongState;
 };
 
 const NUMPAD_ROWS = [
@@ -39,8 +67,14 @@ const NUMPAD_ROWS = [
   ["00", "0", "backspace"],
 ] as const;
 
-function formatMoney(value: number) {
-  return `$${value.toFixed(2)}`;
+const QUICK_AMOUNTS: Record<Currency, number[]> = {
+  USD: [1, 5, 10, 20, 50],
+  KHR: [2000, 5000, 10000, 20000, 50000],
+};
+
+function formatCountdown(seconds: number | null): string {
+  if (seconds === null) return "--:--";
+  return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 export function PosPaymentModal({
@@ -50,25 +84,40 @@ export function PosPaymentModal({
   total,
   orderTable = "Order Table #51",
   orderId = "#542845",
+  method,
+  onMethodChange,
   onConfirm,
   isLoading = false,
+  cash,
+  bakong,
 }: PosPaymentModalProps) {
-  const [cashInput, setCashInput] = useState(total.toFixed(2));
+  const { t } = useI18n();
+  // In riel this is the total rounded to the nearest 100, the same figure the API charges and the receipt prints.
+  const payable = useMemo(
+    () => amountDue(total, cash.currency, cash.khrPerUsdRate),
+    [total, cash.currency, cash.khrPerUsdRate]
+  );
 
-  useEffect(() => {
-    if (open) {
-      setCashInput(total.toFixed(2));
-    }
-  }, [open, total]);
+  const [cashInput, setCashInput] = useState(() => formatForInput(payable, cash.currency));
+
+  const seedKey = `${open}|${payable}|${cash.currency}`;
+  const [seededFor, setSeededFor] = useState(seedKey);
+  if (seedKey !== seededFor) {
+    setSeededFor(seedKey);
+    if (open) setCashInput(formatForInput(payable, cash.currency));
+  }
 
   const credit = useMemo(() => {
     const parsed = Number.parseFloat(cashInput);
     return Number.isFinite(parsed) ? parsed : 0;
   }, [cashInput]);
 
-  const balance = credit - total;
+  const balance = credit - payable;
+  // Change in riel is rounded the same way the API rounds it, so the screen matches the receipt.
+  const shownBalance = balance >= 0 ? changeDue(credit, payable, cash.currency) : balance;
 
   const appendValue = (value: string) => {
+    if (value === "." && cash.currency === "KHR") return;
     setCashInput((current) => {
       if (current === "0" && value !== ".") {
         return value === "00" ? "0" : value;
@@ -84,88 +133,230 @@ export function PosPaymentModal({
   };
 
   const handleBackspace = () => {
-    setCashInput((current) => {
-      if (current.length <= 1) {
-        return "0";
-      }
-      return current.slice(0, -1);
-    });
+    setCashInput((current) => (current.length <= 1 ? "0" : current.slice(0, -1)));
   };
 
-  const handleCancel = () => {
-    setCashInput("0");
-  };
+  const isBakong = method === "bakong";
+  const canUseKhr = cash.khrPerUsdRate != null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="admin_modal is_pos_payment">
         <DialogHeader className="admin_modal_header">
-          <DialogTitle className="admin_modal_title">Checkout Order Payment</DialogTitle>
+          <DialogTitle className="admin_modal_title">{t("pos.payment.title", "Checkout Order Payment")}</DialogTitle>
         </DialogHeader>
 
         <div className="pos_payment_modal_body">
+          <div className="pos_payment_method_tabs" role="tablist" aria-label={t("pos.payment.method_aria_label", "Payment method")}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={method === "cash"}
+              className={cn("pos_payment_method_tab", method === "cash" && "is_active")}
+              onClick={() => onMethodChange("cash")}
+            >
+              <Banknote className="h-4 w-4" /> Cash
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isBakong}
+              className={cn("pos_payment_method_tab", isBakong && "is_active")}
+              onClick={() => onMethodChange("bakong")}
+            >
+              <QrCode className="h-4 w-4" /> Bakong QR
+            </button>
+          </div>
+
           <div className="pos_payment_modal_layout">
-            <section className="pos_payment_left" aria-label="Payment calculator">
+            <section className="pos_payment_left" aria-label={t("pos.payment.calculator_aria_label", "Payment calculator")}>
               <div className="pos_payment_payable">
-                <p>Payable Amount (Grand Total)</p>
-                <strong>{formatMoney(total)}</strong>
+                <p>{t("pos.payment.payable_amount", "Payable Amount (Grand Total)")}</p>
+                <strong>{isBakong ? formatByCurrency(total, "USD") : formatByCurrency(payable, cash.currency)}</strong>
               </div>
 
-              <div className="pos_payment_cash">
-                <p className="pos_payment_cash_label">Cash Only</p>
-                <div className="pos_payment_cash_input">{formatMoney(credit)}</div>
+              {!isBakong ? (
+                <div className="pos_payment_cash">
+                  <div className="pos_payment_cash_head">
+                    <span className="pos_payment_cash_label">Cash</span>
+                    <div className="pos_payment_currency_tabs" role="tablist" aria-label={t("pos.payment.cash_currency_aria_label", "Cash currency")}>
+                      {(["USD", "KHR"] as const).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          role="tab"
+                          aria-selected={cash.currency === option}
+                          className={cn(
+                            "pos_payment_currency_tab",
+                            cash.currency === option && "is_active"
+                          )}
+                          disabled={option === "KHR" && !canUseKhr}
+                          onClick={() => cash.onCurrencyChange(option)}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                  {NUMPAD_ROWS.flatMap((row) =>
-                    row.map((key) => {
-                      if (key === "backspace") {
+                  <div className="pos_payment_cash_input">
+                    {formatByCurrency(credit, cash.currency)}
+                  </div>
+
+                  <div className="pos_payment_quick_amounts">
+                    <button
+                      type="button"
+                      className="pos_payment_quick_btn"
+                      onClick={() => setCashInput(formatForInput(payable, cash.currency))}
+                    >
+                      {t("pos.payment.exact", "Exact")}
+                    </button>
+                    {QUICK_AMOUNTS[cash.currency].map((amount) => (
+                      <button
+                        key={amount}
+                        type="button"
+                        className="pos_payment_quick_btn"
+                        onClick={() => setCashInput(String(amount))}
+                      >
+                        {cash.currency === "KHR" ? amount.toLocaleString() : `$${amount}`}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {NUMPAD_ROWS.flatMap((row) =>
+                      row.map((key) => {
+                        if (key === "backspace") {
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              className="pos_payment_key is_icon"
+                              aria-label={t("pos.payment.backspace", "Backspace")}
+                              onClick={handleBackspace}
+                            >
+                              <Delete />
+                            </button>
+                          );
+                        }
+
                         return (
                           <button
                             key={key}
                             type="button"
-                            className="pos_payment_key is_icon"
-                            aria-label="Backspace"
-                            onClick={handleBackspace}
+                            className="pos_payment_key"
+                            onClick={() => appendValue(key)}
                           >
-                            <Delete />
+                            {key}
                           </button>
                         );
-                      }
+                      })
+                    )}
 
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          className="pos_payment_key"
-                          onClick={() => appendValue(key)}
-                        >
-                          {key}
-                        </button>
-                      );
-                    })
+                    <button
+                      type="button"
+                      className="pos_payment_key"
+                      disabled={cash.currency === "KHR"}
+                      onClick={() => appendValue(".")}
+                    >
+                      .
+                    </button>
+                    <button
+                      type="button"
+                      className="pos_payment_key col-span-2 is_cancel"
+                      onClick={() => setCashInput("0")}
+                    >
+                      {t("actions.clear", "Clear")}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="pos_payment_bakong">
+                  <div className="pos_payment_currency_tabs" role="tablist" aria-label={t("pos.payment.qr_currency_aria_label", "QR currency")}>
+                    {(["USD", "KHR"] as const).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        role="tab"
+                        aria-selected={bakong.currency === option}
+                        className={cn(
+                          "pos_payment_currency_tab",
+                          bakong.currency === option && "is_active"
+                        )}
+                        onClick={() => bakong.onCurrencyChange(option)}
+                        disabled={bakong.isGenerating}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="pos_payment_bakong_qr">
+                    {bakong.qrDataUrl ? (
+                      <Image
+                        src={bakong.qrDataUrl}
+                        alt={t("pos.payment.qr_alt", "Bakong KHQR for this order")}
+                        width={220}
+                        height={220}
+                        unoptimized
+                      />
+                    ) : bakong.isGenerating ? (
+                      <Loader label={t("pos.payment.generating_qr", "Generating QR...")} />
+                    ) : (
+                      <p className="px-4 text-center text-xs font-semibold text-gray-500">
+                        {bakong.failure ?? t("pos.payment.no_qr", "No QR generated yet.")}
+                      </p>
+                    )}
+                  </div>
+
+                  {bakong.qrDataUrl && (
+                    <>
+                      <p className="pos_payment_bakong_amount">
+                        {formatByCurrency(Number(bakong.amount ?? 0), bakong.currency)}
+                      </p>
+                      <p className="pos_payment_bakong_hint">
+                        {t(
+                          "pos.payment.scan_hint",
+                          "Have the customer scan this on their banking app — this screen is for the counter, not their phone."
+                        )}
+                      </p>
+                      <p className="pos_payment_bakong_timer">
+                        {t("pos.payment.expires_in", "Expires in {time}", { time: formatCountdown(bakong.secondsLeft) })}
+                      </p>
+                    </>
                   )}
 
-                  <button
-                    type="button"
-                    className="pos_payment_key"
-                    onClick={() => appendValue(".")}
-                  >
-                    .
-                  </button>
-                  <button
-                    type="button"
-                    className="pos_payment_key col-span-2 is_cancel"
-                    onClick={handleCancel}
-                  >
-                    Cancel
-                  </button>
+                  {bakong.failure && !bakong.isGenerating && (
+                    <p className="pos_payment_bakong_error">{bakong.failure}</p>
+                  )}
+
+                  <div className="flex gap-2">
+                    {bakong.qrDataUrl && (bakong.secondsLeft ?? 0) > 0 ? (
+                      <p className="pos_payment_bakong_status" role="status" aria-live="polite">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                        {t("pos.payment.waiting", "Waiting for payment — confirms automatically")}
+                      </p>
+                    ) : (
+                      <Button
+                       
+                        variant="accent" className="flex-1 text-xs"
+                        disabled={bakong.isGenerating}
+                        onClick={bakong.onRetry}
+                      >
+                        <RefreshCw className="mr-1 inline h-3.5 w-3.5" />
+                        {bakong.qrDataUrl
+                          ? t("pos.payment.new_qr", "Get a new QR")
+                          : t("pos.payment.generate_qr", "Generate QR")}
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </section>
 
-            <section className="pos_payment_right" aria-label="Order summary">
+            <section className="pos_payment_right" aria-label={t("pos.order.aria_label", "Order summary")}>
               <div className="pos_payment_summary_head">
-                <h2>Order Summary</h2>
+                <h2>{t("pos.order.title", "Order Summary")}</h2>
                 <div>
                   <strong>{orderTable}</strong>
                   <span>{orderId}</span>
@@ -180,41 +371,55 @@ export function PosPaymentModal({
                       {item.note ? <p>{item.note}</p> : null}
                     </div>
                     <div className="pos_payment_item_meta">
-                      <strong>QTY: {item.quantity}</strong>
+                      <strong>{t("pos.payment.qty", "QTY: {quantity}", { quantity: item.quantity })}</strong>
                       <div className="pos_cart_price">
                         {item.originalPrice ? (
-                          <span className="is_struck">{formatMoney(item.originalPrice)}</span>
+                          <span className="is_struck">${item.originalPrice.toFixed(2)}</span>
                         ) : null}
-                        <strong>{formatMoney(item.price)}</strong>
+                        <strong>${item.price.toFixed(2)}</strong>
                       </div>
                     </div>
                   </article>
                 ))}
               </div>
 
-              <dl className="pos_payment_totals">
-                <dt>Credit:</dt>
-                <dd>{formatMoney(credit)}</dd>
-                <dt className="is_balance">Balance:</dt>
-                <dd className={cn("is_balance", balance < 0 && "is_negative")}>
-                  {balance < 0 ? "-" : ""}
-                  {formatMoney(Math.abs(balance))}
-                </dd>
-              </dl>
+              {!isBakong ? (
+                <>
+                  <dl className="pos_payment_totals">
+                    <dt>{t("pos.payment.credit", "Credit:")}</dt>
+                    <dd>{formatByCurrency(credit, cash.currency)}</dd>
+                    <dt className="is_balance">{t("pos.payment.balance", "Balance:")}</dt>
+                    <dd className={cn("is_balance", balance < 0 && "is_negative")}>
+                      {balance < 0 ? "-" : ""}
+                      {formatByCurrency(Math.abs(shownBalance), cash.currency)}
+                    </dd>
+                  </dl>
 
-              <button
-                type="button"
-                className="btn_primary_yellow pos_payment_confirm"
-                // Short-changing the till is a hard stop, not a warning.
-                disabled={isLoading || balance < 0 || items.length === 0}
-                onClick={() => onConfirm?.(credit)}
-              >
-                {isLoading ? "Processing..." : "Confirm Payment"}
-              </button>
+                  <Button
+                   
+                    variant="accent" className="pos_payment_confirm"
+                    disabled={isLoading || balance < 0 || items.length === 0}
+                    onClick={() => onConfirm?.(cash.currency, credit)}
+                  >
+                    {isLoading
+                      ? t("states.processing", "Processing...")
+                      : t("pos.payment.confirm", "Confirm Payment")}
+                  </Button>
+                </>
+              ) : (
+                <dl className="pos_payment_totals">
+                  <dt>{t("pos.payment.total", "Total:")}</dt>
+                  <dd>${total.toFixed(2)}</dd>
+                </dl>
+              )}
             </section>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
+}
+
+function formatForInput(amount: number, currency: Currency): string {
+  return currency === "KHR" ? String(Math.round(amount)) : amount.toFixed(2);
 }

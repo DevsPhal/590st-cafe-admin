@@ -1,11 +1,17 @@
 import { clearTokens, setTokens } from "@/lib/authStorage";
+import { markWelcomePending } from "@/lib/welcomeToast";
 import { baseApi, unwrap } from "./baseApi";
 import type {
   ApiEnvelope,
   AuthTokenResponse,
   ChangePasswordRequest,
+  ForgotPasswordRequest,
   LoginRequest,
   LoginResponse,
+  PhoneLoginRequest,
+  ResendOtpRequest,
+  ResetPasswordRequest,
+  TelegramWidgetAuthRequest,
   UpdateProfileRequest,
   UserResponse,
   VerifyLoginOtpRequest,
@@ -13,51 +19,103 @@ import type {
 
 export const authApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    /**
-     * Step one of login. Most accounts come back with `otpRequired: true` and a `loginTicket`
-     * to hand to `verifyLoginOtp`; the super admin gets `tokens` directly and is logged in
-     * here. Tokens are persisted in whichever branch produces them.
-     */
-    login: builder.mutation<LoginResponse, LoginRequest>({
-      query: (body) => ({ url: "/api/auth/login", method: "POST", body }),
-      transformResponse: (response: ApiEnvelope<LoginResponse>) => {
+    login: builder.mutation<
+      LoginResponse,
+      LoginRequest & { remember?: boolean }
+    >({
+      query: ({ email, password }) => ({
+        url: "/api/auth/login",
+        method: "POST",
+        body: { email: email.trim().toLowerCase(), password },
+      }),
+      transformResponse: (response: ApiEnvelope<LoginResponse>, _meta, arg) => {
         const result = unwrap(response);
-        if (result.tokens) setTokens(result.tokens);
+        if (result.tokens) {
+          setTokens(result.tokens, arg.remember ?? true);
+          markWelcomePending();
+        }
         return result;
       },
       invalidatesTags: ["Auth"],
     }),
 
-    /** Step two, for the accounts that got an OTP challenge. */
-    verifyLoginOtp: builder.mutation<AuthTokenResponse, VerifyLoginOtpRequest>({
-      query: (body) => ({ url: "/api/auth/verify-login-otp", method: "POST", body }),
-      transformResponse: (response: ApiEnvelope<AuthTokenResponse>) => {
+    loginPhone: builder.mutation<LoginResponse, PhoneLoginRequest>({
+      query: (body) => ({
+        url: "/api/auth/login/phone",
+        method: "POST",
+        body,
+      }),
+      transformResponse: unwrap<LoginResponse>,
+    }),
+
+    verifyLoginOtp: builder.mutation<
+      AuthTokenResponse,
+      VerifyLoginOtpRequest & { remember?: boolean }
+    >({
+      query: ({ loginTicket, otp }) => ({
+        url: "/api/auth/verify-login-otp",
+        method: "POST",
+        body: { loginTicket, otp },
+      }),
+      transformResponse: (
+        response: ApiEnvelope<AuthTokenResponse>,
+        _meta,
+        arg,
+      ) => {
         const tokens = unwrap(response);
-        setTokens(tokens);
+        setTokens(tokens, arg.remember ?? true);
+        markWelcomePending();
         return tokens;
       },
       invalidatesTags: ["Auth"],
     }),
 
-    resendOtp: builder.mutation<void, { purpose: "LOGIN"; loginTicket: string }>({
+    loginTelegram: builder.mutation<
+      AuthTokenResponse,
+      TelegramWidgetAuthRequest & { remember?: boolean }
+    >({
+      query: ({ remember, ...body }) => ({
+        url: "/api/auth/login/telegram",
+        method: "POST",
+        body,
+      }),
+      transformResponse: (
+        response: ApiEnvelope<AuthTokenResponse>,
+        _meta,
+        arg,
+      ) => {
+        const tokens = unwrap(response);
+        setTokens(tokens, arg.remember ?? true);
+        markWelcomePending();
+        return tokens;
+      },
+      invalidatesTags: ["Auth"],
+    }),
+
+    resendOtp: builder.mutation<void, ResendOtpRequest>({
       query: (body) => ({ url: "/api/auth/resend-otp", method: "POST", body }),
     }),
 
-    forgotPassword: builder.mutation<void, { email: string }>({
-      query: (body) => ({ url: "/api/auth/forgot-password", method: "POST", body }),
+    // The API answers the same way whether or not the email has an account.
+    forgotPassword: builder.mutation<void, ForgotPasswordRequest>({
+      query: ({ email }) => ({
+        url: "/api/auth/forgot-password",
+        method: "POST",
+        body: { email: email.trim().toLowerCase() },
+      }),
     }),
 
-    resetPassword: builder.mutation<
-      void,
-      { email: string; otp: string; newPassword: string }
-    >({
-      query: (body) => ({ url: "/api/auth/reset-password", method: "POST", body }),
+    // A successful reset revokes the account's refresh tokens on every device.
+    resetPassword: builder.mutation<void, ResetPasswordRequest>({
+      query: ({ email, otp, newPassword }) => ({
+        url: "/api/auth/reset-password",
+        method: "POST",
+        body: { email: email.trim().toLowerCase(), otp: otp.trim(), newPassword },
+      }),
     }),
 
     logout: builder.mutation<void, void>({
       query: () => ({ url: "/api/auth/logout", method: "POST" }),
-      // Drop the tokens whether or not the server call succeeded — the local session is over
-      // either way, and leaving a stale token behind is worse than a server-side orphan.
       async onQueryStarted(_arg, { queryFulfilled, dispatch }) {
         try {
           await queryFulfilled;
@@ -68,19 +126,12 @@ export const authApi = baseApi.injectEndpoints({
       },
     }),
 
-    /** The signed-in admin's own profile — drives the sidebar/header identity. */
     getCurrentUser: builder.query<UserResponse, void>({
       query: () => "/api/users/me",
       transformResponse: unwrap<UserResponse>,
       providesTags: ["Auth"],
     }),
 
-    /**
-     * Self-service profile edit. Deliberately separate from `/api/admin/admins/{id}`, which is
-     * SUPER_ADMIN-only — an admin or barista can maintain their own record through this.
-     * Invalidating "Auth" refreshes the sidebar identity as soon as the save lands. "User" is
-     * invalidated too so the Users/Staff directories don't keep showing the pre-edit row.
-     */
     updateProfile: builder.mutation<UserResponse, UpdateProfileRequest>({
       query: (body) => ({ url: "/api/users/me", method: "PATCH", body }),
       transformResponse: unwrap<UserResponse>,
@@ -94,21 +145,26 @@ export const authApi = baseApi.injectEndpoints({
     }),
 
     changePassword: builder.mutation<void, ChangePasswordRequest>({
-      query: (body) => ({ url: "/api/users/me/change-password", method: "POST", body }),
+      query: (body) => ({
+        url: "/api/users/me/change-password",
+        method: "POST",
+        body,
+      }),
     }),
 
     uploadAvatar: builder.mutation<UserResponse, File>({
       query: (file) => {
         const formData = new FormData();
         formData.append("file", file);
-        // No explicit Content-Type: the browser must set the multipart boundary itself.
         return { url: "/api/users/me/avatar", method: "POST", body: formData };
       },
       transformResponse: unwrap<UserResponse>,
       invalidatesTags: (result) => [
-        "Auth", { type: "User", id: "LIST" },
+        "Auth",
+        { type: "User", id: "LIST" },
         ...(result ? [{ type: "User" as const, id: result.id }] : []),
-        { type: "Admin", id: "LIST" }, { type: "Barista", id: "LIST" },
+        { type: "Admin", id: "LIST" },
+        { type: "Barista", id: "LIST" },
       ],
     }),
 
@@ -116,9 +172,11 @@ export const authApi = baseApi.injectEndpoints({
       query: () => ({ url: "/api/users/me/avatar", method: "DELETE" }),
       transformResponse: unwrap<UserResponse>,
       invalidatesTags: (result) => [
-        "Auth", { type: "User", id: "LIST" },
+        "Auth",
+        { type: "User", id: "LIST" },
         ...(result ? [{ type: "User" as const, id: result.id }] : []),
-        { type: "Admin", id: "LIST" }, { type: "Barista", id: "LIST" },
+        { type: "Admin", id: "LIST" },
+        { type: "Barista", id: "LIST" },
       ],
     }),
   }),
@@ -128,10 +186,13 @@ export const {
   useLoginMutation,
   useVerifyLoginOtpMutation,
   useResendOtpMutation,
+  useLoginTelegramMutation,
+  useLoginPhoneMutation,
   useForgotPasswordMutation,
   useResetPasswordMutation,
   useLogoutMutation,
   useGetCurrentUserQuery,
+  useLazyGetCurrentUserQuery,
   useUpdateProfileMutation,
   useChangePasswordMutation,
   useUploadAvatarMutation,

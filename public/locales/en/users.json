@@ -1,0 +1,59 @@
+{
+  "title": "Users",
+  "customers": {
+    "title": "Customers",
+    "empty": "No customer accounts yet. Customers appear here once they register."
+  },
+  "stats": {
+    "all": "All {title}",
+    "active_page": "Active (this page)"
+  },
+  "filters": {
+    "name_or_email": "Name or Email",
+    "search_placeholder": "Search accounts",
+    "all_roles": "All roles",
+    "all_statuses": "All statuses"
+  },
+  "meta": {
+    "total": "Total: {count}"
+  },
+  "table": {
+    "avatar": "Avatar",
+    "change_status_aria": "Change status for {name}"
+  },
+  "telegram": {
+    "linked": "Linked",
+    "not_linked": "Not linked"
+  },
+  "empty": {
+    "default": "No user accounts found.",
+    "filtered": "No accounts match these filters."
+  },
+  "fields": {
+    "gender": "Gender"
+  },
+  "form": {
+    "edit_title": "Edit Account"
+  },
+  "status_form": {
+    "title": "Change Account Status",
+    "status_for": "Status for {name}",
+    "placeholder": "Select status"
+  },
+  "detail": {
+    "title": "Account Detail",
+    "self_registered": "Self-registered"
+  },
+  "confirm": {
+    "delete_title": "Delete user account",
+    "delete_description": "Delete {name}'s account? They will lose access. Past orders and attendance will be retained."
+  },
+  "toast": {
+    "updated": "Account updated",
+    "update_failed": "Could not update the account.",
+    "deleted": "Account deleted",
+    "delete_failed": "Could not delete the account.",
+    "status_updated": "{name} is now {status}",
+    "status_failed": "Could not update the account status."
+  }
+}

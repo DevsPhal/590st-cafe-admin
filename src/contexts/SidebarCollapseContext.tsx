@@ -1,14 +1,7 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
+import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 
 const STORAGE_KEY = "desktop_sidebar_collapsed";
 
@@ -22,22 +15,11 @@ const SidebarCollapseContext = createContext<SidebarCollapseContextValue | null>
 );
 
 export function SidebarCollapseProvider({ children }: { children: ReactNode }) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "true") {
-      setIsCollapsed(true);
-    }
-  }, []);
+  const [isCollapsed, setIsCollapsed] = useLocalStorageState(STORAGE_KEY, (raw) => raw === "true");
 
   const toggleSidebar = useCallback(() => {
-    setIsCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem(STORAGE_KEY, String(next));
-      return next;
-    });
-  }, []);
+    setIsCollapsed(!isCollapsed);
+  }, [isCollapsed, setIsCollapsed]);
 
   const value = useMemo(
     () => ({ isCollapsed, toggleSidebar }),

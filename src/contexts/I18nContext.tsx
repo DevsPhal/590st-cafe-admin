@@ -3,13 +3,20 @@
 import {
   createContext,
   useContext,
-  useState,
   useEffect,
   ReactNode,
   useCallback,
+  useMemo,
 } from "react";
-import { usePathname } from "next/navigation";
 import { formatWithCommas } from "@/utils/format-currency";
+import { useLocalStorageState } from "@/hooks/useLocalStorageState";
+import { interpolate, lookup, setActiveMessages, type TranslationParams } from "./translate";
+import { LOCALE_STORAGE_KEY, localeInfo, normalizeLocale, type Locale } from "./locales";
+import { MESSAGES } from "./messages";
+
+export { translate, type TranslationParams } from "./translate";
+export { LOCALES, type Locale } from "./locales";
+
 const timeUnitTranslations: Record<string, string> = {
   hour: "ម៉ោង",
   hours: "ម៉ោង",
@@ -21,15 +28,10 @@ const timeUnitTranslations: Record<string, string> = {
   months: "ខែ",
 };
 
-// Define types for the translation messages structure
-type TranslationMessages = {
-  [key: string]: string | TranslationMessages;
-};
-
 type I18nContextType = {
-  locale: string;
+  locale: Locale;
   setLocale: (locale: string) => void;
-  t: (key: string) => string;
+  t: (key: string, fallback?: string, params?: TranslationParams) => string;
   loadPage: (pageName: string) => Promise<void>;
   formatNumber: (num: number) => string;
   parseTimeAgo: (timeAgo: string) => string;
@@ -37,162 +39,31 @@ type I18nContextType = {
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
-// Key for localStorage
-const LOCALE_STORAGE_KEY = "selectedLocale";
-
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+  // The saved choice is the single source of truth. Reading it through the shared localStorage
+  // store keeps hydration clean (the server render uses the default) and keeps open tabs in step.
+  const [locale, storeLocale] = useLocalStorageState<Locale>(LOCALE_STORAGE_KEY, normalizeLocale);
+  const messages = MESSAGES[locale];
+  // Code outside React (form validation, API errors, live notices) reads the language this render shows.
+  setActiveMessages(messages, locale);
 
-  // Initialize locale from localStorage or default to "en"
-  const [locale, setLocale] = useState(() => {
-    if (typeof window !== "undefined") {
-      const savedLocale = localStorage.getItem(LOCALE_STORAGE_KEY);
-      return savedLocale || "en";
-    }
-    return "en";
-  });
+  const setLocale = useCallback((next: string) => storeLocale(normalizeLocale(next)), [storeLocale]);
 
-  const [messages, setMessages] = useState<TranslationMessages>({});
-
-  // Save locale to localStorage whenever it changes
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(LOCALE_STORAGE_KEY, locale);
-    }
+    document.documentElement.lang = localeInfo(locale).htmlLang;
   }, [locale]);
 
-  // Function to get page name from pathname
-  const getPageName = (path: string): string => {
-    // Remove leading slash and get first segment
-    const segments = path.replace(/^\//, "").split("/");
-    const pageName = segments[0] || "dashboard"; // Default to dashboard for root
+  // Every dictionary ships with the app now; kept so existing callers still work.
+  const loadPage = useCallback(async () => {}, []);
 
-    const pageMap: Record<string, string> = {
-      "": "dashboard",
-      content: "content",
-      moderation: "moderation",
-      notifications: "notifications",
-      settings: "settings",
-      users: "users",
-      badges: "badges",
-    };
-
-    return pageMap[pageName] || pageName;
-  };
-
-  // Function to load sidebar translations
-  const loadSidebar = useCallback(async (): Promise<TranslationMessages> => {
-    try {
-      const res = await fetch(`/locales/${locale}/sidebar.json`);
-
-      if (!res.ok) {
-        // Fallback to English sidebar if current locale fails
-        if (locale !== "en") {
-          try {
-            const enRes = await fetch(`/locales/en/sidebar.json`);
-            if (enRes.ok) {
-              return await enRes.json();
-            }
-          } catch {
-            // Ignore fallback errors
-          }
-        }
-        return {};
-      }
-
-      return await res.json();
-    } catch {
-      return {};
-    }
-  }, [locale]);
-
-  // Function to load translations for a specific page
-  const loadPage = useCallback(
-    async (pageName: string) => {
-      try {
-        // Always load sidebar translations first
-        const sidebarMessages = await loadSidebar();
-
-        // Then load page-specific translations
-        const res = await fetch(`/locales/${locale}/${pageName}.json`);
-
-        if (!res.ok) {
-          // Try to fallback to common.json if page-specific file doesn't exist
-          if (pageName !== "common") {
-            try {
-              const fallbackRes = await fetch(`/locales/${locale}/common.json`);
-              if (fallbackRes.ok) {
-                const fallbackData = await fallbackRes.json();
-                // Merge sidebar + common translations
-                setMessages({ ...sidebarMessages, ...fallbackData });
-                return;
-              }
-            } catch {
-              // Ignore fallback errors
-            }
-          }
-
-          // Final fallback to English if selected locale fails
-          if (locale !== "en") {
-            try {
-              const enRes = await fetch(`/locales/en/${pageName}.json`);
-              if (enRes.ok) {
-                const enData = await enRes.json();
-                // Merge sidebar + English page translations
-                setMessages({ ...sidebarMessages, ...enData });
-                return;
-              }
-            } catch {
-              // Ignore English fallback errors
-            }
-          }
-
-          // If all else fails, use only sidebar translations
-          setMessages(sidebarMessages);
-          return;
-        }
-
-        const pageData: TranslationMessages = await res.json();
-        // Always merge sidebar + page translations
-        setMessages({ ...sidebarMessages, ...pageData });
-      } catch {
-        // If everything fails, try to load just sidebar
-        try {
-          const sidebarMessages = await loadSidebar();
-          setMessages(sidebarMessages);
-        } catch {
-          // Keep existing messages if everything fails
-        }
-      }
-    },
-    [locale, loadSidebar]
+  const t = useCallback(
+    (key: string, fallback?: string, params?: TranslationParams): string =>
+      interpolate(lookup(messages, key) ?? fallback ?? key, params),
+    [messages]
   );
 
-  // Load translations when pathname or locale changes
-  useEffect(() => {
-    const pageName = getPageName(pathname);
-    loadPage(pageName);
-  }, [pathname, locale, loadPage]);
-
-  const t = (key: string): string => {
-    const keys = key.split(".");
-    let result: string | TranslationMessages | undefined = messages;
-
-    for (const k of keys) {
-      if (typeof result === "object" && result !== null && k in result) {
-        result = result[k];
-      } else {
-        return key; // Return the key if path is invalid
-      }
-    }
-
-    return typeof result === "string" ? result : key;
-  };
-
-  // Move formatNumber inside the provider where it can access locale
   const formatNumber = useCallback(
     (num: Parameters<typeof formatWithCommas>[0]): string => {
-      // Format with commas first
       const formatted = formatWithCommas(num, "en-US");
 
       if (locale === "kh") {
@@ -207,27 +78,32 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     },
     [locale]
   );
-  function parseTimeAgo(timeAgo: string) {
-    const match = timeAgo.match(/(\d+)\s*(\w+)/);
-    if (!match) return timeAgo;
+  const parseTimeAgo = useCallback(
+    (timeAgo: string) => {
+      const match = timeAgo.match(/(\d+)\s*(\w+)/);
+      if (!match) return timeAgo;
 
-    const [, numStr, unit] = match;
-    const formattedNum = formatNumber(Number(numStr));
-    const translatedUnit = timeUnitTranslations[unit.toLowerCase()] || unit;
+      const [, numStr, unit] = match;
+      const formattedNum = formatNumber(Number(numStr));
+      const translatedUnit = timeUnitTranslations[unit.toLowerCase()] || unit;
 
-    return `${formattedNum} ${translatedUnit}`;
-  }
+      return `${formattedNum} ${translatedUnit}`;
+    },
+    [formatNumber]
+  );
+
+  const value = useMemo(
+    () => ({ locale, setLocale, t, loadPage, formatNumber, parseTimeAgo }),
+    [locale, setLocale, t, loadPage, formatNumber, parseTimeAgo]
+  );
 
   return (
-    <I18nContext.Provider
-      value={{ locale, setLocale, t, loadPage, formatNumber, parseTimeAgo }}
-    >
+    <I18nContext.Provider value={value}>
       {children}
     </I18nContext.Provider>
   );
 }
 
-// Custom hook
 export function useI18n() {
   const context = useContext(I18nContext);
   if (!context) {
@@ -236,7 +112,6 @@ export function useI18n() {
   return context;
 }
 
-// Hook for manually loading a specific page's translations
 export function usePageTranslations(pageName?: string) {
   const { t, loadPage } = useI18n();
 
@@ -248,10 +123,3 @@ export function usePageTranslations(pageName?: string) {
 
   return { t };
 }
-
-
-
-
-
-
-

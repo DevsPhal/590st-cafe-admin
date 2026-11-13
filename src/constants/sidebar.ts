@@ -6,11 +6,15 @@ import {
   CircleUserRound,
   Coffee,
   Home,
+  Images,
   Bell,
   CalendarDays,
+  ChartNoAxesCombined,
   CreditCard,
+  History,
   TriangleAlert,
   Package,
+  QrCode,
   ClipboardList,
   ScrollText,
   Settings,
@@ -23,11 +27,13 @@ import {
 const navigationSections = [
   {
     title: "",
+    titleKey: "section_home",
     dividerBefore: false,
     items: [{ name: "Home", href: "/", icon: Home, label: "nav_home" }],
   },
   {
     title: "Operations",
+    titleKey: "section_operations",
     dividerBefore: true,
     items: [
       {
@@ -42,6 +48,7 @@ const navigationSections = [
         icon: ClipboardList,
         label: "nav_orders",
       },
+      { name: "Tables", href: "/tables", icon: QrCode, label: "nav_tables" },
       { name: "Barista", href: "/barista-queue", icon: Coffee, label: "nav_barista" },
       { name: "Payments", href: "/payments", icon: CreditCard, label: "nav_payments" },
       { name: "Current alerts", href: "/notifications", icon: Bell, label: "nav_notifications" },
@@ -49,6 +56,7 @@ const navigationSections = [
   },
   {
     title: "Catalog",
+    titleKey: "section_catalog",
     dividerBefore: false,
     items: [
       {
@@ -69,12 +77,16 @@ const navigationSections = [
         icon: Archive,
         label: "nav_inventory",
       },
+      { name: "Inventory history", href: "/inventory/history", icon: History, label: "nav_inventory_history" },
+      { name: "Inventory reports", href: "/inventory/reports", icon: ChartNoAxesCombined, label: "nav_inventory_reports" },
       { name: "Stock alerts", href: "/stock-alerts", icon: TriangleAlert, label: "nav_stock_alerts" },
       { name: "Events", href: "/events", icon: CalendarDays, label: "nav_events" },
+      { name: "Banners", href: "/banners", icon: Images, label: "nav_banners" },
     ],
   },
   {
     title: "Customer & Rating",
+    titleKey: "section_customer",
     dividerBefore: false,
     items: [
       {
@@ -95,11 +107,11 @@ const navigationSections = [
         icon: Stamp,
         label: "nav_points",
       },
-      // { name: "Ratings", href: "/ratings", icon: Star, label: "nav_ratings" },
     ],
   },
   {
     title: "Analytics & Admin",
+    titleKey: "section_admin",
     dividerBefore: true,
     items: [
       { name: "Report", href: "/reports", icon: BarChart3, label: "nav_report" },

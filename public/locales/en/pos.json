@@ -1,0 +1,133 @@
+{
+  "title": "POS",
+  "breadcrumb": {
+    "point_of_sale": "Point of Sale"
+  },
+  "pending": {
+    "awaiting_payment": "Order #{id} is awaiting payment. Retry payment or clear the order to cancel it.",
+    "resume_payment": "Resume payment"
+  },
+  "catalog": {
+    "aria_label": "Product catalog",
+    "categories_aria_label": "Product categories",
+    "all": "All",
+    "search_placeholder": "Search product by name or SKU",
+    "loading_aria_label": "Loading products",
+    "load_error": "Could not load products.",
+    "empty": "No active products in this category.",
+    "clear_search": "Clear search",
+    "no_match": "No products match “{term}”."
+  },
+  "product": {
+    "discount_off": "{amount} off",
+    "per_unit": "per {unit}",
+    "stock": "{count} {unit} in stock",
+    "low_stock": "Low stock · {count} {unit}",
+    "out_of_stock": "Out of stock",
+    "add": "Add",
+    "add_to_order": "Add {name} to the order",
+    "add_variant": "Add {variant} {name}, {price}",
+    "quantity_of": "Quantity of {name}",
+    "stock_label": "{stock} in stock",
+    "low_stock_label": "Low stock · {stock}",
+    "can_make": "Can make {count}"
+  },
+  "quantity": {
+    "decrease": "Decrease quantity",
+    "increase": "Increase quantity"
+  },
+  "order": {
+    "aria_label": "Order summary",
+    "title": "Order Summary",
+    "clear_aria_label": "Clear order",
+    "type_label": "Order type",
+    "type_dine_in": "Dine in",
+    "type_take_away": "Take away",
+    "table_label": "Table",
+    "table_placeholder": "No table",
+    "table_option": "Table {number}",
+    "item_count_one": "{count} item",
+    "item_count_other": "{count} items",
+    "table_option_status": "{number} · {status}"
+  },
+  "cart": {
+    "remove_item": "Remove {name}",
+    "each": "each",
+    "edit_item": "Change options for {name}",
+    "empty_title": "No items yet",
+    "empty_hint": "Tap a product to add it to the order.",
+    "change": "Change"
+  },
+  "totals": {
+    "subtotal": "Subtotal",
+    "total_discount": "Discount",
+    "grand_total": "Total",
+    "riel": "≈ {amount}",
+    "riel_rate": "At 1 USD = {rate} ៛"
+  },
+  "actions": {
+    "view_order": "View order",
+    "charge": "Charge"
+  },
+  "payment": {
+    "title": "Checkout Order Payment",
+    "method_aria_label": "Payment method",
+    "calculator_aria_label": "Payment calculator",
+    "payable_amount": "Payable Amount (Grand Total)",
+    "cash_currency_aria_label": "Cash currency",
+    "exact": "Exact",
+    "backspace": "Backspace",
+    "qr_currency_aria_label": "QR currency",
+    "qr_alt": "Bakong KHQR for this order",
+    "no_qr": "No QR generated yet.",
+    "scan_hint": "Have the customer scan this on their banking app — this screen is for the counter, not their phone.",
+    "expires_in": "Expires in {time}",
+    "waiting": "Waiting for payment — confirms automatically",
+    "new_qr": "Get a new QR",
+    "generate_qr": "Generate QR",
+    "qty": "QTY: {quantity}",
+    "credit": "Credit:",
+    "balance": "Balance:",
+    "confirm": "Confirm Payment",
+    "total": "Total:",
+    "generating_qr": "Generating QR..."
+  },
+  "toast": {
+    "finish_payment_first": "Finish or cancel the payment before editing the order.",
+    "not_enough_stock": "{name} does not have enough stock.",
+    "out_of_stock": "{name} is out of stock.",
+    "order_cancelled": "Order #{id} was cancelled. The cart is kept — take payment again to start a new order.",
+    "line_limit": "One line can hold at most {max}."
+  },
+  "errors": {
+    "cancel_pending": "Could not cancel the pending order. Check its payment status.",
+    "complete_sale": "Could not complete the sale.",
+    "generate_qr": "Could not generate the payment QR.",
+    "check_payment": "Could not check the payment."
+  },
+  "options": {
+    "subtitle": "Choose how to make it, then add it to the order.",
+    "size": "Size",
+    "sugar": "Sugar level",
+    "ice": "Ice level",
+    "milk": "Milk",
+    "extras": "Extras",
+    "each": "Each",
+    "add": "Add to order",
+    "update": "Update item"
+  },
+  "table": {
+    "confirm_party_first": "Table {number} is not free. Confirm the order is for the guests already there, or pick another table.",
+    "finish_pending_first": "Finish or clear the pending order before starting one for table {number}.",
+    "new_guests_hint": "New guests? Mark the table clean on the Tables screen first.",
+    "notice_label": "Table check",
+    "override": "Admin override: seat this order here anyway",
+    "override_reason": "Reason (saved in the table history)",
+    "override_reason_needed": "Give a reason for the override.",
+    "reserved_blocked": "Table {number} is reserved. Check the booked party in from Tables, or pick another table.",
+    "reserved_notice": "Table {number} is reserved for a booking. Check the booked party in from Tables, then add their order here.",
+    "same_party_cleaning": "Table {number} is waiting to be cleaned. The same guests are still there and want more.",
+    "same_party_occupied": "Table {number} is occupied. This order is for the guests already seated there."
+  },
+  "cancel_reason": "Cleared at the POS before payment"
+}

@@ -44,7 +44,6 @@ export const categoryApi = baseApi.injectEndpoints({
         body,
       }),
       transformResponse: unwrap<CategoryResponse>,
-      // Products carry categoryName, so renaming a category makes the product list stale.
       invalidatesTags: (_r, _e, { id }) => [
         { type: "Category", id },
         { type: "Category", id: "LIST" },

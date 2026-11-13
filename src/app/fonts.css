@@ -1,0 +1,21 @@
+/* The CSS variables next/font/google used to set on <html>, now naming the self-hosted families (see fonts.ts).
+   Family names only, with no generic fallback: stacks such as `var(--current-english-font), var(--current-khmer-font),
+   sans-serif` rely on Khmer characters falling through to the Khmer font. */
+:root {
+  --font-inter: "Inter Variable";
+  --font-poppins: "Poppins";
+  --font-roboto: "Roboto";
+  --font-google-sans: "Google Sans Flex Variable";
+  --font-open-sans: "Open Sans Variable";
+  --font-montserrat: "Montserrat Variable";
+  --font-lato: "Lato";
+  --font-source-sans: "Source Sans 3 Variable";
+  --font-nunito: "Nunito Variable";
+  --font-work-sans: "Work Sans Variable";
+  --font-koh-santepheap: "Koh Santepheap";
+  --font-kantumruy-pro: "Kantumruy Pro Variable";
+  --font-battambang: "Battambang";
+  --font-siemreap: "Siemreap";
+  --font-dangrek: "Dangrek";
+  --font-noto-sans-khmer: "Noto Sans Khmer";
+}

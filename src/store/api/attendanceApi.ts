@@ -5,11 +5,26 @@ export interface AttendanceQuery extends PageQuery {
   baristaId?: UUID;
   from?: string;
   to?: string;
+  /** true: only shifts still running; false: only completed shifts. */
+  open?: boolean;
 }
 export interface AttendanceInput {
   baristaId: UUID;
   checkInAt: string;
   checkOutAt?: string;
+  note?: string;
+}
+export interface ShiftNoteInput {
+  note?: string;
+}
+export interface StaffCheckInInput {
+  baristaId: UUID;
+  checkInAt: string;
+  note?: string;
+}
+export interface StaffCheckOutInput {
+  baristaId: UUID;
+  checkOutAt: string;
   note?: string;
 }
 
@@ -60,13 +75,24 @@ export const attendanceApi = baseApi.injectEndpoints({
       },
       providesTags: ["Attendance"],
     }),
-    checkIn: builder.mutation<AttendanceResponse, void>({
-      query: () => ({ url: "/api/barista/attendance/check-in", method: "POST" }),
+    // A barista's own punch; the optional note is saved on the shift.
+    checkIn: builder.mutation<AttendanceResponse, ShiftNoteInput | void>({
+      query: (body) => ({ url: "/api/barista/attendance/check-in", method: "POST", body: body ?? undefined }),
       transformResponse: unwrap<AttendanceResponse>,
       invalidatesTags: ["Attendance"],
     }),
-    checkOut: builder.mutation<AttendanceResponse, void>({
-      query: () => ({ url: "/api/barista/attendance/check-out", method: "POST" }),
+    checkOut: builder.mutation<AttendanceResponse, ShiftNoteInput | void>({
+      query: (body) => ({ url: "/api/barista/attendance/check-out", method: "POST", body: body ?? undefined }),
+      transformResponse: unwrap<AttendanceResponse>,
+      invalidatesTags: ["Attendance"],
+    }),
+    checkInStaff: builder.mutation<AttendanceResponse, StaffCheckInInput>({
+      query: (body) => ({ url: "/api/admin/attendance/check-in", method: "POST", body }),
+      transformResponse: unwrap<AttendanceResponse>,
+      invalidatesTags: ["Attendance"],
+    }),
+    checkOutStaff: builder.mutation<AttendanceResponse, StaffCheckOutInput>({
+      query: (body) => ({ url: "/api/admin/attendance/check-out", method: "POST", body }),
       transformResponse: unwrap<AttendanceResponse>,
       invalidatesTags: ["Attendance"],
     }),
@@ -84,5 +110,5 @@ export const attendanceApi = baseApi.injectEndpoints({
 });
 
 export const { useListAttendanceQuery, useGetAttendanceHistoryQuery, useListMyAttendanceQuery,
-  useGetCurrentShiftQuery, useCheckInMutation, useCheckOutMutation, useCreateAttendanceMutation,
-  useUpdateAttendanceMutation } = attendanceApi;
+  useGetCurrentShiftQuery, useCheckInMutation, useCheckOutMutation, useCheckInStaffMutation,
+  useCheckOutStaffMutation, useCreateAttendanceMutation, useUpdateAttendanceMutation } = attendanceApi;

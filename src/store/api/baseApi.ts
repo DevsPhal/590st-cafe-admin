@@ -6,30 +6,46 @@ import {
   type FetchBaseQueryError,
 } from "@reduxjs/toolkit/query/react";
 
-import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "@/lib/authStorage";
+import toast from "react-hot-toast";
+
+import {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+} from "@/lib/authStorage";
 import type { ApiEnvelope, ApiErrorBody, AuthTokenResponse } from "./types";
+import { translate } from "@/contexts/translate";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-/**
- * Every controller wraps its payload in `ApiResponse<T>`, so each endpoint unwraps with this
- * rather than repeating `(r) => r.data` inline.
- */
 export function unwrap<T>(response: ApiEnvelope<T>): T {
   return response.data;
 }
 
-/** Pulls the human-readable message out of an `ErrorResponse` body for toasts. */
 export function apiErrorMessage(
   error: FetchBaseQueryError | undefined,
-  fallback = "Something went wrong. Please try again."
+  fallback = translate("errors.generic", "Something went wrong. Please try again."),
 ): string {
   if (!error) return fallback;
   if ("status" in error && error.status === "FETCH_ERROR") {
-    return "Cannot reach the server. Please check your connection and try again.";
+    return translate("errors.unreachable", "Cannot reach the server. Please check your connection and try again.");
   }
   const body = (error as { data?: Partial<ApiErrorBody> }).data;
   return body?.message ?? fallback;
+}
+
+/**
+ * The API's per-field messages, keyed by request field path ("fullName", "items[0].quantity"),
+ * so a form can show each one under its input. Empty when the error isn't about specific fields.
+ */
+export function apiFieldErrors(error: unknown): Record<string, string> {
+  const body = (error as { data?: Partial<ApiErrorBody> } | undefined)?.data;
+  const fields: Record<string, string> = {};
+  for (const entry of Array.isArray(body?.errors) ? body.errors : []) {
+    if (entry?.field && entry.message && !(entry.field in fields)) fields[entry.field] = entry.message;
+  }
+  return fields;
 }
 
 const rawBaseQuery = fetchBaseQuery({
@@ -41,11 +57,6 @@ const rawBaseQuery = fetchBaseQuery({
   },
 });
 
-/**
- * Serialises refresh attempts: without it, several 401s arriving together would each fire
- * their own /refresh-token call and all but the first would present an already-rotated token.
- * Deliberately tiny — the only thing needed is "is a refresh in flight, and let me await it".
- */
 const refreshLock = {
   pending: null as Promise<void> | null,
   isLocked() {
@@ -66,10 +77,53 @@ const refreshLock = {
   },
 };
 
-/**
- * Wraps the base query so an expired access token is refreshed once and the original request
- * retried. A failed refresh clears the session and sends the user to the login page.
- */
+const SERVER_STATUS_TOAST_ID = "server-status";
+let serverDown = false;
+
+function isServerDown(error: FetchBaseQueryError | undefined): boolean {
+  if (!error) return false;
+  return (
+    error.status === "FETCH_ERROR" ||
+    error.status === 502 ||
+    error.status === 503 ||
+    error.status === 504
+  );
+}
+
+function trackServerStatus(error: FetchBaseQueryError | undefined): void {
+  if (typeof window === "undefined") return;
+  if (isServerDown(error)) {
+    if (!serverDown) {
+      serverDown = true;
+      toast.error(
+        translate("errors.system_unavailable", "System unavailable — retrying automatically."),
+        {
+          id: SERVER_STATUS_TOAST_ID,
+          duration: Infinity,
+        },
+      );
+    }
+    return;
+  }
+  if (serverDown) {
+    serverDown = false;
+    toast.success(translate("errors.connection_restored", "Connection restored"), {
+      id: SERVER_STATUS_TOAST_ID,
+      duration: 3000,
+    });
+  }
+}
+
+const baseQueryWithStatus: BaseQueryFn<
+  string | FetchArgs,
+  unknown,
+  FetchBaseQueryError
+> = async (args, api, extraOptions) => {
+  const result = await baseQueryWithReauth(args, api, extraOptions);
+  trackServerStatus(result.error);
+  return result;
+};
+
 const baseQueryWithReauth: BaseQueryFn<
   string | FetchArgs,
   unknown,
@@ -81,7 +135,6 @@ const baseQueryWithReauth: BaseQueryFn<
   if (result.error?.status !== 401) return result;
 
   if (refreshLock.isLocked()) {
-    // Another request is already refreshing — wait for it, then retry with the new token.
     await refreshLock.waitForUnlock();
     return rawBaseQuery(args, api, extraOptions);
   }
@@ -101,10 +154,12 @@ const baseQueryWithReauth: BaseQueryFn<
         body: { refreshToken },
       },
       api,
-      extraOptions
+      extraOptions,
     );
 
-    const tokens = (refreshResult.data as ApiEnvelope<AuthTokenResponse> | undefined)?.data;
+    const tokens = (
+      refreshResult.data as ApiEnvelope<AuthTokenResponse> | undefined
+    )?.data;
     if (!tokens?.accessToken) {
       forceLogout();
       return result;
@@ -121,36 +176,43 @@ const baseQueryWithReauth: BaseQueryFn<
 
 function forceLogout(): void {
   clearTokens();
-  if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {
+  if (
+    typeof window !== "undefined" &&
+    !window.location.pathname.startsWith("/auth")
+  ) {
     window.location.href = "/auth/login";
   }
 }
 
-/**
- * Single API slice; each domain file injects its own endpoints so the store stays one cache
- * and cross-domain invalidation (an order changing inventory, say) actually works.
- */
 export const baseApi = createApi({
   reducerPath: "api",
-  baseQuery: baseQueryWithReauth,
+  baseQuery: baseQueryWithStatus,
   refetchOnFocus: true,
   refetchOnReconnect: true,
   refetchOnMountOrArgChange: 30,
   tagTypes: [
+    "Table",
+    "Reservation",
     "Attendance",
     "ContactMessage",
     "Auth",
     "Product",
-    "SizeOption",
+    "Variant",
+    "ProductExtra",
+    "Extra",
     "Category",
     "Inventory",
     "StockMovement",
+    "Recipe",
+    "InventoryReport",
     "Order",
     "OrderHistory",
+    "StaffCall",
     "User",
     "Admin",
     "Barista",
     "Event",
+    "Banner",
     "Report",
     "Finance",
     "ExchangeRate",

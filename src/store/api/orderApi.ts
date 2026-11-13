@@ -1,41 +1,132 @@
 import { baseApi, unwrap } from "./baseApi";
 import type {
+  BakongQrResponse,
+  CancelOrderRequest,
   CashPaymentRequest,
+  CreateOrderRequest,
+  Currency,
+  DeliveryFeeRequest,
+  EstimatedTimeRequest,
+  InvoiceLanguage,
   OrderAuditLogResponse,
   OrderResponse,
+  OrderSearchParams,
   OrderStatus,
+  OrderStatusSummary,
   PageQuery,
   PageResponse,
+  SortDirection,
+  StaffCallResponse,
   UUID,
 } from "./types";
 
-interface OrderListQuery extends PageQuery {
+interface OrderSummaryQuery extends OrderSearchParams {
   baristaId?: UUID;
   customerId?: UUID;
-  status?: OrderStatus;
 }
 
-/** Every mutation below moves an order between queues, so they all share this invalidation. */
+interface OrderListQuery extends PageQuery, OrderSummaryQuery {
+  status?: OrderStatus | OrderStatus[];
+  direction?: SortDirection;
+}
+
 const ORDER_QUEUE_TAGS = [
   { type: "Order" as const, id: "LIST" },
   { type: "Order" as const, id: "AWAITING_PICKUP" },
   { type: "Order" as const, id: "AWAITING_BAKONG" },
+  { type: "Order" as const, id: "AWAITING_DELIVERY_FEE" },
+  { type: "Order" as const, id: "DELIVERY_BOARD" },
   { type: "Report" as const, id: "DAILY" },
   { type: "Finance" as const, id: "SUMMARY" },
 ];
 
 export const orderApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    listOrders: builder.query<PageResponse<OrderResponse>, OrderListQuery | void>({
-      query: (params) => ({ url: "/api/admin/orders", params: params ?? undefined }),
+    createAdminOrder: builder.mutation<OrderResponse, CreateOrderRequest>({
+      query: (body) => ({ url: "/api/admin/orders", method: "POST", body }),
+      transformResponse: unwrap<OrderResponse>,
+      invalidatesTags: [...ORDER_QUEUE_TAGS, { type: "Inventory", id: "LIST" }],
+    }),
+
+    payAdminOrderCash: builder.mutation<
+      OrderResponse,
+      { id: UUID; body: CashPaymentRequest }
+    >({
+      query: ({ id, body }) => ({
+        url: `/api/admin/orders/${id}/pay/cash`,
+        method: "POST",
+        body,
+      }),
+      transformResponse: unwrap<OrderResponse>,
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: "Order", id },
+        { type: "OrderHistory", id },
+        "Inventory",
+        "StockMovement",
+        "Product",
+        ...ORDER_QUEUE_TAGS,
+      ],
+    }),
+
+    generateAdminBakongQr: builder.mutation<
+      BakongQrResponse,
+      { id: UUID; currency?: Currency }
+    >({
+      query: ({ id, currency }) => ({
+        url: `/api/admin/orders/${id}/pay/bakong/qr`,
+        method: "POST",
+        params: currency ? { currency } : undefined,
+      }),
+      transformResponse: unwrap<BakongQrResponse>,
+    }),
+
+    confirmAdminBakongPayment: builder.mutation<OrderResponse, UUID>({
+      query: (id) => ({
+        url: `/api/admin/orders/${id}/pay/bakong/confirm`,
+        method: "POST",
+      }),
+      transformResponse: unwrap<OrderResponse>,
+      invalidatesTags: (_r, _e, id) => [
+        { type: "Order", id },
+        { type: "OrderHistory", id },
+        "Inventory",
+        "StockMovement",
+        "Product",
+        ...ORDER_QUEUE_TAGS,
+      ],
+    }),
+
+    listOrders: builder.query<
+      PageResponse<OrderResponse>,
+      OrderListQuery | void
+    >({
+      query: (params) => ({
+        url: "/api/admin/orders",
+        params: params ?? undefined,
+      }),
       transformResponse: unwrap<PageResponse<OrderResponse>>,
       providesTags: (result) =>
         result
           ? [
-              ...result.content.map(({ id }) => ({ type: "Order" as const, id })),
+              ...result.content.map(({ id }) => ({
+                type: "Order" as const,
+                id,
+              })),
               { type: "Order" as const, id: "LIST" },
             ]
           : [{ type: "Order" as const, id: "LIST" }],
+    }),
+
+    getOrderStatusSummary: builder.query<
+      OrderStatusSummary[],
+      OrderSummaryQuery | void
+    >({
+      query: (params) => ({
+        url: "/api/admin/orders/status-summary",
+        params: params ?? undefined,
+      }),
+      transformResponse: unwrap<OrderStatusSummary[]>,
+      providesTags: [{ type: "Order", id: "LIST" }],
     }),
 
     getOrder: builder.query<OrderResponse, UUID>({
@@ -50,8 +141,10 @@ export const orderApi = baseApi.injectEndpoints({
       providesTags: (_r, _e, id) => [{ type: "OrderHistory", id }],
     }),
 
-    /** Cash-on-pickup orders waiting for staff to take the money. */
-    listAwaitingPickup: builder.query<PageResponse<OrderResponse>, PageQuery | void>({
+    listAwaitingPickup: builder.query<
+      PageResponse<OrderResponse>,
+      PageQuery | void
+    >({
       query: (params) => ({
         url: "/api/admin/orders/awaiting-pickup",
         params: params ?? undefined,
@@ -60,7 +153,6 @@ export const orderApi = baseApi.injectEndpoints({
       providesTags: [{ type: "Order", id: "AWAITING_PICKUP" }],
     }),
 
-    /** Bakong payments the customer claims to have sent, pending staff confirmation. */
     listAwaitingBakongConfirmation: builder.query<
       PageResponse<OrderResponse>,
       PageQuery | void
@@ -73,7 +165,10 @@ export const orderApi = baseApi.injectEndpoints({
       providesTags: [{ type: "Order", id: "AWAITING_BAKONG" }],
     }),
 
-    collectCash: builder.mutation<OrderResponse, { id: UUID; body: CashPaymentRequest }>({
+    collectCash: builder.mutation<
+      OrderResponse,
+      { id: UUID; body: CashPaymentRequest }
+    >({
       query: ({ id, body }) => ({
         url: `/api/admin/orders/${id}/collect-cash`,
         method: "POST",
@@ -83,27 +178,21 @@ export const orderApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: "Order", id },
         { type: "OrderHistory", id },
-        "Inventory", "StockMovement", "Product",
+        "Inventory",
+        "StockMovement",
+        "Product",
         ...ORDER_QUEUE_TAGS,
       ],
     }),
 
-    acceptBakongPayment: builder.mutation<OrderResponse, UUID>({
-      query: (id) => ({ url: `/api/admin/orders/${id}/accept-bakong`, method: "POST" }),
+    cancelOrder: builder.mutation<OrderResponse, { id: UUID; body: CancelOrderRequest }>({
+      query: ({ id, body }) => ({
+        url: `/api/admin/orders/${id}/cancel`,
+        method: "POST",
+        body,
+      }),
       transformResponse: unwrap<OrderResponse>,
-      invalidatesTags: (_r, _e, id) => [
-        { type: "Order", id },
-        { type: "OrderHistory", id },
-        "Inventory", "StockMovement", "Product",
-        ...ORDER_QUEUE_TAGS,
-      ],
-    }),
-
-    cancelOrder: builder.mutation<OrderResponse, UUID>({
-      query: (id) => ({ url: `/api/admin/orders/${id}/cancel`, method: "POST" }),
-      transformResponse: unwrap<OrderResponse>,
-      // Only unpaid orders can be cancelled; the backend cuts stock upon payment.
-      invalidatesTags: (_r, _e, id) => [
+      invalidatesTags: (_r, _e, { id }) => [
         { type: "Order", id },
         { type: "OrderHistory", id },
         { type: "Inventory", id: "LIST" },
@@ -111,14 +200,67 @@ export const orderApi = baseApi.injectEndpoints({
       ],
     }),
 
-    /**
-     * The admin mirror of the barista's queue actions, so a manager covering the bar can move
-     * orders along on their own account. Money and stock both moved at payment, so these only
-     * invalidate the board.
-     */
+    listAwaitingDeliveryFee: builder.query<
+      PageResponse<OrderResponse>,
+      PageQuery | void
+    >({
+      query: (params) => ({
+        url: "/api/admin/orders/awaiting-delivery-fee",
+        params: params ?? undefined,
+      }),
+      transformResponse: unwrap<PageResponse<OrderResponse>>,
+      providesTags: [{ type: "Order", id: "AWAITING_DELIVERY_FEE" }],
+    }),
+
+    setOrderEstimatedTime: builder.mutation<
+      OrderResponse,
+      { id: UUID; body: EstimatedTimeRequest }
+    >({
+      query: ({ id, body }) => ({
+        url: `/api/admin/orders/${id}/estimated-time`,
+        method: "POST",
+        body,
+      }),
+      transformResponse: unwrap<OrderResponse>,
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: "Order", id },
+        { type: "OrderHistory", id },
+        ...ORDER_QUEUE_TAGS,
+      ],
+    }),
+
+    setOrderDeliveryFee: builder.mutation<
+      OrderResponse,
+      { id: UUID; body: DeliveryFeeRequest }
+    >({
+      query: ({ id, body }) => ({
+        url: `/api/admin/orders/${id}/delivery-fee`,
+        method: "POST",
+        body,
+      }),
+      transformResponse: unwrap<OrderResponse>,
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: "Order", id },
+        { type: "OrderHistory", id },
+        ...ORDER_QUEUE_TAGS,
+      ],
+    }),
+
+    listDeliveryBoard: builder.query<
+      PageResponse<OrderResponse>,
+      PageQuery | void
+    >({
+      query: (params) => ({
+        url: "/api/admin/orders/delivery-board",
+        params: params ?? undefined,
+      }),
+      transformResponse: unwrap<PageResponse<OrderResponse>>,
+      providesTags: [{ type: "Order", id: "DELIVERY_BOARD" }],
+    }),
+
     startPreparingOrder: builder.mutation<OrderResponse, UUID>({
       query: (id) => ({
-        url: `/api/admin/orders/${id}/start-preparing`,
+        url: `/api/admin/orders/${id}/prepare`,
         method: "POST",
       }),
       transformResponse: unwrap<OrderResponse>,
@@ -129,9 +271,11 @@ export const orderApi = baseApi.injectEndpoints({
       ],
     }),
 
-
     dispatchAdminOrder: builder.mutation<OrderResponse, UUID>({
-      query: (id) => ({ url: `/api/admin/orders/${id}/dispatch`, method: "POST" }),
+      query: (id) => ({
+        url: `/api/admin/orders/${id}/dispatch`,
+        method: "POST",
+      }),
       transformResponse: unwrap<OrderResponse>,
       invalidatesTags: (_r, _e, id) => [
         { type: "Order", id },
@@ -141,7 +285,10 @@ export const orderApi = baseApi.injectEndpoints({
     }),
 
     markDeliveredAdminOrder: builder.mutation<OrderResponse, UUID>({
-      query: (id) => ({ url: `/api/admin/orders/${id}/delivered`, method: "POST" }),
+      query: (id) => ({
+        url: `/api/admin/orders/${id}/deliver`,
+        method: "POST",
+      }),
       transformResponse: unwrap<OrderResponse>,
       invalidatesTags: (_r, _e, id) => [
         { type: "Order", id },
@@ -151,7 +298,10 @@ export const orderApi = baseApi.injectEndpoints({
     }),
 
     completeOrder: builder.mutation<OrderResponse, UUID>({
-      query: (id) => ({ url: `/api/admin/orders/${id}/complete`, method: "POST" }),
+      query: (id) => ({
+        url: `/api/admin/orders/${id}/complete`,
+        method: "POST",
+      }),
       transformResponse: unwrap<OrderResponse>,
       invalidatesTags: (_r, _e, id) => [
         { type: "Order", id },
@@ -159,20 +309,56 @@ export const orderApi = baseApi.injectEndpoints({
         ...ORDER_QUEUE_TAGS,
       ],
     }),
+
+    downloadOrderInvoice: builder.mutation<Blob, { id: UUID; language?: InvoiceLanguage }>({
+      query: ({ id, language }) => ({
+        url: `/api/admin/orders/${id}/invoice`,
+        params: language ? { language } : undefined,
+        responseHandler: (response: Response) =>
+          response.ok ? response.blob() : response.json(),
+      }),
+    }),
+
+    listStaffCalls: builder.query<StaffCallResponse[], void>({
+      query: () => "/api/admin/orders/staff-calls",
+      transformResponse: unwrap<StaffCallResponse[]>,
+      providesTags: [{ type: "StaffCall", id: "LIST" }],
+    }),
+
+    answerStaffCall: builder.mutation<StaffCallResponse, { id: UUID; reply?: string }>({
+      query: ({ id, reply }) => ({
+        url: `/api/admin/orders/${id}/staff-call/answer`,
+        method: "POST",
+        body: { reply },
+      }),
+      transformResponse: unwrap<StaffCallResponse>,
+      invalidatesTags: [{ type: "StaffCall", id: "LIST" }],
+    }),
   }),
 });
 
 export const {
+  useCreateAdminOrderMutation,
+  usePayAdminOrderCashMutation,
+  useGenerateAdminBakongQrMutation,
+  useConfirmAdminBakongPaymentMutation,
   useListOrdersQuery,
+  useGetOrderStatusSummaryQuery,
   useGetOrderQuery,
   useGetOrderHistoryQuery,
   useListAwaitingPickupQuery,
   useListAwaitingBakongConfirmationQuery,
+  useListAwaitingDeliveryFeeQuery,
+  useListDeliveryBoardQuery,
+  useSetOrderDeliveryFeeMutation,
+  useSetOrderEstimatedTimeMutation,
   useCollectCashMutation,
-  useAcceptBakongPaymentMutation,
   useCancelOrderMutation,
   useStartPreparingOrderMutation,
   useCompleteOrderMutation,
   useDispatchAdminOrderMutation,
   useMarkDeliveredAdminOrderMutation,
+  useDownloadOrderInvoiceMutation,
+  useListStaffCallsQuery,
+  useAnswerStaffCallMutation,
 } = orderApi;

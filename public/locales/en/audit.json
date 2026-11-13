@@ -1,0 +1,46 @@
+{
+  "title": "Audit Trail",
+  "description": "Every step taken on an order or a shift, with who did it and when.",
+  "sources": {
+    "aria_label": "History source",
+    "orders": "Orders",
+    "attendance": "Attendance"
+  },
+  "meta": {
+    "records": "{count} records"
+  },
+  "fields": {
+    "payment": "Payment",
+    "placed": "Placed",
+    "history": "History",
+    "barista": "Barista",
+    "check_in": "Check In",
+    "check_out": "Check Out",
+    "worked": "Worked"
+  },
+  "empty": {
+    "orders": "No orders yet.",
+    "shifts": "No shifts recorded yet."
+  },
+  "walk_in": "Walk-in",
+  "shift": {
+    "on_shift": "On shift",
+    "closed": "Closed",
+    "still_on_shift": "Still on shift"
+  },
+  "modal": {
+    "order_title": "Order #{id}",
+    "order_history": "Order history",
+    "shift_title": "{name}'s shift",
+    "shift_history": "Shift history"
+  },
+  "timeline": {
+    "title": "Activity",
+    "loading": "Loading history",
+    "error": "Could not load the history.",
+    "empty": "Nothing has been recorded for this yet.",
+    "by_role": "by {name} · {role}",
+    "by": "by {name}",
+    "automatic": "Automatic"
+  }
+}

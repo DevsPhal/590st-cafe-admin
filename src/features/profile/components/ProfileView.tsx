@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
+import { useRef, useState } from "react";
 import toast from "react-hot-toast";
 import {
   Check,
@@ -9,7 +8,6 @@ import {
   Loader2,
   Mail,
   Send,
-  ShieldCheck,
   Trash2,
   Upload,
   UserRound,
@@ -17,16 +15,21 @@ import {
 
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import {
   AdminTopActions,
   DataCard,
   DetailGrid,
   DetailItem,
+  ErrorState,
   FormInput,
+  FormPhoneInput,
   FormSelect,
+  SkeletonBlock,
   StatusBadge,
 } from "@/components/common/AdminKit";
 import { apiErrorMessage } from "@/store/api/baseApi";
+import { useI18n } from "@/contexts/I18nContext";
 import {
   useChangePasswordMutation,
   useGetCurrentUserQuery,
@@ -34,33 +37,24 @@ import {
   useUpdateProfileMutation,
   useUploadAvatarMutation,
 } from "@/store/api/authApi";
+import { changePasswordSchema, profileSchema } from "@/lib/formSchemas";
 import type { Gender, UpdateProfileRequest } from "@/store/api/types";
-import { humanise, statusTone } from "@/features/user/components/UserManagementView";
+import { statusTone } from "@/features/user/components/UserManagementView";
+import { titleCase } from "@/lib/utils";
+import { enumLabel } from "@/lib/enumLabel";
+import { formatPhoneInput, samePhone } from "@/lib/phone";
+import { useFormErrors } from "@/hooks/useFormErrors";
+import { IMAGE_ACCEPT, imageFileProblem } from "@/lib/imageFile";
+import { Button } from "@/components/common/Button";
 
 const GENDERS: Gender[] = ["MALE", "FEMALE", "OTHER"];
 
-/** Matches the API's ValidationPatterns.STRONG_PASSWORD_REGEX so we fail fast in the browser. */
-const STRONG_PASSWORD =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-
-const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 const EMPTY_PASSWORD_FORM = { current: "", next: "", confirm: "" };
 
-/**
- * The signed-in account's own page: full detail plus the three things staff previously had no
- * way to do for themselves — edit their name/phone/gender, change their avatar, and change
- * their password. All of it goes through `/api/users/me`, which is open to any authenticated
- * account; `/api/admin/admins/{id}` is SUPER_ADMIN-only, so an admin or barista could not
- * maintain their own record before this existed.
- *
- * The super admin has no `User` row behind it — it signs in from SUPER_ADMIN_EMAIL /
- * SUPER_ADMIN_PASSWORD so the shop can never be locked out by a bad database. Its display
- * profile is still its own to maintain, and is stored separately; only the email and password
- * remain configuration, and only those two are disabled here.
- */
 export default function ProfileView() {
-  const { data: user, isLoading, error, refetch } = useGetCurrentUserQuery();
+  const { t } = useI18n();
+  const { data: user, isLoading, isFetching, error, refetch } = useGetCurrentUserQuery();
 
   const [updateProfile, { isLoading: isSaving }] = useUpdateProfileMutation();
   const [changePassword, { isLoading: isChangingPassword }] = useChangePasswordMutation();
@@ -73,83 +67,59 @@ export default function ProfileView() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [gender, setGender] = useState<string>("");
   const [password, setPassword] = useState(EMPTY_PASSWORD_FORM);
+  const profileValidation = useFormErrors(profileSchema, { fullName, phoneNumber });
+  const passwordValidation = useFormErrors(changePasswordSchema, password);
 
-  // The super admin signs in from configuration, so its email and password are the two things
-  // that still cannot be changed here. Its name, phone, gender and avatar are persisted like
-  // anyone else's and are editable.
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
-  const isPasswordConfigDriven = isSuperAdmin;
 
-  // Re-seed the form from the server whenever the profile changes — including right after a
-  // save, so the inputs show exactly what was persisted (a trimmed name, a cleared phone).
-  useEffect(() => {
-    if (!user) return;
+  const [seededFrom, setSeededFrom] = useState<typeof user>(undefined);
+  if (user && user !== seededFrom) {
+    setSeededFrom(user);
     setFullName(user.fullName ?? "");
-    setPhoneNumber(user.phoneNumber ?? "");
+    setPhoneNumber(formatPhoneInput(user.phoneNumber));
     setGender(user.gender ?? "");
-  }, [user]);
+  }
 
   const isDirty =
     !!user &&
     (fullName !== (user.fullName ?? "") ||
-      phoneNumber !== (user.phoneNumber ?? "") ||
+      !samePhone(phoneNumber, user.phoneNumber) ||
       gender !== (user.gender ?? ""));
 
   const handleSaveProfile = async () => {
     if (!user) return;
 
-    const trimmedName = fullName.trim();
-    if (trimmedName.length < 2) {
-      toast.error("Full name must be at least 2 characters");
-      return;
-    }
+    const parsed = profileValidation.validate();
+    if (!parsed) return;
 
-    // Send only what actually changed: the API treats null as "leave alone", and an untouched
-    // phone number should not be re-validated against the Cambodian format on every save.
     const body: UpdateProfileRequest = {};
-    if (trimmedName !== user.fullName) body.fullName = trimmedName;
-    if (phoneNumber.trim() !== (user.phoneNumber ?? "")) body.phoneNumber = phoneNumber.trim();
+    if (parsed.fullName !== user.fullName) body.fullName = parsed.fullName;
+    if (!samePhone(phoneNumber, user.phoneNumber)) body.phoneNumber = parsed.phoneNumber ?? "";
     if (gender && gender !== user.gender) body.gender = gender as Gender;
 
     if (Object.keys(body).length === 0) {
-      toast("Nothing to save");
+      toast(t("profile.toast.nothing_to_save", "Nothing to save."));
       return;
     }
 
     try {
       await updateProfile(body).unwrap();
-      toast.success("Profile updated");
+      toast.success(t("profile.toast.profile_updated", "Profile updated"));
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, "Could not update your profile."));
+      profileValidation.showServerError(err, t("profile.toast.profile_update_failed", "Could not update your profile."));
     }
   };
 
   const handleResetForm = () => {
     if (!user) return;
     setFullName(user.fullName ?? "");
-    setPhoneNumber(user.phoneNumber ?? "");
+    setPhoneNumber(formatPhoneInput(user.phoneNumber));
     setGender(user.gender ?? "");
+    profileValidation.reset();
   };
 
   const handleChangePassword = async () => {
-    if (!password.current) {
-      toast.error("Enter your current password");
-      return;
-    }
-    if (password.next !== password.confirm) {
-      toast.error("The new passwords do not match");
-      return;
-    }
-    if (!STRONG_PASSWORD.test(password.next)) {
-      toast.error(
-        "New password needs at least 8 characters, with an uppercase, a lowercase, a number and a symbol."
-      );
-      return;
-    }
-    if (password.next === password.current) {
-      toast.error("The new password must be different from the current one");
-      return;
-    }
+    if (!passwordValidation.validate()) return;
 
     try {
       await changePassword({
@@ -157,54 +127,63 @@ export default function ProfileView() {
         newPassword: password.next,
       }).unwrap();
       setPassword(EMPTY_PASSWORD_FORM);
-      toast.success("Password changed. Other devices will need to sign in again.");
+      toast.success(
+        t(
+          "profile.toast.password_changed",
+          "Password changed. Other devices will need to sign in again."
+        )
+      );
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, "Could not change your password."));
+      passwordValidation.showServerError(err, t("profile.toast.password_change_failed", "Could not change your password."), {
+        currentPassword: "current",
+        newPassword: "next",
+      });
     }
   };
 
   const handlePickAvatar = async (file: File | null) => {
-    // Clear the input value so re-picking the same file still fires a change event.
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      toast.error("Choose an image file");
-      return;
-    }
-    if (file.size > MAX_AVATAR_BYTES) {
-      toast.error("Image must be 5 MB or smaller");
+    const problem = imageFileProblem(file);
+    if (problem) {
+      toast.error(problem);
       return;
     }
 
     try {
       await uploadAvatar(file).unwrap();
-      toast.success("Photo updated");
+      toast.success(t("profile.toast.photo_updated", "Photo updated"));
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, "Could not upload your photo."));
+      toast.error(apiErrorMessage(err as never, t("profile.toast.photo_upload_failed", "Could not upload your photo.")));
     }
   };
 
   const handleRemoveAvatar = async () => {
     try {
       await removeAvatar().unwrap();
-      toast.success("Photo removed");
+      toast.success(t("profile.toast.photo_removed", "Photo removed"));
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, "Could not remove your photo."));
+      toast.error(apiErrorMessage(err as never, t("profile.toast.photo_remove_failed", "Could not remove your photo.")));
     }
   };
+
+  const header = (
+    <PageHeader
+      title={t("profile.title", "My Profile")}
+      breadcrumbs={[
+        { label: t("breadcrumb.home", "Home"), href: "/" },
+        { label: t("profile.breadcrumb.profile", "Profile") },
+      ]}
+      rightSlot={<AdminTopActions />}
+    />
+  );
 
   if (isLoading) {
     return (
       <PageShell>
-        <PageHeader
-          title="My Profile"
-          breadcrumbs={[{ label: "Home", href: "/" }, { label: "Profile" }]}
-          rightSlot={<AdminTopActions />}
-        />
-        <div className="flex min-h-[240px] items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-        </div>
+        {header}
+        <ProfileSkeleton />
       </PageShell>
     );
   }
@@ -212,21 +191,13 @@ export default function ProfileView() {
   if (error || !user) {
     return (
       <PageShell>
-        <PageHeader
-          title="My Profile"
-          breadcrumbs={[{ label: "Home", href: "/" }, { label: "Profile" }]}
-          rightSlot={<AdminTopActions />}
+        {header}
+        <ErrorState
+          error={error}
+          fallback={t("profile.errors.load", "Could not load your account.")}
+          onRetry={() => refetch()}
+          isRetrying={isFetching}
         />
-        <DataCard title="Profile">
-          <div className="p-6 text-sm" role="alert">
-            <p className="text-red-500">
-              {apiErrorMessage(error as never, "Could not load your account.")}
-            </p>
-            <button type="button" className="mt-3 underline" onClick={() => refetch()}>
-              Retry
-            </button>
-          </div>
-        </DataCard>
       </PageShell>
     );
   }
@@ -235,118 +206,96 @@ export default function ProfileView() {
 
   return (
     <PageShell>
-      <PageHeader
-        title="My Profile"
-        breadcrumbs={[{ label: "Home", href: "/" }, { label: "Profile" }]}
-        rightSlot={<AdminTopActions />}
-      />
-
-      {isSuperAdmin ? (
-        <div
-          className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4"
-          role="status"
-        >
-          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-          <div className="text-sm">
-            <p className="font-semibold text-amber-900">
-              The super admin signs in from configuration
-            </p>
-            <p className="mt-1 text-amber-800">
-              Your name, phone, gender and photo are yours to edit here. The email and password
-              come from{" "}
-              <code className="rounded bg-amber-100 px-1">SUPER_ADMIN_EMAIL</code> and{" "}
-              <code className="rounded bg-amber-100 px-1">SUPER_ADMIN_PASSWORD</code> instead of
-              the database — that is what keeps the shop from ever being locked out of its own
-              admin — so change those two in the deployment environment.
-            </p>
-          </div>
-        </div>
-      ) : null}
+      {header}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="space-y-6 lg:col-span-1">
-          <DataCard title="Photo" meta="Shown beside your name across the dashboard.">
+          <DataCard
+            title={t("profile.photo.title", "Photo")}
+            meta={t("profile.photo.meta", "Shown beside your name across the dashboard.")}
+          >
             <div className="flex flex-col items-center gap-4 p-2 pb-4">
-              <div className="relative h-28 w-28 overflow-hidden rounded-full border border-gray-200 bg-gray-100">
-                {user.avatarUrl ? (
-                  <Image
-                    src={user.avatarUrl}
-                    alt={user.fullName}
-                    fill
-                    sizes="112px"
-                    className="object-cover"
-                  />
-                ) : (
-                  <span className="flex h-full w-full items-center justify-center text-3xl font-semibold text-gray-400">
-                    {user.fullName.slice(0, 1).toUpperCase()}
-                  </span>
-                )}
+              <UserAvatar
+                src={user.avatarUrl}
+                name={user.fullName}
+                alt={user.fullName}
+                sizes="112px"
+                className="h-28 w-28 border border-gray-200 bg-gray-100 text-3xl font-semibold text-gray-400"
+              >
                 {avatarBusy ? (
                   <span className="absolute inset-0 grid place-items-center bg-white/70">
                     <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
                   </span>
                 ) : null}
-              </div>
+              </UserAvatar>
 
               <p className="text-center text-xs text-gray-400">
-                JPG or PNG, up to 5&nbsp;MB.
+                {t("profile.photo.hint", "JPG or PNG, up to 5\u00a0MB.")}
               </p>
 
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept={IMAGE_ACCEPT}
                 className="sr-only"
                 onChange={(e) => handlePickAvatar(e.target.files?.[0] ?? null)}
               />
               <div className="flex flex-wrap items-center justify-center gap-2">
-                <button
-                  type="button"
-                  className="btn_primary_black"
+                <Button
+                 
+                  variant="primary"
                   disabled={avatarBusy}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload />
-                  {user.avatarUrl ? "Replace" : "Upload"}
-                </button>
+                  {user.avatarUrl
+                    ? t("profile.photo.replace", "Replace")
+                    : t("profile.photo.upload", "Upload")}
+                </Button>
                 {user.avatarUrl ? (
-                  <button
-                    type="button"
-                    className="btn_outline_black"
+                  <Button
+                   
+                    variant="outline"
                     disabled={avatarBusy}
                     onClick={handleRemoveAvatar}
                   >
                     <Trash2 />
-                    Remove
-                  </button>
+                    {t("actions.remove", "Remove")}
+                  </Button>
                 ) : null}
               </div>
             </div>
           </DataCard>
 
-          <DataCard title="Account" meta="Managed by a super admin.">
+          <DataCard
+            title={t("profile.account.title", "Account")}
+            meta={isSuperAdmin ? undefined : t("profile.account.meta", "Managed by a super admin.")}
+          >
             <div className="admin_modal_form_wrap p-2">
               <DetailGrid>
-                <DetailItem label="Role">{humanise(user.role)}</DetailItem>
-                <DetailItem label="Status">
+                <DetailItem label={t("fields.role", "Role")}>{enumLabel(t, "role", user.role)}</DetailItem>
+                <DetailItem label={t("fields.status", "Status")}>
                   <StatusBadge
-                    label={humanise(user.status)}
+                    label={enumLabel(t, "user_status", user.status)}
                     tone={statusTone(user.status)}
                   />
                 </DetailItem>
-                <DetailItem label="Telegram">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Send className="h-3.5 w-3.5 text-gray-400" />
-                    {user.telegramLinked ? "Linked" : "Not linked"}
-                  </span>
-                </DetailItem>
-                <DetailItem label="Created By">
-                  {user.createdByName
-                    ? `${user.createdByName} (${humanise(user.createdByRole ?? "")})`
-                    : "Self-registered"}
-                </DetailItem>
-                <DetailItem label="Account ID">
-                  <span className="break-all font-mono text-xs">{user.id}</span>
+                {!isSuperAdmin ? (
+                  <DetailItem label="Telegram">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Send className="h-3.5 w-3.5 text-gray-400" />
+                      {user.telegramLinked
+                        ? t("profile.account.linked", "Linked")
+                        : t("profile.account.not_linked", "Not linked")}
+                    </span>
+                  </DetailItem>
+                ) : null}
+                <DetailItem label={t("fields.created_by", "Created By")}>
+                  {isSuperAdmin
+                    ? t("profile.account.server_config", "Server configuration")
+                    : user.createdByName
+                      ? `${titleCase(user.createdByName)} (${enumLabel(t, "role", user.createdByRole)})`
+                      : t("profile.account.self_registered", "Self-registered")}
                 </DetailItem>
               </DetailGrid>
             </div>
@@ -355,39 +304,38 @@ export default function ProfileView() {
 
         <section className="space-y-6 lg:col-span-2">
           <DataCard
-            title="Personal Information"
-            meta="Your own details — you don't need a super admin to change these."
+            title={t("profile.personal.title", "Personal Information")}
+            meta={t(
+              "profile.personal.meta",
+              "Your own details — you don't need a super admin to change these."
+            )}
           >
             <div className="space-y-6 p-2">
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <FormInput
-                  label="Full Name"
+                  label={t("fields.full_name", "Full Name")}
                   value={fullName}
+                  error={profileValidation.errors.fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Your name"
+                  placeholder={t("profile.personal.name_placeholder", "Your name")}
                   required
                 />
                 <FormInput
-                  label="Email"
+                  label={t("fields.email", "Email")}
                   value={user.email}
                   readOnly
                   placeholder="—"
                 />
-                <FormInput
-                  label="Phone Number"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="072 345 5674"
-                />
+                <FormPhoneInput value={phoneNumber} onChange={setPhoneNumber} error={profileValidation.errors.phoneNumber} />
                 <FormSelect
-                  label="Gender"
+                  label={t("profile.personal.gender", "Gender")}
                   value={gender}
                   onChange={(e) => setGender(e.target.value)}
-                  placeholder="Not set"
+                  placeholder={t("profile.personal.gender_placeholder", "Not set")}
                 >
                   {GENDERS.map((option) => (
                     <option key={option} value={option}>
-                      {humanise(option)}
+                      {enumLabel(t, "gender", option)}
                     </option>
                   ))}
                 </FormSelect>
@@ -395,99 +343,171 @@ export default function ProfileView() {
 
               <p className="flex items-start gap-2 text-xs text-gray-400">
                 <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Your email is your sign-in name and cannot be changed here — ask a super admin if
-                it needs to move.
+                {isSuperAdmin
+                  ? t(
+                      "profile.personal.super_admin_email_note",
+                      "The super admin signs in with the email set in the server configuration, so it is changed there."
+                    )
+                  : t(
+                      "profile.personal.email_note",
+                      "Your email is your sign-in name and cannot be changed here — ask a super admin if it needs to move."
+                    )}
               </p>
 
               <div className="flex flex-wrap justify-end gap-3 border-t border-gray-100 pt-6">
-                <button
-                  type="button"
-                  className="btn_outline_black"
+                <Button
+                 
+                  variant="outline"
                   onClick={handleResetForm}
                   disabled={!isDirty || isSaving}
                 >
-                  Reset
-                </button>
-                <button
-                  type="button"
-                  className="btn_primary_black"
+                  {t("actions.reset", "Reset")}
+                </Button>
+                <Button
+                 
+                  variant="primary"
                   onClick={handleSaveProfile}
                   disabled={!isDirty || isSaving}
                 >
                   {isSaving ? <Loader2 className="animate-spin" /> : <Check />}
-                  {isSaving ? "Saving..." : "Save Changes"}
-                </button>
+                  {isSaving ? t("states.saving", "Saving...") : t("actions.save_changes", "Save Changes")}
+                </Button>
               </div>
             </div>
           </DataCard>
 
           <DataCard
-            title="Password"
-            meta="Changing it signs your other devices out."
+            title={t("fields.password", "Password")}
+            meta={
+              isSuperAdmin
+                ? undefined
+                : t("profile.password.meta", "Changing it signs your other devices out.")
+            }
           >
-            <div className="space-y-6 p-2">
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <FormInput
-                  label="Current Password"
-                  type="password"
-                  value={password.current}
-                  onChange={(e) =>
-                    setPassword((prev) => ({ ...prev, current: e.target.value }))
-                  }
-                  placeholder="••••••••"
-                  required
-                  readOnly={isPasswordConfigDriven}
-                />
-                <div className="hidden md:block" aria-hidden />
-                <FormInput
-                  label="New Password"
-                  type="password"
-                  value={password.next}
-                  onChange={(e) => setPassword((prev) => ({ ...prev, next: e.target.value }))}
-                  placeholder="••••••••"
-                  required
-                  readOnly={isPasswordConfigDriven}
-                />
-                <FormInput
-                  label="Confirm New Password"
-                  type="password"
-                  value={password.confirm}
-                  onChange={(e) =>
-                    setPassword((prev) => ({ ...prev, confirm: e.target.value }))
-                  }
-                  placeholder="••••••••"
-                  required
-                  readOnly={isPasswordConfigDriven}
-                />
-              </div>
-
-              <p className="flex items-start gap-2 text-xs text-gray-400">
-                <UserRound className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                At least 8 characters, including an uppercase letter, a lowercase letter, a number
-                and a symbol.
+            {isSuperAdmin ? (
+              <p className="flex items-start gap-2 p-2 pb-4 text-xs text-gray-400">
+                <KeyRound className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {t(
+                  "profile.password.super_admin_note",
+                  "The super admin password is set in the server configuration and can't be changed from the dashboard."
+                )}
               </p>
+            ) : (
+              <div className="space-y-6 p-2">
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                  <FormInput
+                    label={t("profile.password.current", "Current Password")}
+                    type="password"
+                    value={password.current}
+                    error={passwordValidation.errors.current}
+                    onChange={(e) =>
+                      setPassword((prev) => ({ ...prev, current: e.target.value }))
+                    }
+                    placeholder="••••••••"
+                    required
+                  />
+                  <div className="hidden md:block" aria-hidden />
+                  <FormInput
+                    label={t("profile.password.new", "New Password")}
+                    type="password"
+                    value={password.next}
+                    error={passwordValidation.errors.next}
+                    onChange={(e) => setPassword((prev) => ({ ...prev, next: e.target.value }))}
+                    placeholder="••••••••"
+                    required
+                  />
+                  <FormInput
+                    label={t("profile.password.confirm", "Confirm New Password")}
+                    type="password"
+                    value={password.confirm}
+                    error={passwordValidation.errors.confirm}
+                    onChange={(e) =>
+                      setPassword((prev) => ({ ...prev, confirm: e.target.value }))
+                    }
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
 
-              <div className="flex justify-end border-t border-gray-100 pt-6">
-                <button
-                  type="button"
-                  className="btn_primary_black"
-                  onClick={handleChangePassword}
-                  disabled={
-                    isPasswordConfigDriven ||
-                    isChangingPassword ||
-                    !password.current ||
-                    !password.next ||
-                    !password.confirm
-                  }
-                >
-                  {isChangingPassword ? <Loader2 className="animate-spin" /> : <KeyRound />}
-                  {isChangingPassword ? "Changing..." : "Change Password"}
-                </button>
+                <p className="flex items-start gap-2 text-xs text-gray-400">
+                  <UserRound className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  {t(
+                    "profile.password.hint",
+                    "At least 8 characters, including an uppercase letter, a lowercase letter, a number and a symbol."
+                  )}
+                </p>
+
+                <div className="flex justify-end border-t border-gray-100 pt-6">
+                  <Button
+                   
+                    variant="primary"
+                    onClick={handleChangePassword}
+                    disabled={
+                      isChangingPassword ||
+                      !password.current ||
+                      !password.next ||
+                      !password.confirm
+                    }
+                  >
+                    {isChangingPassword ? <Loader2 className="animate-spin" /> : <KeyRound />}
+                    {isChangingPassword
+                      ? t("profile.password.changing", "Changing...")
+                      : t("profile.password.change", "Change Password")}
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </DataCard>
         </section>
       </div>
     </PageShell>
+  );
+}
+
+function ProfileSkeleton() {
+  const { t } = useI18n();
+  return (
+    <div
+      className="grid grid-cols-1 gap-6 lg:grid-cols-3"
+      role="status"
+      aria-label={t("profile.loading_aria", "Loading your profile")}
+    >
+      <section className="space-y-6 lg:col-span-1">
+        <DataCard title={t("profile.photo.title", "Photo")}>
+          <div className="flex flex-col items-center gap-4 p-2 pb-4">
+            <SkeletonBlock className="h-28 w-28 rounded-full" />
+            <SkeletonBlock className="h-3 w-32" />
+            <SkeletonBlock className="h-10 w-28" />
+          </div>
+        </DataCard>
+        <DataCard title={t("profile.account.title", "Account")}>
+          <div className="grid grid-cols-2 gap-5 p-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <SkeletonBlock className="h-3 w-16" />
+                <SkeletonBlock className="h-5 w-24" />
+              </div>
+            ))}
+          </div>
+        </DataCard>
+      </section>
+      <section className="space-y-6 lg:col-span-2">
+        {[
+          t("profile.personal.title", "Personal Information"),
+          t("fields.password", "Password"),
+        ].map((title) => (
+          <DataCard key={title} title={title}>
+            <div className="grid grid-cols-1 gap-5 p-2 pb-4 md:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <SkeletonBlock className="h-3 w-24" />
+                  <SkeletonBlock className="h-11 w-full" />
+                </div>
+              ))}
+            </div>
+          </DataCard>
+        ))}
+      </section>
+    </div>
   );
 }

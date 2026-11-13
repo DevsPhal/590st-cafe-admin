@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import toast from "react-hot-toast";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -15,6 +15,7 @@ import {
   FilterPanel,
   FormModal,
   FormInput,
+  FormPhoneInput,
   FormSelect,
   ModalGrid,
   PaginationFooter,
@@ -25,25 +26,25 @@ import {
   StatTile,
   StatusBadge,
   TableState,
+  listLoadState,
   TextField,
-  Thumbnail,
 } from "@/components/common/AdminKit";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import { apiErrorMessage } from "@/store/api/baseApi";
+import { useI18n } from "@/contexts/I18nContext";
 import { usePageSize, useRefreshOptions } from "@/contexts/AdminPreferencesContext";
 import { useListUsersQuery, useUpdateUserStatusMutation, useUpdateUserMutation, useDeleteUserMutation } from "@/store/api/userApi";
 import type { Gender, Role, UserResponse, UserStatus } from "@/store/api/types";
+import { humanise, titleCase } from "@/lib/utils";
+import { enumLabel } from "@/lib/enumLabel";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { formatPhone, formatPhoneInput } from "@/lib/phone";
+import { usePersistentState } from "@/hooks/usePersistentState";
+import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
+import { userAccountSchema } from "@/lib/formSchemas";
+import { useFormErrors } from "@/hooks/useFormErrors";
 
-const USER_TABLE_HEADERS = [
-  "No",
-  "Avatar",
-  "Full Name",
-  "Email",
-  "Phone",
-  "Role",
-  "Telegram",
-  "Status",
-  "Action",
-] as const;
+export { humanise };
 
 const USER_STATUSES: UserStatus[] = [
   "ACTIVE",
@@ -63,64 +64,69 @@ export function statusTone(
   return "danger";
 }
 
-/** PENDING_VERIFICATION -> "Pending Verification" */
-export function humanise(value: string) {
-  return value
-    .toLowerCase()
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-/**
- * Super admins can view, edit and delete stored accounts here.
- * New staff accounts are created on the Staff screen.
- */
 export default function UserManagementView({
   role,
-  title = "Users",
-  emptyLabel = "No user accounts found.",
+  title: titleProp,
+  emptyLabel: emptyLabelProp,
 }: {
   role?: Role;
   title?: string;
   emptyLabel?: string;
 } = {}) {
-  const [page, setPage] = useState(1);
+  const { t } = useI18n();
+  const title = titleProp ?? t("users.title", "Users");
+  const emptyLabel = emptyLabelProp ?? t("users.empty.default", "No user accounts found.");
+  const userTableHeaders = [
+    t("table.no", "No"),
+    t("users.table.avatar", "Avatar"),
+    t("fields.full_name", "Full Name"),
+    t("fields.email", "Email"),
+    t("fields.phone_number", "Phone Number"),
+    t("fields.role", "Role"),
+    "Telegram",
+    t("fields.status", "Status"),
+    t("table.action", "Action"),
+  ];
+  const { confirm, confirmDialog } = useConfirmDialog();
+  const [page, setPage] = usePersistentState(`users-${role ?? "all"}:page`, 1);
   const [size, setSize] = usePageSize();
   const refresh = useRefreshOptions();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [roleFilter, setRoleFilter] = useState<string>(role ?? "");
+  const [searchTerm, setSearchTerm] = usePersistentState(`users-${role ?? "all"}:searchTerm`, "");
+  const [statusFilter, setStatusFilter] = usePersistentState(`users-${role ?? "all"}:statusFilter`, "");
+  const isFiltering = Boolean(searchTerm.trim() || statusFilter);
+  const [roleFilter, setRoleFilter] = usePersistentState<string>(`users-${role ?? "all"}:roleFilter`, role ?? "");
 
   const effectiveRole = (role ?? roleFilter) || undefined;
 
   const {
     data: userPage,
+    currentData,
     isFetching,
     error,
     refetch,
   } = useListUsersQuery({
-    page,
-    size,
+    ...filteredQueryArgs(page, size, isFiltering),
     ...(effectiveRole ? { role: effectiveRole as Role } : {}),
   }, refresh);
+  const list = listLoadState({ isFetching, currentData, error });
 
   const [updateStatus, { isLoading: isUpdating }] = useUpdateUserStatusMutation();
   const [updateUser, { isLoading: isSavingProfile }] = useUpdateUserMutation();
   const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
 
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
-  const [fullName, setFullName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [gender, setGender] = useState<Gender | "">("");
-  const [selected, setSelected] = useState<UserResponse | null>(null);
-  const [nextStatus, setNextStatus] = useState<UserStatus>("ACTIVE");
+  const [detailOpen, setDetailOpen] = usePersistentState(`users-${role ?? "all"}:detailOpen`, false);
+  const [statusOpen, setStatusOpen] = usePersistentState(`users-${role ?? "all"}:statusOpen`, false);
+  const [editOpen, setEditOpen] = usePersistentState(`users-${role ?? "all"}:editOpen`, false);
+  const [fullName, setFullName] = usePersistentState(`users-${role ?? "all"}:fullName`, "");
+  const [phoneNumber, setPhoneNumber] = usePersistentState(`users-${role ?? "all"}:phoneNumber`, "");
+  const [gender, setGender] = usePersistentState<Gender | "">(`users-${role ?? "all"}:gender`, "");
+  const [selected, setSelected] = usePersistentState<UserResponse | null>(`users-${role ?? "all"}:selected`, null);
+  const validation = useFormErrors(userAccountSchema, { fullName, phoneNumber });
+  const [nextStatus, setNextStatus] = usePersistentState<UserStatus>(`users-${role ?? "all"}:nextStatus`, "ACTIVE");
 
   const users = useMemo(() => userPage?.content ?? [], [userPage]);
 
-  const visibleUsers = useMemo(
+  const matchingUsers = useMemo(
     () =>
       users.filter((user) => {
         const term = searchTerm.trim().toLowerCase();
@@ -133,34 +139,43 @@ export default function UserManagementView({
       }),
     [users, searchTerm, statusFilter]
   );
+  const view = filteredPage(matchingUsers, userPage, page, size, isFiltering);
+  const visibleUsers = view.rows;
 
   const activeCount = users.filter((u) => u.status === "ACTIVE").length;
 
   const handleSaveProfile = async () => {
     if (!selected) return;
-    if (fullName.trim().length < 2) {
-      toast.error("Full name must contain at least two characters.");
-      return;
-    }
+    const parsed = validation.validate();
+    if (!parsed) return;
     try {
       await updateUser({ id: selected.id, body: {
-        fullName: fullName.trim(), phoneNumber: phoneNumber.trim(), ...(gender ? { gender } : {}),
+        fullName: parsed.fullName, phoneNumber: parsed.phoneNumber ?? "", ...(gender ? { gender } : {}),
       } }).unwrap();
-      toast.success("Account updated");
+      toast.success(t("users.toast.updated", "Account updated"));
       setEditOpen(false);
       setSelected(null);
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, "Could not update the account."));
+      validation.showServerError(err, t("users.toast.update_failed", "Could not update the account."));
     }
   };
 
   const handleDelete = async (user: UserResponse) => {
-    if (!window.confirm(`Delete ${user.fullName}'s account? They will lose access. Past orders and attendance will be retained.`)) return;
+    if (!(await confirm({
+      title: t("users.confirm.delete_title", "Delete user account"),
+      description: t(
+        "users.confirm.delete_description",
+        "Delete {name}'s account? They will lose access. Past orders and attendance will be retained.",
+        { name: user.fullName }
+      ),
+      confirmLabel: t("actions.delete", "Delete"),
+      tone: "danger",
+    }))) return;
     try {
       await deleteUser(user.id).unwrap();
-      toast.success("Account deleted");
+      toast.success(t("users.toast.deleted", "Account deleted"));
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, "Could not delete the account."));
+      toast.error(apiErrorMessage(err as never, t("users.toast.delete_failed", "Could not delete the account.")));
     }
   };
 
@@ -168,11 +183,16 @@ export default function UserManagementView({
     if (!selected) return;
     try {
       await updateStatus({ id: selected.id, status: nextStatus }).unwrap();
-      toast.success(`${selected.fullName} is now ${humanise(nextStatus)}`);
+      toast.success(
+        t("users.toast.status_updated", "{name} is now {status}", {
+          name: selected.fullName,
+          status: enumLabel(t, "user_status", nextStatus),
+        })
+      );
       setStatusOpen(false);
       setSelected(null);
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, "Could not update the account status."));
+      toast.error(apiErrorMessage(err as never, t("users.toast.status_failed", "Could not update the account status.")));
     }
   };
 
@@ -180,85 +200,88 @@ export default function UserManagementView({
     <PageShell>
       <PageHeader
         title={title}
-        breadcrumbs={[{ label: "Home", href: "/" }, { label: title }]}
+        breadcrumbs={[{ label: t("breadcrumb.home", "Home"), href: "/" }, { label: title }]}
         rightSlot={<AdminTopActions />}
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <StatTile title={`All ${title}`} value={String(userPage?.totalElements ?? 0)} tone="gray" />
-        <StatTile title="Active (this page)" value={String(activeCount)} tone="green" />
+        <StatTile title={t("users.stats.all", "All {title}", { title })} value={String(userPage?.totalElements ?? 0)} tone="gray" />
+        <StatTile title={t("users.stats.active_page", "Active (this page)")} value={String(activeCount)} tone="green" />
       </div>
 
       <FilterPanel>
         <TextField
-          label="Name or Email"
-          placeholder="Search accounts"
+          label={t("users.filters.name_or_email", "Name or Email")}
+          placeholder={t("users.filters.search_placeholder", "Search accounts")}
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
         />
-        {/* Locked when the screen is already scoped to one role (e.g. Customers). */}
         {role ? null : (
           <SelectField
-            label="Role"
-            placeholder="All roles"
+            label={t("fields.role", "Role")}
+            placeholder={t("users.filters.all_roles", "All roles")}
             value={roleFilter}
             onChange={(e) => {
               setRoleFilter(e.target.value);
               setPage(1);
             }}
           >
-            <option value="ADMIN">Admin</option>
-            <option value="BARISTA">Barista</option>
-            <option value="CUSTOMER">Customer</option>
+            <option value="ADMIN">{enumLabel(t, "role", "ADMIN")}</option>
+            <option value="BARISTA">{enumLabel(t, "role", "BARISTA")}</option>
+            <option value="CUSTOMER">{enumLabel(t, "role", "CUSTOMER")}</option>
           </SelectField>
         )}
         <SelectField
-          label="Status"
-          placeholder="All statuses"
+          label={t("fields.status", "Status")}
+          placeholder={t("users.filters.all_statuses", "All statuses")}
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
         >
           {USER_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {humanise(status)}
+              {enumLabel(t, "user_status", status)}
             </option>
           ))}
         </SelectField>
         <FilterActions onClear={() => { setSearchTerm(""); setStatusFilter(""); setRoleFilter(role ?? ""); setPage(1); }} onSearch={refetch} />
       </FilterPanel>
 
-      <DataCard title={title} meta={`Total: ${userPage?.totalElements ?? 0}`}>
-        <SimpleTable headers={[...USER_TABLE_HEADERS]}>
+      <DataCard title={title} meta={t("users.meta.total", "Total: {count}", { count: userPage?.totalElements ?? 0 })}>
+        <SimpleTable headers={userTableHeaders}>
           <TableState
-            colSpan={USER_TABLE_HEADERS.length}
-            isLoading={isFetching}
-            error={error}
+            colSpan={userTableHeaders.length}
+            isLoading={list.isLoading}
+            error={list.error}
             isEmpty={visibleUsers.length === 0}
-            emptyLabel={emptyLabel}
+            emptyLabel={isFiltering ? t("users.empty.filtered", "No accounts match these filters.") : emptyLabel}
             onRetry={refetch}
           />
-          {!isFetching &&
-            !error &&
+          {list.showRows &&
             visibleUsers.map((user, index) => (
               <Row key={user.id} striped={index % 2 === 1}>
-                <Cell>{(page - 1) * size + index + 1}</Cell>
+                <Cell>{view.offset + index + 1}</Cell>
                 <Cell>
-                  <Thumbnail src={user.avatarUrl ?? undefined} />
+                  <UserAvatar
+                    src={user.avatarUrl}
+                    name={user.fullName}
+                    sizes="40px"
+                    className="h-10 w-10 bg-(--placeholder-bg) text-sm font-semibold text-(--placeholder-ink-strong)"
+                  />
                 </Cell>
-                <Cell className="font-semibold">{user.fullName}</Cell>
+                <Cell className="font-semibold">{titleCase(user.fullName)}</Cell>
                 <Cell>{user.email}</Cell>
-                <Cell>{user.phoneNumber || "-"}</Cell>
-                <Cell>{humanise(user.role)}</Cell>
+                <Cell className="tabular-nums whitespace-nowrap">{formatPhone(user.phoneNumber) || "-"}</Cell>
+                <Cell>{enumLabel(t, "role", user.role)}</Cell>
                 <Cell>
                   <StatusBadge
-                    label={user.telegramLinked ? "Linked" : "Not linked"}
+                    label={user.telegramLinked ? t("users.telegram.linked", "Linked") : t("users.telegram.not_linked", "Not linked")}
                     tone={user.telegramLinked ? "success" : "neutral"}
                   />
                 </Cell>
                 <Cell>
-                  <button type="button" aria-label={`Change status for ${user.fullName}`} disabled={isUpdating || isDeleting}
+                  <button type="button" aria-label={t("users.table.change_status_aria", "Change status for {name}", { name: user.fullName })} disabled={isUpdating || isDeleting}
                     onClick={() => { setSelected(user); setNextStatus(user.status); setStatusOpen(true); }}>
-                    <StatusBadge label={humanise(user.status)} tone={statusTone(user.status)} />
+                    <StatusBadge label={enumLabel(t, "user_status", user.status)} tone={statusTone(user.status)} />
                   </button>
                 </Cell>
                 <Cell>
@@ -270,8 +293,9 @@ export default function UserManagementView({
                     onEdit={() => {
                       setSelected(user);
                       setFullName(user.fullName);
-                      setPhoneNumber(user.phoneNumber ?? "");
+                      setPhoneNumber(formatPhoneInput(user.phoneNumber));
                       setGender(user.gender ?? "");
+                      validation.reset();
                       setEditOpen(true);
                     }}
                     onDelete={user.status !== "DELETED" ? () => handleDelete(user) : undefined}
@@ -282,10 +306,10 @@ export default function UserManagementView({
             ))}
         </SimpleTable>
         <PaginationFooter
-          page={userPage?.page ?? page}
-          totalPages={userPage?.totalPages ?? 1}
+          page={view.page}
+          totalPages={view.totalPages}
           size={size}
-          totalElements={userPage?.totalElements}
+          totalElements={view.totalElements}
           onPageChange={setPage}
           onSizeChange={(next) => {
             setSize(next);
@@ -294,11 +318,11 @@ export default function UserManagementView({
         />
       </DataCard>
 
-      <FormModal open={editOpen} onOpenChange={setEditOpen} title="Edit Account" submitLabel="Save" onSubmit={handleSaveProfile} isLoading={isSavingProfile}>
+      <FormModal open={editOpen} onOpenChange={setEditOpen} title={t("users.form.edit_title", "Edit Account")} submitLabel={t("actions.save", "Save")} onSubmit={handleSaveProfile} isLoading={isSavingProfile}>
         <ModalGrid>
-          <FormInput label="Full Name" value={fullName} onChange={(event) => setFullName(event.target.value)} required />
-          <FormInput label="Phone" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} />
-          <FormSelect label="Gender" value={gender} onChange={(event) => setGender(event.target.value as Gender | "")}>
+          <FormInput label={t("fields.full_name", "Full Name")} value={fullName} onChange={(event) => setFullName(event.target.value)} required error={validation.errors.fullName} />
+          <FormPhoneInput value={phoneNumber} onChange={setPhoneNumber} error={validation.errors.phoneNumber} />
+          <FormSelect label={t("users.fields.gender", "Gender")} value={gender} onChange={(event) => setGender(event.target.value as Gender | "")}>
             <option value="MALE">Male</option>
             <option value="FEMALE">Female</option>
             <option value="OTHER">Other</option>
@@ -309,22 +333,22 @@ export default function UserManagementView({
       <FormModal
         open={statusOpen}
         onOpenChange={setStatusOpen}
-        title="Change Account Status"
-        submitLabel="Save"
+        title={t("users.status_form.title", "Change Account Status")}
+        submitLabel={t("actions.save", "Save")}
         onSubmit={handleSubmitStatus}
         isLoading={isUpdating}
       >
         <ModalGrid>
           <FormSelect
-            label={`Status for ${selected?.fullName ?? ""}`}
-            placeholder="Select status"
+            label={t("users.status_form.status_for", "Status for {name}", { name: selected?.fullName ?? "" })}
+            placeholder={t("users.status_form.placeholder", "Select status")}
             value={nextStatus}
             onChange={(e) => setNextStatus(e.target.value as UserStatus)}
             required
           >
             {USER_STATUSES.map((status) => (
               <option key={status} value={status}>
-                {humanise(status)}
+                {enumLabel(t, "user_status", status)}
               </option>
             ))}
           </FormSelect>
@@ -337,36 +361,52 @@ export default function UserManagementView({
           setDetailOpen(open);
           if (!open) setSelected(null);
         }}
-        title="Account Detail"
+        title={t("users.detail.title", "Account Detail")}
       >
         {selected && (
           <div className="admin_modal_form_wrap">
+            <div className="mb-4 flex items-center gap-4">
+              <UserAvatar
+                src={selected.avatarUrl}
+                name={selected.fullName}
+                sizes="64px"
+                className="h-16 w-16 bg-(--placeholder-bg) text-xl font-semibold text-(--placeholder-ink-strong)"
+              />
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-gray-900">{titleCase(selected.fullName)}</p>
+                {selected.telegramUsername ? (
+                  <p className="truncate text-sm text-gray-500">@{selected.telegramUsername}</p>
+                ) : null}
+              </div>
+            </div>
             <DetailGrid>
-              <DetailItem label="Full Name">{selected.fullName}</DetailItem>
-              <DetailItem label="Email">{selected.email}</DetailItem>
-              <DetailItem label="Phone">{selected.phoneNumber || "-"}</DetailItem>
-              <DetailItem label="Gender">
-                {selected.gender ? humanise(selected.gender) : "-"}
+              <DetailItem label={t("fields.full_name", "Full Name")}>{titleCase(selected.fullName)}</DetailItem>
+              <DetailItem label={t("fields.email", "Email")}>{selected.email || "-"}</DetailItem>
+              <DetailItem label={t("fields.phone_number", "Phone Number")}>{formatPhone(selected.phoneNumber) || "-"}</DetailItem>
+              <DetailItem label={t("users.fields.gender", "Gender")}>
+                {selected.gender ? enumLabel(t, "gender", selected.gender) : "-"}
               </DetailItem>
-              <DetailItem label="Role">{humanise(selected.role)}</DetailItem>
-              <DetailItem label="Status">
+              <DetailItem label={t("fields.role", "Role")}>{enumLabel(t, "role", selected.role)}</DetailItem>
+              <DetailItem label={t("fields.status", "Status")}>
                 <StatusBadge
-                  label={humanise(selected.status)}
+                  label={enumLabel(t, "user_status", selected.status)}
                   tone={statusTone(selected.status)}
                 />
               </DetailItem>
               <DetailItem label="Telegram">
-                {selected.telegramLinked ? "Linked" : "Not linked"}
+                {selected.telegramLinked ? t("users.telegram.linked", "Linked") : t("users.telegram.not_linked", "Not linked")}
+                {selected.telegramLinked && selected.telegramUsername ? ` (@${selected.telegramUsername})` : ""}
               </DetailItem>
-              <DetailItem label="Created By">
+              <DetailItem label={t("fields.created_by", "Created By")}>
                 {selected.createdByName
-                  ? `${selected.createdByName} (${selected.createdByRole})`
-                  : "Self-registered"}
+                  ? `${titleCase(selected.createdByName)} (${enumLabel(t, "role", selected.createdByRole)})`
+                  : t("users.detail.self_registered", "Self-registered")}
               </DetailItem>
             </DetailGrid>
           </div>
         )}
       </DetailModal>
+      {confirmDialog}
     </PageShell>
   );
 }

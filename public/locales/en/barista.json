@@ -1,0 +1,142 @@
+{
+  "title": "Order Queue",
+  "breadcrumb": {
+    "queue": "Barista Queue"
+  },
+  "stats": {
+    "awaiting_payment": "Awaiting Payment",
+    "drinks_to_make": "Drinks To Make",
+    "unpaid_value": "Unpaid Value"
+  },
+  "queue": {
+    "loading": "Loading {title}",
+    "awaiting_payment": "Awaiting Payment",
+    "new_paid": "New — Paid",
+    "preparing": "Preparing",
+    "out_for_delivery": "Out for Delivery",
+    "completed": "Completed",
+    "cancelled": "Cancelled",
+    "all": "All Orders"
+  },
+  "empty": {
+    "awaiting_payment": "Nothing waiting to be paid.",
+    "new_paid": "No new paid orders.",
+    "preparing": "Nothing on the bar.",
+    "out_for_delivery": "Nothing out for delivery.",
+    "completed": "No completed orders yet.",
+    "cancelled": "No cancelled orders.",
+    "all": "No orders yet.",
+    "filtered": "No orders match these filters.",
+    "filtered_hint": "Try another search, date range or order type."
+  },
+  "card": {
+    "view_order": "View order {id}",
+    "fee_needed": "Fee needed",
+    "cash_due": "Cash due",
+    "cancel_order": "Cancel order",
+    "online": "Online",
+    "payment_not_chosen": "Payment not chosen"
+  },
+  "labels": {
+    "walk_in": "Walk-in",
+    "sugar": "Sugar {level}",
+    "ice": "Ice {level}",
+    "standard": "Standard"
+  },
+  "actions": {
+    "set_delivery_fee": "Set Delivery Fee",
+    "start_preparing": "Start Preparing",
+    "take_cash": "Take Cash",
+    "collect_cash": "Collect Cash",
+    "out_for_delivery": "Out for Delivery",
+    "mark_completed": "Mark Completed",
+    "mark_delivered": "Mark Delivered"
+  },
+  "hints": {
+    "waiting_qr": "Waiting for the customer's QR payment — it confirms automatically.",
+    "waiting_method": "Waiting for the customer to choose how to pay."
+  },
+  "toast": {
+    "paid_change": "Paid. Change: {change}",
+    "payment_recorded": "Payment recorded",
+    "order_cancelled": "Order cancelled",
+    "started_preparing": "Started preparing — the customer can see this",
+    "out_for_delivery": "Out for delivery — the customer can see this",
+    "order_completed": "Order completed",
+    "marked_delivered": "Marked as delivered",
+    "delivery_fee_saved": "Delivery fee saved",
+    "estimate_set": "Estimated time set to {minutes} min"
+  },
+  "errors": {
+    "record_payment": "Could not record the payment.",
+    "cancel_order": "Could not cancel the order.",
+    "start_order": "Could not start this order.",
+    "dispatch_order": "Could not dispatch the order.",
+    "complete_order": "Could not complete the order.",
+    "mark_delivered": "Could not mark the order delivered.",
+    "save_delivery_fee": "Could not save the delivery fee.",
+    "save_estimate": "Could not save the estimated time.",
+    "role_cannot_read": "Your account role cannot read orders. Sign in as an admin or a barista.",
+    "load_queue": "Could not load the queue."
+  },
+  "confirm": {},
+  "cash": {
+    "title": "Take Cash Payment",
+    "total_due": "Total Due",
+    "currency": "Currency",
+    "rate_unavailable": "(rate unavailable)",
+    "amount_tendered": "Amount Tendered",
+    "change_due": "Change Due"
+  },
+  "detail": {
+    "title": "Order Detail",
+    "placed": "Placed",
+    "not_chosen_yet": "Not chosen yet",
+    "paid_at": "Paid At",
+    "not_paid_yet": "Not paid yet",
+    "handled_by": "Handled By",
+    "total_khr": "Total in KHR",
+    "change_given": "Change Given",
+    "bakong_amount": "Bakong Amount",
+    "note_from_customer": "Note from customer",
+    "items": "Items ({count})",
+    "unit_price_each": "{price} each"
+  },
+  "tabs": {
+    "label": "Order status"
+  },
+  "filters": {
+    "search_label": "Search orders",
+    "search_placeholder": "Invoice # or customer",
+    "clear_search": "Clear search",
+    "date_label": "Order date",
+    "any_date": "Any date",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "last_7_days": "Last 7 days",
+    "last_30_days": "Last 30 days",
+    "apply": "Apply",
+    "order_type": "Order type",
+    "all_types": "All types",
+    "ordered_from": "Ordered from",
+    "served_as": "Served as",
+    "payment": "Payment",
+    "all_payments": "All payments",
+    "sort": "Sort orders",
+    "newest": "Newest",
+    "oldest": "Oldest",
+    "toggle": "Filters",
+    "clear": "Clear filters"
+  },
+  "payment": {
+    "paid": "Paid",
+    "unpaid": "Unpaid",
+    "due": "Due",
+    "refunded": "Refunded"
+  },
+  "results": {
+    "showing": "Showing {from}–{to} of {total} orders",
+    "updated": "Updated {time}",
+    "refresh": "Refresh the queue"
+  }
+}

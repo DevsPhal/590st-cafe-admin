@@ -28,6 +28,11 @@ export function Sidebar() {
   const { t } = useI18n();
   const { role } = useCurrentRole();
   const sections = navigationSections.map((section) => ({ ...section, items: section.items.filter((item) => canAccessAdminPage(role, item.href)) })).filter((section) => section.items.length);
+  // The most specific entry wins, so /inventory/history lights up "Inventory history" and not "Inventory" as well.
+  const activeHref = sections
+    .flatMap((section) => section.items.map((item) => item.href))
+    .filter((href) => isNavItemActive(pathname, href))
+    .sort((a, b) => b.length - a.length)[0];
 
   const handleNavClick = () => {
     setIsMobileMenuOpen(false);
@@ -35,7 +40,7 @@ export function Sidebar() {
 
   const logo = (
     <Link href={adminHome(role)} onClick={handleNavClick} className="logo_link">
-      <Image src="/logos/logo.svg" alt="590st CAFE Logo" width={72} height={34} priority/>
+      <Image src="/logos/logo-white.png" alt="590st CAFE" width={800} height={539} className="h-11 w-auto" priority />
     </Link>
   );
 
@@ -43,14 +48,14 @@ export function Sidebar() {
     <nav className="sidebar scrollbar">
       {sections.map((section) => (
         <div key={section.title || "home"} className="sidebar_section" data-divider={section.dividerBefore}>
-          {section.title && ( <p className="title"> {section.title} </p> )}
+          {section.title && ( <p className="title"> {t(section.titleKey, section.title)} </p> )}
           <div className="sidebar_wrap">
             {section.items.map((item) => {
-              const isActive = isNavItemActive(pathname, item.href);
+              const isActive = item.href === activeHref;
               return (
                 <Link key={item.name} href={item.href} onClick={handleNavClick} className={cn("sidebar_item", isActive ? "active" : "")}>
                   <item.icon className="icons" strokeWidth={2.2} />
-                  <span className="sidebar_item_label">{t(item.label) === item.label ? item.name : t(item.label)}</span>
+                  <span className="sidebar_item_label">{t(item.label, item.name)}</span>
                 </Link>
               );
             })}
@@ -61,11 +66,10 @@ export function Sidebar() {
   );
   return (
     <>
-      {/* Mobile Header */}
       <div className="mobile_header">
         <div className="mobile_header_inner">
           {logo}
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="mobile_menu_trigger" aria-label="Toggle menu">
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="mobile_menu_trigger" aria-label={t("sidebar_toggle.menu", "Toggle menu")}>
             {isMobileMenuOpen ? (
               <X className="mobile_trigger_icon" />
             ) : (
@@ -75,14 +79,11 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && ( <div className="mobile_overlay" onClick={() => setIsMobileMenuOpen(false)}/>)}
-      {/* Mobile Sidebar Drawer */}
       <div className={cn("mobile_drawer", isMobileMenuOpen && "is_open")}> 
         {navItems}
-        <SidebarProfile isMobile={true} />
+        <SidebarProfile isMobile={true} onNavigate={handleNavClick} />
       </div>
-      {/* Desktop Sidebar */}
       <div className={cn("desktop_sidebar", isCollapsed && "is_collapsed")}>
         <div className="logo_container">
           {logo}

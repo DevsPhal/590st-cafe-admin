@@ -1,0 +1,94 @@
+{
+  "title": "Staff",
+  "stats": {
+    "all_admins": "All Admins",
+    "all_baristas": "All Baristas",
+    "active_this_page": "Active (this page)"
+  },
+  "filters": {
+    "staff_type": "Staff Type",
+    "name_or_email": "Name or Email",
+    "search_placeholder": "Search staff",
+    "all_statuses": "All statuses"
+  },
+  "list": {
+    "admins": "Admins",
+    "baristas": "Baristas",
+    "total": "Total: {count}",
+    "add_admin": "Add Admin",
+    "add_barista": "Add Barista"
+  },
+  "fields": {
+    "gender": "Gender"
+  },
+  "table": {
+    "staff": "Staff"
+  },
+  "empty": {
+    "no_match": "No staff match these filters.",
+    "no_admins": "No admins yet.",
+    "no_baristas": "No baristas yet."
+  },
+  "form": {
+    "title_modify": "Modify Staff",
+    "title_register_admin": "Register Admin",
+    "title_register_barista": "Register Barista",
+    "account_role": "Account Role",
+    "setup_method": "Setup Method",
+    "setup_password": "Email & Password",
+    "setup_telegram": "Invite via Telegram",
+    "photo_alt": "Staff profile photo",
+    "profile_photo": "Profile Photo",
+    "photo_replace": "Choose a photo to replace the current one",
+    "photo_none": "No photo selected",
+    "photo_hint": "Optional. JPEG, PNG, WebP, or GIF, up to 5 MB. Saved when you submit.",
+    "clear_photo": "Clear selected photo",
+    "full_name_placeholder": "e.g. Sophal Nem",
+    "password_placeholder": "Min 8 chars, mixed case, digit + symbol",
+    "telegram_hint_admin": "No email or password needed — the admin activates their account by opening the Telegram invite link and confirming this phone number, then signs in on the login page under the",
+    "telegram_hint_barista": "No email or password needed — the barista activates their account by opening the Telegram invite link and confirming this phone number, then signs in on the login page under the",
+    "phone_tab": "Phone number",
+    "telegram_hint_end": " tab.",
+    "gender_placeholder": "Select gender",
+    "status_placeholder": "Select status"
+  },
+  "detail": {
+    "title": "Staff Detail",
+    "photo_alt": "{name}'s profile photo",
+    "linked": "Linked",
+    "not_linked": "Not linked",
+    "send_invite": "Send Telegram invite"
+  },
+  "invite_result": {
+    "title": "Telegram Invite Sent",
+    "invite_link": "Invite Link",
+    "code": "Code",
+    "expires_in": "Expires In",
+    "expires_minutes": "{count} minute(s)",
+    "hint": "Share this link with the invitee. After they open it and share their phone number in Telegram, the account is active and they sign in on the login page under",
+    "phone_tab": "Phone number",
+    "hint_end": " — the code arrives in Telegram.",
+    "copy_link": "Copy Link"
+  },
+  "confirm": {
+    "remove_title": "Remove staff member",
+    "remove_description": "Remove {name}?"
+  },
+  "toast": {
+    "invalid_image_type": "Choose a JPEG, PNG, WebP, or GIF image.",
+    "invalid_image_size": "Choose a non-empty image of 5 MB or smaller.",
+    "cannot_manage_role": "Your account cannot manage this staff role.",
+    "invite_failed": "Could not send the Telegram invite.",
+    "updated": "Staff member updated",
+    "admin_created": "Admin created",
+    "barista_created": "Barista created",
+    "photo_upload_failed": "Staff details saved, but the photo was not uploaded. {error} Submit again to retry.",
+    "please_try_again": "Please try again.",
+    "save_failed": "Could not save the staff member.",
+    "resend_failed": "Could not resend the Telegram invite.",
+    "removed": "Staff member removed",
+    "remove_failed": "Could not remove the staff member.",
+    "link_copied": "Link copied",
+    "copy_failed": "Could not copy the link."
+  }
+}

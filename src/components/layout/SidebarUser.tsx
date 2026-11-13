@@ -1,34 +1,49 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 
+import { UserAvatar } from "@/components/common/UserAvatar";
 import { useGetCurrentUserQuery, useLogoutMutation } from "@/store/api/authApi";
+import { titleCase } from "@/lib/utils";
+import { enumLabel } from "@/lib/enumLabel";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { useI18n } from "@/contexts/I18nContext";
 
-/**
- * The signed-in identity, read from /api/users/me rather than hardcoded, plus the only
- * sign-out control in the admin. The name doubles as the entry point to /profile — that page is
- * the only place an admin or barista can edit their own record, since /api/admin/admins/** is
- * SUPER_ADMIN-only. Logout clears the tokens and resets the RTK Query cache even if the server
- * call fails, so no previous user's data survives into the next session.
- */
-export function SidebarUser() {
+export function SidebarUser({ onNavigate }: { onNavigate?: () => void } = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const { data: user, isLoading } = useGetCurrentUserQuery();
   const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
+  const { confirm, confirmDialog } = useConfirmDialog();
+  const { t } = useI18n();
 
-  const name = user?.fullName ?? (isLoading ? "Loading..." : "Account");
-  const role = user?.role ? user.role.replace(/_/g, " ") : user?.email ?? "";
+  const name = user?.fullName
+    ? titleCase(user.fullName)
+    : isLoading
+      ? t("states.loading", "Loading...")
+      : t("account.account", "Account");
+  const role = user?.role ? enumLabel(t, "role", user.role) : (user?.email ?? "");
   const isOnProfile = pathname === "/profile";
 
   const handleLogout = async () => {
+    if (
+      !(await confirm({
+        title: t("account.sign_out_title", "Sign out?"),
+        description: t(
+          "account.sign_out_description",
+          "You'll need to log in again to access the admin dashboard.",
+        ),
+        confirmLabel: t("actions.sign_out", "Sign out"),
+        tone: "danger",
+      }))
+    ) {
+      return;
+    }
     try {
       await logout().unwrap();
     } catch {
-      // onQueryStarted clears the session either way.
     }
     router.replace("/auth/login");
   };
@@ -37,19 +52,21 @@ export function SidebarUser() {
     <div className="flex items-center gap-3 sidebar_user">
       <Link
         href="/profile"
+        onClick={onNavigate}
         aria-current={isOnProfile ? "page" : undefined}
-        title="View and edit your profile"
+        title={t("account.view_profile", "View and edit your profile")}
         className="sidebar_user_link flex min-w-0 flex-1 items-center gap-3 rounded-lg transition hover:opacity-80"
       >
-        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-sm font-semibold text-black">
-          {user?.avatarUrl ? (
-            <Image src={user.avatarUrl} alt="" fill sizes="36px" className="object-cover" />
-          ) : (
-            name.slice(0, 1).toUpperCase()
-          )}
-        </span>
+        <UserAvatar
+          src={user?.avatarUrl}
+          name={user?.fullName}
+          sizes="36px"
+          className="h-9 w-9 bg-(--brand-lime) text-sm font-semibold text-(--brand-ink)"
+        />
         <span className="sidebar_user_text min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-white">{name}</span>
+          <span className="block truncate text-sm font-semibold text-white">
+            {name}
+          </span>
           <span className="block truncate text-xs text-white/65">{role}</span>
         </span>
       </Link>
@@ -57,12 +74,13 @@ export function SidebarUser() {
         type="button"
         onClick={handleLogout}
         disabled={isLoggingOut}
-        aria-label="Sign out"
-        title="Sign out"
+        aria-label={t("actions.sign_out", "Sign out")}
+        title={t("actions.sign_out", "Sign out")}
         className="sidebar_user_logout shrink-0 text-white/65 transition hover:text-white disabled:opacity-50"
       >
         <LogOut className="h-4 w-4" />
       </button>
+      {confirmDialog}
     </div>
   );
 }

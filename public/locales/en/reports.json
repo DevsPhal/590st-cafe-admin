@@ -1,0 +1,46 @@
+{
+  "title": "Reports",
+  "export": "Export Excel",
+  "exporting": "Exporting...",
+  "filters": {
+    "finance_period": "Finance Period",
+    "daily": "Daily",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "year": "Year",
+    "month": "Month"
+  },
+  "errors": {
+    "finance_load_failed": "Could not load the finance summary.",
+    "export_failed": "Could not download the report."
+  },
+  "stats": {
+    "unavailable": "Unavailable",
+    "money_in": "Money In",
+    "money_in_hint": "Cash {cash} · Bakong {bakong}",
+    "money_out": "Money Out",
+    "money_out_hint": "Recorded expenses",
+    "profit": "Profit",
+    "orders_selected_day": "Orders on Selected Day"
+  },
+  "table": {
+    "barista": "Barista",
+    "orders": "Orders",
+    "cash": "Cash"
+  },
+  "barista_takings": {
+    "title": "Barista Takings",
+    "meta": "Daily report for {date}",
+    "empty": "No barista took any orders on this date.",
+    "all_baristas": "All Baristas"
+  },
+  "barista": {
+    "title": "My Daily Report",
+    "my_sales": "My Sales",
+    "load_failed": "Could not load your daily report.",
+    "loading": "Loading your daily report",
+    "paid_orders": "Paid Orders",
+    "total_sales": "Total Sales",
+    "hint": "Sales attributed to your account for the selected day."
+  }
+}

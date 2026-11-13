@@ -16,6 +16,7 @@ import {
   FilterActions,
   FilterPanel,
   FormInput,
+  FormPhoneInput,
   FormImageUpload,
   FormModal,
   FormSelect,
@@ -30,6 +31,7 @@ import {
   StatusBadge,
   TableActions,
   TableState,
+  listLoadState,
   TextField,
 } from "@/components/common/AdminKit";
 import { apiErrorMessage } from "@/store/api/baseApi";
@@ -39,28 +41,32 @@ import {
   useCreateBaristaMutation,
   useDeleteAdminMutation,
   useDeleteBaristaMutation,
+  useInviteAdminViaTelegramMutation,
+  useInviteBaristaViaTelegramMutation,
   useListAdminsQuery,
   useListBaristasQuery,
+  useResendAdminTelegramInviteMutation,
+  useResendBaristaTelegramInviteMutation,
   useUpdateAdminMutation,
   useUpdateBaristaMutation,
   useUploadStaffAvatarMutation,
 } from "@/store/api/userApi";
-import { humanise, statusTone } from "@/features/user/components/UserManagementView";
-import type { Gender, UserResponse, UserStatus } from "@/store/api/types";
+import { statusTone } from "@/features/user/components/UserManagementView";
+import { titleCase } from "@/lib/utils";
+import { enumLabel } from "@/lib/enumLabel";
+import type { Gender, TelegramLinkCodeResponse, UserResponse, UserStatus } from "@/store/api/types";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { formatPhone, formatPhoneInput } from "@/lib/phone";
+import { usePersistentState } from "@/hooks/usePersistentState";
+import { filteredPage, filteredQueryArgs } from "@/hooks/useFilteredPaging";
+import { staffCreateSchema, staffInviteSchema, staffUpdateSchema } from "@/lib/formSchemas";
+import { useI18n } from "@/contexts/I18nContext";
+import { useFormErrors } from "@/hooks/useFormErrors";
+import { Button } from "@/components/common/Button";
 
-const STAFF_TABLE_HEADERS = [
-  "No",
-  "Staff",
-  "Phone",
-  "Gender",
-  "Role",
-  "Created By",
-  "Status",
-  "Action",
-] as const;
-
-/** Admins and baristas are separate endpoints, so the screen tabs between them. */
 type StaffKind = "ADMIN" | "BARISTA";
+
+type CreationMode = "PASSWORD" | "TELEGRAM";
 
 type StaffFormFields = {
   fullName: string;
@@ -81,67 +87,72 @@ const EMPTY_FORM: StaffFormFields = {
 };
 
 export default function Staff() {
+  const { t } = useI18n();
   const { role, isAdmin } = useCurrentRole();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const canManageAdmins = role === "SUPER_ADMIN";
-  const [kind, setKind] = useState<StaffKind>("BARISTA");
-  const [formKind, setFormKind] = useState<StaffKind>("BARISTA");
-  const [page, setPage] = useState(1);
+  const [kind, setKind] = usePersistentState<StaffKind>("staff:kind", "BARISTA");
+  const [formKind, setFormKind] = usePersistentState<StaffKind>("staff:formKind", "BARISTA");
+  const [page, setPage] = usePersistentState("staff:page", 1);
   const [size, setSize] = usePageSize();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [searchTerm, setSearchTerm] = usePersistentState("staff:searchTerm", "");
+  const [statusFilter, setStatusFilter] = usePersistentState("staff:statusFilter", "");
+  const isFiltering = Boolean(searchTerm.trim() || statusFilter);
 
   const adminQuery = useListAdminsQuery(
-    { page, size },
+    filteredQueryArgs(page, size, isFiltering),
     { skip: !canManageAdmins || kind !== "ADMIN" }
   );
   const baristaQuery = useListBaristasQuery(
-    { page, size },
+    filteredQueryArgs(page, size, isFiltering),
     { skip: !isAdmin || kind !== "BARISTA" }
   );
   const active = kind === "ADMIN" ? adminQuery : baristaQuery;
+  const list = listLoadState(active);
 
   const [createAdmin, { isLoading: isCreatingAdmin }] = useCreateAdminMutation();
   const [createBarista, { isLoading: isCreatingBarista }] = useCreateBaristaMutation();
   const [updateAdmin, { isLoading: isUpdatingAdmin }] = useUpdateAdminMutation();
   const [updateBarista, { isLoading: isUpdatingBarista }] = useUpdateBaristaMutation();
-  const [deleteAdmin] = useDeleteAdminMutation();
-  const [deleteBarista] = useDeleteBaristaMutation();
+  const [deleteAdmin, { isLoading: isDeletingAdmin }] = useDeleteAdminMutation();
+  const [deleteBarista, { isLoading: isDeletingBarista }] = useDeleteBaristaMutation();
+  const isDeleting = isDeletingAdmin || isDeletingBarista;
   const [uploadAvatar, { isLoading: isUploadingAvatar }] = useUploadStaffAvatarMutation();
+  const [inviteAdmin, { isLoading: isInvitingAdmin }] = useInviteAdminViaTelegramMutation();
+  const [inviteBarista, { isLoading: isInvitingBarista }] = useInviteBaristaViaTelegramMutation();
+  const [resendAdminInvite, { isLoading: isResendingAdmin }] = useResendAdminTelegramInviteMutation();
+  const [resendBaristaInvite, { isLoading: isResendingBarista }] = useResendBaristaTelegramInviteMutation();
   const submitting = useRef(false);
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [selected, setSelected] = useState<UserResponse | null>(null);
-  const [form, setForm] = useState<StaffFormFields>(EMPTY_FORM);
+  const [formOpen, setFormOpen] = usePersistentState("staff:formOpen", false);
+  const [detailOpen, setDetailOpen] = usePersistentState("staff:detailOpen", false);
+  const [selected, setSelected] = usePersistentState<UserResponse | null>("staff:selected", null);
+  const [form, setForm] = usePersistentState<StaffFormFields>("staff:form", EMPTY_FORM);
+  const [creationMode, setCreationMode] = usePersistentState<CreationMode>("staff:creationMode", "PASSWORD");
+  // One check per mode, so each submit keeps its exact shape; the open mode's messages are shown.
+  const inviteValidation = useFormErrors(staffInviteSchema, form);
+  const updateValidation = useFormErrors(staffUpdateSchema, form);
+  const createValidation = useFormErrors(staffCreateSchema, form);
+  const isInviteMode = !selected && creationMode === "TELEGRAM";
+  const validation = isInviteMode ? inviteValidation : selected ? updateValidation : createValidation;
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>();
+  const imagePreview = useMemo(() => (imageFile ? URL.createObjectURL(imageFile) : undefined), [imageFile]);
+  const [inviteResult, setInviteResult] = usePersistentState<TelegramLinkCodeResponse | null>("staff:inviteResult", null);
+  const [inviteResultOpen, setInviteResultOpen] = usePersistentState("staff:inviteResultOpen", false);
 
   useEffect(() => {
-    if (!imageFile) {
-      setImagePreview(undefined);
-      return;
-    }
-    const url = URL.createObjectURL(imageFile);
-    setImagePreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [imageFile]);
+    if (!imagePreview) return;
+    return () => URL.revokeObjectURL(imagePreview);
+  }, [imagePreview]);
 
   const handlePickImage = (file: File | null) => {
     if (submitting.current) return;
-    if (file && !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
-      toast.error("Choose a JPEG, PNG, WebP, or GIF image");
-      return;
-    }
-    if (file && (file.size === 0 || file.size > 5 * 1024 * 1024)) {
-      toast.error("Choose a non-empty image of 5 MB or smaller");
-      return;
-    }
     setImageFile(file);
   };
 
   const staff = useMemo(() => active.data?.content ?? [], [active.data]);
 
-  const visibleStaff = useMemo(
+  const matchingStaff = useMemo(
     () =>
       staff.filter((member) => {
         const term = searchTerm.trim().toLowerCase();
@@ -154,14 +165,28 @@ export default function Staff() {
       }),
     [staff, searchTerm, statusFilter]
   );
+  const view = filteredPage(matchingStaff, active.data, page, size, isFiltering);
+  const visibleStaff = view.rows;
 
   const activeCount = staff.filter((s) => s.status === "ACTIVE").length;
+
+  const staffTableHeaders = [
+    t("table.no", "No"),
+    t("staff.table.staff", "Staff"),
+    t("fields.phone_number", "Phone Number"),
+    t("staff.fields.gender", "Gender"),
+    t("fields.role", "Role"),
+    t("fields.created_by", "Created By"),
+    t("fields.status", "Status"),
+    t("table.action", "Action"),
+  ];
 
   const handleOpenForm = (member?: UserResponse, createKind: StaffKind = kind) => {
     const targetKind = member?.role === "ADMIN" ? "ADMIN" : member ? "BARISTA" : createKind;
     if (!isAdmin || (targetKind === "ADMIN" && !canManageAdmins)) return;
     setFormKind(targetKind);
     setImageFile(null);
+    setCreationMode("PASSWORD");
     setSelected(member ?? null);
     setForm(
       member
@@ -169,60 +194,65 @@ export default function Staff() {
             fullName: member.fullName,
             email: member.email,
             password: "",
-            phoneNumber: member.phoneNumber ?? "",
+            phoneNumber: formatPhoneInput(member.phoneNumber),
             gender: member.gender ?? "",
             status: member.status,
           }
         : EMPTY_FORM
     );
+    inviteValidation.reset();
+    updateValidation.reset();
+    createValidation.reset();
     setFormOpen(true);
   };
 
   const handleSubmit = async () => {
     if (submitting.current) return;
     if (!isAdmin || (formKind === "ADMIN" && !canManageAdmins)) {
-      toast.error("Your account cannot manage this staff role.");
+      toast.error(t("staff.toast.cannot_manage_role", "Your account cannot manage this staff role."));
       return;
     }
-    const fullName = form.fullName.trim();
-    if (!fullName) {
-      toast.error("Full name is required");
+    const gender = (form.gender || undefined) as Gender | undefined;
+    const isInvite = !selected && Boolean(formKind) && creationMode === "TELEGRAM";
+
+    if (isInvite) {
+      const invite = inviteValidation.validate();
+      if (!invite) return;
+      submitting.current = true;
+      try {
+        const body = { ...invite, gender };
+        const result = formKind === "ADMIN" ? await inviteAdmin(body).unwrap() : await inviteBarista(body).unwrap();
+        setKind(formKind);
+        setPage(1);
+        setFormOpen(false);
+        setForm(EMPTY_FORM);
+        setInviteResult(result);
+        setInviteResultOpen(true);
+      } catch (err) {
+        inviteValidation.showServerError(err, t("staff.toast.invite_failed", "Could not send the Telegram invite."));
+      } finally {
+        submitting.current = false;
+      }
       return;
     }
+
+    const updates = selected ? updateValidation.validate() : null;
+    const created = selected ? null : createValidation.validate();
+    if (!updates && !created) return;
 
     submitting.current = true;
     let detailsSaved = false;
     try {
       let savedMember: UserResponse;
-      if (selected) {
-        // Email and password are not editable through UpdateStaffRequest.
-        const body = {
-          fullName,
-          phoneNumber: form.phoneNumber.trim() || undefined,
-          gender: (form.gender || undefined) as Gender | undefined,
-          status: form.status,
-        };
+      if (selected && updates) {
+        const body = { ...updates, gender, status: form.status };
         if (formKind === "ADMIN") {
           savedMember = await updateAdmin({ id: selected.id, body }).unwrap();
         } else {
           savedMember = await updateBarista({ id: selected.id, body }).unwrap();
         }
       } else {
-        if (!form.email.trim()) {
-          toast.error("Email is required");
-          return;
-        }
-        if (form.password.length < 8) {
-          toast.error("Password must be at least 8 characters");
-          return;
-        }
-        const body = {
-          fullName,
-          email: form.email.trim(),
-          password: form.password,
-          phoneNumber: form.phoneNumber.trim() || undefined,
-          gender: (form.gender || undefined) as Gender | undefined,
-        };
+        const body = { ...created!, gender };
         if (formKind === "ADMIN") {
           savedMember = await createAdmin(body).unwrap();
         } else {
@@ -230,13 +260,16 @@ export default function Staff() {
         }
       }
       detailsSaved = true;
-      // Preserve the created account if its separate photo upload fails, so retry edits it.
       setSelected(savedMember);
       setForm((current) => ({ ...current, password: "" }));
       if (imageFile) {
         await uploadAvatar({ id: savedMember.id, role: formKind, file: imageFile }).unwrap();
       }
-      toast.success(selected ? "Staff member updated" : `${formKind === "ADMIN" ? "Admin" : "Barista"} created`);
+      toast.success(selected
+        ? t("staff.toast.updated", "Staff member updated")
+        : formKind === "ADMIN"
+          ? t("staff.toast.admin_created", "Admin created")
+          : t("staff.toast.barista_created", "Barista created"));
       setKind(formKind);
       setPage(1);
       setFormOpen(false);
@@ -244,52 +277,76 @@ export default function Staff() {
       setForm(EMPTY_FORM);
       setImageFile(null);
     } catch (err) {
-      toast.error(detailsSaved
-        ? `Staff details saved, but the photo was not uploaded. ${apiErrorMessage(err as never, "Please try again.")} Submit again to retry.`
-        : apiErrorMessage(err as never, "Could not save the staff member."));
+      if (detailsSaved) {
+        toast.error(t("staff.toast.photo_upload_failed", "Staff details saved, but the photo was not uploaded. {error} Submit again to retry.", {
+          error: apiErrorMessage(err as never, t("staff.toast.please_try_again", "Please try again.")),
+        }));
+      } else {
+        validation.showServerError(err, t("staff.toast.save_failed", "Could not save the staff member."));
+      }
     } finally {
       submitting.current = false;
     }
   };
 
+  const handleResendInvite = async (member: UserResponse) => {
+    try {
+      const result = member.role === "ADMIN"
+        ? await resendAdminInvite(member.id).unwrap()
+        : await resendBaristaInvite(member.id).unwrap();
+      setDetailOpen(false);
+      setInviteResult(result);
+      setInviteResultOpen(true);
+    } catch (err) {
+      toast.error(apiErrorMessage(err as never, t("staff.toast.resend_failed", "Could not resend the Telegram invite.")));
+    }
+  };
+
   const handleDelete = async (member: UserResponse) => {
     if (!isAdmin || (member.role === "ADMIN" && !canManageAdmins)) return;
-    if (!window.confirm(`Remove ${member.fullName}?`)) return;
+    if (!(await confirm({
+      title: t("staff.confirm.remove_title", "Remove staff member"),
+      description: t("staff.confirm.remove_description", "Remove {name}?", { name: member.fullName }),
+      confirmLabel: t("actions.remove", "Remove"),
+      tone: "danger",
+    }))) return;
     try {
       if (member.role === "ADMIN") {
         await deleteAdmin(member.id).unwrap();
       } else {
         await deleteBarista(member.id).unwrap();
       }
-      toast.success("Staff member removed");
+      toast.success(t("staff.toast.removed", "Staff member removed"));
     } catch (err) {
-      toast.error(apiErrorMessage(err as never, "Could not remove the staff member."));
+      toast.error(apiErrorMessage(err as never, t("staff.toast.remove_failed", "Could not remove the staff member.")));
     }
   };
 
   const isSaving =
-    isCreatingAdmin || isCreatingBarista || isUpdatingAdmin || isUpdatingBarista || isUploadingAvatar;
+    isCreatingAdmin || isCreatingBarista || isUpdatingAdmin || isUpdatingBarista || isUploadingAvatar ||
+    isInvitingAdmin || isInvitingBarista;
+  const isResendingInvite = isResendingAdmin || isResendingBarista;
 
   return (
     <PageShell>
       <PageHeader
-        title="Staff"
-        breadcrumbs={[{ label: "Home", href: "/" }, { label: "Staff" }]}
+        title={t("staff.title", "Staff")}
+        breadcrumbs={[{ label: t("breadcrumb.home", "Home"), href: "/" }, { label: t("staff.title", "Staff") }]}
         rightSlot={<AdminTopActions />}
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <StatTile
-          title={kind === "ADMIN" ? "All Admins" : "All Baristas"}
+          title={kind === "ADMIN" ? t("staff.stats.all_admins", "All Admins") : t("staff.stats.all_baristas", "All Baristas")}
           value={String(active.data?.totalElements ?? 0)}
           tone="gray"
         />
-        <StatTile title="Active (this page)" value={String(activeCount)} tone="green" />
+        <StatTile title={t("staff.stats.active_this_page", "Active (this page)")} value={String(activeCount)} tone="green" />
       </div>
 
       <FilterPanel>
         <SelectField
-          label="Staff Type"
+          label={t("staff.filters.staff_type", "Staff Type")}
           value={kind}
           onChange={(e) => {
             if (!e.target.value) return;
@@ -299,64 +356,69 @@ export default function Staff() {
             setPage(1);
           }}
         >
-          <option value="BARISTA">Baristas</option>
-          {canManageAdmins && <option value="ADMIN">Admins</option>}
+          <option value="BARISTA">{t("staff.list.baristas", "Baristas")}</option>
+          {canManageAdmins && <option value="ADMIN">{t("staff.list.admins", "Admins")}</option>}
         </SelectField>
         <TextField
-          label="Name or Email"
-          placeholder="Search staff"
+          label={t("staff.filters.name_or_email", "Name or Email")}
+          placeholder={t("staff.filters.search_placeholder", "Search staff")}
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
         />
         <SelectField
-          label="Status"
-          placeholder="All statuses"
+          label={t("fields.status", "Status")}
+          placeholder={t("staff.filters.all_statuses", "All statuses")}
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
         >
-          <option value="ACTIVE">Active</option>
-          <option value="PENDING_VERIFICATION">Pending Verification</option>
-          <option value="DEACTIVATED">Deactivated</option>
-          <option value="SUSPENDED">Suspended</option>
-          <option value="BANNED">Banned</option>
+          <option value="ACTIVE">{enumLabel(t, "user_status", "ACTIVE")}</option>
+          <option value="PENDING_VERIFICATION">{enumLabel(t, "user_status", "PENDING_VERIFICATION")}</option>
+          <option value="DEACTIVATED">{enumLabel(t, "user_status", "DEACTIVATED")}</option>
+          <option value="SUSPENDED">{enumLabel(t, "user_status", "SUSPENDED")}</option>
+          <option value="BANNED">{enumLabel(t, "user_status", "BANNED")}</option>
         </SelectField>
         <FilterActions onClear={() => { setSearchTerm(""); setStatusFilter(""); setPage(1); }} onSearch={active.refetch} />
       </FilterPanel>
 
       <DataCard
-        title={kind === "ADMIN" ? "Admins" : "Baristas"}
-        meta={`Total: ${active.data?.totalElements ?? 0}`}
+        title={kind === "ADMIN" ? t("staff.list.admins", "Admins") : t("staff.list.baristas", "Baristas")}
+        meta={t("staff.list.total", "Total: {count}", { count: active.data?.totalElements ?? 0 })}
         actions={
           <div className="flex flex-wrap gap-2">
-            {canManageAdmins && <TableActions onRegister={() => handleOpenForm(undefined, "ADMIN")} primaryLabel="Add Admin" />}
-            {isAdmin && <TableActions onRegister={() => handleOpenForm(undefined, "BARISTA")} primaryLabel="Add Barista" />}
+            {canManageAdmins && <TableActions onRegister={() => handleOpenForm(undefined, "ADMIN")} primaryLabel={t("staff.list.add_admin", "Add Admin")} />}
+            {isAdmin && <TableActions onRegister={() => handleOpenForm(undefined, "BARISTA")} primaryLabel={t("staff.list.add_barista", "Add Barista")} />}
           </div>
         }
       >
-        <SimpleTable headers={[...STAFF_TABLE_HEADERS]}>
+        <SimpleTable headers={staffTableHeaders}>
           <TableState
-            colSpan={STAFF_TABLE_HEADERS.length}
-            isLoading={active.isFetching}
-            error={active.error}
+            colSpan={staffTableHeaders.length}
+            isLoading={list.isLoading}
+            error={list.error}
             isEmpty={visibleStaff.length === 0}
-            emptyLabel={`No ${kind === "ADMIN" ? "admins" : "baristas"} yet.`}
+            emptyLabel={
+              isFiltering
+                ? t("staff.empty.no_match", "No staff match these filters.")
+                : kind === "ADMIN"
+                  ? t("staff.empty.no_admins", "No admins yet.")
+                  : t("staff.empty.no_baristas", "No baristas yet.")
+            }
             onRetry={active.refetch}
           />
-          {!active.isFetching &&
-            !active.error &&
+          {list.showRows &&
             visibleStaff.map((member, index) => (
               <Row key={member.id} striped={index % 2 === 1}>
-                <Cell>{(page - 1) * size + index + 1}</Cell>
+                <Cell>{view.offset + index + 1}</Cell>
                 <Cell>
                   <StaffIdentityCell name={member.fullName} email={member.email} avatarUrl={member.avatarUrl} />
                 </Cell>
-                <Cell>{member.phoneNumber || "-"}</Cell>
-                <Cell>{member.gender ? humanise(member.gender) : "-"}</Cell>
-                <Cell>{humanise(member.role)}</Cell>
-                <Cell>{member.createdByName ?? "-"}</Cell>
+                <Cell className="tabular-nums whitespace-nowrap">{formatPhone(member.phoneNumber) || "-"}</Cell>
+                <Cell>{member.gender ? enumLabel(t, "gender", member.gender) : "-"}</Cell>
+                <Cell>{enumLabel(t, "role", member.role)}</Cell>
+                <Cell>{member.createdByName ? titleCase(member.createdByName) : "-"}</Cell>
                 <Cell>
                   <StatusBadge
-                    label={humanise(member.status)}
+                    label={enumLabel(t, "user_status", member.status)}
                     tone={statusTone(member.status)}
                   />
                 </Cell>
@@ -368,17 +430,17 @@ export default function Staff() {
                     }}
                     onEdit={() => handleOpenForm(member)}
                     onDelete={() => handleDelete(member)}
-                    isLoading={isSaving}
+                    isLoading={isSaving || isDeleting}
                   />
                 </Cell>
               </Row>
             ))}
         </SimpleTable>
         <PaginationFooter
-          page={active.data?.page ?? page}
-          totalPages={active.data?.totalPages ?? 1}
+          page={view.page}
+          totalPages={view.totalPages}
           size={size}
-          totalElements={active.data?.totalElements}
+          totalElements={view.totalElements}
           onPageChange={setPage}
           onSizeChange={(next) => {
             setSize(next);
@@ -396,65 +458,92 @@ export default function Staff() {
         }}
         title={
           selected
-            ? "Modify Staff"
-            : `Register ${formKind === "ADMIN" ? "Admin" : "Barista"}`
+            ? t("staff.form.title_modify", "Modify Staff")
+            : formKind === "ADMIN"
+              ? t("staff.form.title_register_admin", "Register Admin")
+              : t("staff.form.title_register_barista", "Register Barista")
         }
-        submitLabel="Submit"
+        submitLabel={t("actions.submit", "Submit")}
         onSubmit={handleSubmit}
         isLoading={isSaving}
       >
         <ModalGrid>
-          <FormSelect label="Account Role" value={formKind} disabled={Boolean(selected) || isSaving}
+          <FormSelect label={t("staff.form.account_role", "Account Role")} value={formKind} disabled={Boolean(selected) || isSaving}
             onChange={(event) => {
               const nextKind = event.target.value as StaffKind;
               if (nextKind === "BARISTA" || (nextKind === "ADMIN" && canManageAdmins)) setFormKind(nextKind);
             }}>
-            <option value="BARISTA">Barista</option>
-            {canManageAdmins && <option value="ADMIN">Admin</option>}
+            <option value="BARISTA">{enumLabel(t, "role", "BARISTA")}</option>
+            {canManageAdmins && <option value="ADMIN">{enumLabel(t, "role", "ADMIN")}</option>}
           </FormSelect>
-          <div className="md:col-span-3">
-            {(imagePreview || selected?.avatarUrl) && <DetailImage src={imagePreview || selected?.avatarUrl || undefined} alt="Staff profile photo" />}
-            <FormImageUpload label="Profile Photo" file={imageFile} onChange={handlePickImage} disabled={isSaving}
-              accept="image/jpeg,image/png,image/webp,image/gif" emptyLabel={selected?.avatarUrl ? "Choose a photo to replace the current one" : "No photo selected"} />
-            <p className="mt-2 text-sm text-muted-foreground">Optional. JPEG, PNG, WebP, or GIF, up to 5 MB. Saved when you submit.</p>
-            {imageFile && <button type="button" className="mt-2 text-sm underline" disabled={isSaving} onClick={() => setImageFile(null)}>Clear selected photo</button>}
-          </div>
+          {!selected && (
+            <FormSelect
+              label={t("staff.form.setup_method", "Setup Method")}
+              value={creationMode}
+              disabled={isSaving}
+              onChange={(event) => setCreationMode(event.target.value as CreationMode)}
+            >
+              <option value="PASSWORD">{t("staff.form.setup_password", "Email & Password")}</option>
+              <option value="TELEGRAM">{t("staff.form.setup_telegram", "Invite via Telegram")}</option>
+            </FormSelect>
+          )}
+          {(selected || creationMode === "PASSWORD") && (
+            <div className="md:col-span-3">
+              {(imagePreview || selected?.avatarUrl) && <DetailImage src={imagePreview || selected?.avatarUrl || undefined} alt={t("staff.form.photo_alt", "Staff profile photo")} />}
+              <FormImageUpload label={t("staff.form.profile_photo", "Profile Photo")} file={imageFile} onChange={handlePickImage} disabled={isSaving}
+                emptyLabel={selected?.avatarUrl ? t("staff.form.photo_replace", "Choose a photo to replace the current one") : t("staff.form.photo_none", "No photo selected")} />
+              <p className="mt-2 text-sm text-muted-foreground">{t("staff.form.photo_hint", "Optional. JPEG, PNG, WebP, or GIF, up to 5 MB. Saved when you submit.")}</p>
+              {imageFile && <button type="button" className="mt-2 text-sm underline" disabled={isSaving} onClick={() => setImageFile(null)}>{t("staff.form.clear_photo", "Clear selected photo")}</button>}
+            </div>
+          )}
           <FormInput
-            label="Full Name"
-            placeholder="e.g. Sophal Nem"
+            label={t("fields.full_name", "Full Name")}
+            placeholder={t("staff.form.full_name_placeholder", "e.g. Sophal Nem")}
             value={form.fullName}
+            error={validation.errors.fullName}
             onChange={(e) => setForm({ ...form, fullName: e.target.value })}
             required
           />
-          <FormInput
-            label="Email"
-            type="email"
-            placeholder="user@gmail.com"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            readOnly={Boolean(selected)}
-            required={!selected}
-          />
-          {/* Only set at creation — the API offers no password change on this resource. */}
-          {selected ? null : (
+          {(selected || creationMode === "PASSWORD") && (
             <FormInput
-              label="Password"
+              label={t("fields.email", "Email")}
+              type="email"
+              placeholder="user@gmail.com"
+              value={form.email}
+              error={validation.errors.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              readOnly={Boolean(selected)}
+              required={!selected}
+            />
+          )}
+          {!selected && creationMode === "PASSWORD" && (
+            <FormInput
+              label={t("fields.password", "Password")}
               type="password"
-              placeholder="Min 8 chars, mixed case, digit + symbol"
+              placeholder={t("staff.form.password_placeholder", "Min 8 chars, mixed case, digit + symbol")}
               value={form.password}
+              error={validation.errors.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               required
             />
           )}
-          <FormInput
-            label="Phone Number"
-            placeholder="072 345 5674"
+          <FormPhoneInput
             value={form.phoneNumber}
-            onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
+            error={validation.errors.phoneNumber}
+            onChange={(phoneNumber) => setForm({ ...form, phoneNumber })}
+            required={!selected && creationMode === "TELEGRAM"}
           />
+          {!selected && creationMode === "TELEGRAM" && (
+            <p className="md:col-span-3 text-sm text-muted-foreground">
+              {formKind === "ADMIN"
+                ? t("staff.form.telegram_hint_admin", "No email or password needed — the admin activates their account by opening the Telegram invite link and confirming this phone number, then signs in on the login page under the")
+                : t("staff.form.telegram_hint_barista", "No email or password needed — the barista activates their account by opening the Telegram invite link and confirming this phone number, then signs in on the login page under the")}{" "}
+              <span className="font-semibold">{t("staff.form.phone_tab", "Phone number")}</span>{t("staff.form.telegram_hint_end", " tab.")}
+            </p>
+          )}
           <FormSelect
-            label="Gender"
-            placeholder="Select gender"
+            label={t("staff.fields.gender", "Gender")}
+            placeholder={t("staff.form.gender_placeholder", "Select gender")}
             value={form.gender}
             onChange={(e) => setForm({ ...form, gender: e.target.value })}
           >
@@ -464,15 +553,15 @@ export default function Staff() {
           </FormSelect>
           {selected ? (
             <FormSelect
-              label="Status"
-              placeholder="Select status"
+              label={t("fields.status", "Status")}
+              placeholder={t("staff.form.status_placeholder", "Select status")}
               value={form.status}
               onChange={(e) => setForm({ ...form, status: e.target.value as UserStatus })}
             >
-              <option value="ACTIVE">Active</option>
-              <option value="DEACTIVATED">Deactivated</option>
-              <option value="SUSPENDED">Suspended</option>
-              <option value="BANNED">Banned</option>
+              <option value="ACTIVE">{enumLabel(t, "user_status", "ACTIVE")}</option>
+              <option value="DEACTIVATED">{enumLabel(t, "user_status", "DEACTIVATED")}</option>
+              <option value="SUSPENDED">{enumLabel(t, "user_status", "SUSPENDED")}</option>
+              <option value="BANNED">{enumLabel(t, "user_status", "BANNED")}</option>
             </FormSelect>
           ) : null}
         </ModalGrid>
@@ -484,7 +573,7 @@ export default function Staff() {
           setDetailOpen(open);
           if (!open) setSelected(null);
         }}
-        title="Staff Detail"
+        title={t("staff.detail.title", "Staff Detail")}
         onEdit={() => {
           const member = selected;
           setDetailOpen(false);
@@ -493,33 +582,89 @@ export default function Staff() {
       >
         {selected && (
           <div className="admin_modal_form_wrap">
-            {selected.avatarUrl && <DetailImage src={selected.avatarUrl} alt={`${selected.fullName}'s profile photo`} />}
+            {selected.avatarUrl && <DetailImage src={selected.avatarUrl} alt={t("staff.detail.photo_alt", "{name}'s profile photo", { name: selected.fullName })} />}
             <DetailGrid>
-              <DetailItem label="Full Name">{selected.fullName}</DetailItem>
-              <DetailItem label="Email">{selected.email}</DetailItem>
-              <DetailItem label="Phone">{selected.phoneNumber || "-"}</DetailItem>
-              <DetailItem label="Gender">
-                {selected.gender ? humanise(selected.gender) : "-"}
+              <DetailItem label={t("fields.full_name", "Full Name")}>{titleCase(selected.fullName)}</DetailItem>
+              <DetailItem label={t("fields.email", "Email")}>{selected.email}</DetailItem>
+              <DetailItem label={t("fields.phone_number", "Phone Number")}>{formatPhone(selected.phoneNumber) || "-"}</DetailItem>
+              <DetailItem label={t("staff.fields.gender", "Gender")}>
+                {selected.gender ? enumLabel(t, "gender", selected.gender) : "-"}
               </DetailItem>
-              <DetailItem label="Role">{humanise(selected.role)}</DetailItem>
-              <DetailItem label="Status">
+              <DetailItem label={t("fields.role", "Role")}>{enumLabel(t, "role", selected.role)}</DetailItem>
+              <DetailItem label={t("fields.status", "Status")}>
                 <StatusBadge
-                  label={humanise(selected.status)}
+                  label={enumLabel(t, "user_status", selected.status)}
                   tone={statusTone(selected.status)}
                 />
               </DetailItem>
               <DetailItem label="Telegram">
-                {selected.telegramLinked ? "Linked" : "Not linked"}
+                <div className="flex items-center gap-3">
+                  <span>{selected.telegramLinked ? t("staff.detail.linked", "Linked") : t("staff.detail.not_linked", "Not linked")}</span>
+                  {!selected.telegramLinked && (
+                    <button
+                      type="button"
+                      className="text-sm underline disabled:opacity-50"
+                      disabled={isResendingInvite}
+                      onClick={() => handleResendInvite(selected)}
+                    >
+                      {isResendingInvite ? t("states.sending", "Sending...") : t("staff.detail.send_invite", "Send Telegram invite")}
+                    </button>
+                  )}
+                </div>
               </DetailItem>
-              <DetailItem label="Created By">
+              <DetailItem label={t("fields.created_by", "Created By")}>
                 {selected.createdByName
-                  ? `${selected.createdByName} (${selected.createdByRole})`
+                  ? `${titleCase(selected.createdByName)} (${enumLabel(t, "role", selected.createdByRole)})`
                   : "-"}
               </DetailItem>
             </DetailGrid>
           </div>
         )}
       </DetailModal>
+
+      <DetailModal
+        open={inviteResultOpen}
+        onOpenChange={(open) => {
+          setInviteResultOpen(open);
+          if (!open) setInviteResult(null);
+        }}
+        title={t("staff.invite_result.title", "Telegram Invite Sent")}
+      >
+        {inviteResult && (
+          <div className="admin_modal_form_wrap">
+            <DetailGrid>
+              <DetailItem label={t("staff.invite_result.invite_link", "Invite Link")}>
+                <a href={inviteResult.deepLink} target="_blank" rel="noopener noreferrer" className="underline break-all">
+                  {inviteResult.deepLink}
+                </a>
+              </DetailItem>
+              <DetailItem label={t("staff.invite_result.code", "Code")}>{inviteResult.code}</DetailItem>
+              <DetailItem label={t("staff.invite_result.expires_in", "Expires In")}>
+                {t("staff.invite_result.expires_minutes", "{count} minute(s)", { count: Math.round(inviteResult.expiresInSeconds / 60) })}
+              </DetailItem>
+            </DetailGrid>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {t("staff.invite_result.hint", "Share this link with the invitee. After they open it and share their phone number in Telegram, the account is active and they sign in on the login page under")}{" "}
+              <span className="font-semibold">{t("staff.invite_result.phone_tab", "Phone number")}</span>{t("staff.invite_result.hint_end", " — the code arrives in Telegram.")}
+            </p>
+            <Button
+             
+              variant="outline" className="mt-3"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(inviteResult.deepLink);
+                  toast.success(t("staff.toast.link_copied", "Link copied"));
+                } catch {
+                  toast.error(t("staff.toast.copy_failed", "Could not copy the link."));
+                }
+              }}
+            >
+              {t("staff.invite_result.copy_link", "Copy Link")}
+            </Button>
+          </div>
+        )}
+      </DetailModal>
+      {confirmDialog}
     </PageShell>
   );
 }

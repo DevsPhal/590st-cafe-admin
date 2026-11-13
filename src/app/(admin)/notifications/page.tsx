@@ -1,21 +1,36 @@
 "use client";
+
 import { useEffect } from "react";
 import { PageShell } from "@/components/common/PageShell";
 import { PageHeader } from "@/components/common/PageHeader";
 import { AdminTopActions } from "@/components/common/AdminKit";
-import { OperationalAlertsContent, useOperationalAlerts } from "@/components/common/OperationalAlerts";
+import {
+  OperationalAlertsContent,
+  useOperationalAlerts,
+} from "@/components/common/OperationalAlerts";
 import { ContactInbox } from "@/features/notification/ContactInbox";
+import { useI18n } from "@/contexts/I18nContext";
 
 export default function Page() {
+  const { t } = useI18n();
   const alerts = useOperationalAlerts();
-  // Reading the full list is the same as opening the panel: nothing here is unseen afterwards.
   const { markSeen, count } = alerts;
   useEffect(() => {
     if (count !== undefined) markSeen();
   }, [count, markSeen]);
-  return <PageShell>
-    <PageHeader title="Current alerts" breadcrumbs={[{ label: "Home", href: "/" }, { label: "Current alerts" }]} rightSlot={<AdminTopActions />} />
-    <OperationalAlertsContent alerts={alerts} />
-    <ContactInbox />
-  </PageShell>;
+  // Positioned so the scroller contains the sr-only labels; unpositioned, they stretch the document past the shell.
+  return (
+    <PageShell contentClassName="relative">
+      <PageHeader
+        title={t("notifications.title", "Current alerts")}
+        breadcrumbs={[
+          { label: t("breadcrumb.home", "Home"), href: "/" },
+          { label: t("notifications.title", "Current alerts") },
+        ]}
+        rightSlot={<AdminTopActions />}
+      />
+      <OperationalAlertsContent alerts={alerts} showMessages={false} />
+      <ContactInbox />
+    </PageShell>
+  );
 }

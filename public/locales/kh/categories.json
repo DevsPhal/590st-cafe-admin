@@ -1,0 +1,55 @@
+{
+  "title": "បញ្ជីប្រភេទ",
+  "breadcrumb": {
+    "categories": "ប្រភេទ",
+    "list": "បញ្ជីប្រភេទ"
+  },
+  "fields": {
+    "category_name": "ឈ្មោះប្រភេទ",
+    "total_products": "ផលិតផលសរុប",
+    "menu_group": "ក្រុមម៉ឺនុយ"
+  },
+  "stats": {
+    "all": "ប្រភេទទាំងអស់",
+    "active_page": "សកម្ម (ទំព័រនេះ)",
+    "products_categorised": "ផលិតផលដែលបានចាត់ប្រភេទ"
+  },
+  "filters": {
+    "search_by_name": "ស្វែងរកតាមឈ្មោះ",
+    "all_statuses": "គ្រប់ស្ថានភាព"
+  },
+  "card": {
+    "title": "ប្រភេទ",
+    "meta": "ប្រភេទសរុប៖ {count}"
+  },
+  "empty": {
+    "filtered": "គ្មានប្រភេទដែលត្រូវនឹងតម្រងទាំងនេះទេ។",
+    "admin": "មិនទាន់មានប្រភេទនៅឡើយទេ។ ចុច ចុះបញ្ជី ដើម្បីបន្ថែមប្រភេទដំបូង។",
+    "none": "រកមិនឃើញប្រភេទទេ។"
+  },
+  "toast": {
+    "created": "បានបង្កើតប្រភេទ",
+    "updated": "បានធ្វើបច្ចុប្បន្នភាពប្រភេទ",
+    "deleted": "បានលុបប្រភេទ"
+  },
+  "errors": {
+    "save": "មិនអាចរក្សាទុកប្រភេទបានទេ។",
+    "delete": "មិនអាចលុបប្រភេទបានទេ។"
+  },
+  "confirm": {
+    "delete_title": "លុបប្រភេទ",
+    "delete_description": "លុបប្រភេទ \"{name}\" មែនទេ?"
+  },
+  "form": {
+    "register_title": "ចុះបញ្ជីប្រភេទ",
+    "modify_title": "កែប្រែប្រភេទ",
+    "category_name_placeholder": "ឧ. កាហ្វេ",
+    "description_placeholder": "ការពិពណ៌នាខ្លី",
+    "menu_group_internal": "ផ្ទៃក្នុង (មិនបង្ហាញលើម៉ឺនុយអតិថិជន)",
+    "select_status": "ជ្រើសរើសស្ថានភាព"
+  },
+  "detail": {
+    "title": "ព័ត៌មានលម្អិតប្រភេទ",
+    "by_name": "ដោយ {name}"
+  }
+}

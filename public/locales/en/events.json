@@ -1,0 +1,54 @@
+{
+  "title": "Events",
+  "add_event": "Add Event",
+  "stats": {
+    "all": "All Events",
+    "running_now": "Running Now (this page)"
+  },
+  "filters": {
+    "search_placeholder": "Search events",
+    "all_statuses": "All statuses"
+  },
+  "meta": {
+    "total": "Total Events: {count}"
+  },
+  "table": {
+    "starts": "Starts",
+    "ends": "Ends",
+    "window": "Window"
+  },
+  "window": {
+    "running": "Running",
+    "upcoming": "Upcoming",
+    "ended": "Ended"
+  },
+  "empty": {
+    "filtered": "No events match these filters.",
+    "none": "No events yet. Use Add Event to create the first one."
+  },
+  "form": {
+    "modify_title": "Modify Event",
+    "title_placeholder": "e.g. Latte Art Workshop",
+    "starts_at": "Starts At",
+    "ends_at": "Ends At",
+    "select_status": "Select status",
+    "description_placeholder": "What is happening?",
+    "image": "Event Image"
+  },
+  "detail": {
+    "title": "Event Detail"
+  },
+  "toast": {
+    "created": "Event created",
+    "updated": "Event updated",
+    "deleted": "Event deleted"
+  },
+  "errors": {
+    "save": "Could not save the event.",
+    "delete": "Could not delete the event."
+  },
+  "confirm": {
+    "delete_title": "Delete event",
+    "delete_description": "Delete event \"{title}\"?"
+  }
+}

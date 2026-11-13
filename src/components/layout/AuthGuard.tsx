@@ -1,63 +1,203 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useGetCurrentUserQuery } from "@/store/api/authApi";
+import { LogOut, RotateCcw, ShieldAlert, WifiOff } from "lucide-react";
+import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
+import { LogoMark } from "@/components/common/AdminKit";
+import { apiErrorMessage } from "@/store/api/baseApi";
+import { useGetCurrentUserQuery, useLogoutMutation } from "@/store/api/authApi";
 import { adminHome, canAccessAdminPage } from "@/lib/adminAccess";
+import { clearTokens, isAuthenticated } from "@/lib/authStorage";
+import { useMounted } from "@/hooks/useMounted";
+import { useI18n } from "@/contexts/I18nContext";
+import { Button } from "@/components/common/Button";
+import { Loader } from "@/components/common/Loader";
 
-import { isAuthenticated } from "@/lib/authStorage";
+const AUTO_RETRY_MS = 5000;
 
-/**
- * Client-side gate for the admin area.
- *
- * The session is a JWT pair in localStorage, which Next's server middleware cannot read — so
- * the check has to run in the browser. This is a redirect for convenience, not a security
- * boundary: every admin endpoint is authorised server-side, and baseApi force-logs-out on a
- * 401 that a refresh cannot rescue.
- */
+function statusOf(error: unknown): number | string | undefined {
+  return (error as FetchBaseQueryError | undefined)?.status;
+}
+
 export function AuthGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [checked, setChecked] = useState(false);
+  const mounted = useMounted();
+  const { t } = useI18n();
+  const checked = mounted && isAuthenticated();
   const profile = useGetCurrentUserQuery(undefined, { skip: !checked });
   const home = adminHome(profile.data?.role);
 
-  useEffect(() => {
-    if (isAuthenticated()) {
-      setChecked(true);
-      return;
-    }
-    // Come back here once signed in.
-    const next = encodeURIComponent(pathname ?? "/");
-    router.replace(`/auth/login?next=${next}`);
-  }, [router, pathname]);
+  const status = statusOf(profile.error);
+  const hasAccount = profile.data !== undefined;
+  const serverUnreachable =
+    status === "FETCH_ERROR" ||
+    status === "TIMEOUT_ERROR" ||
+    status === 502 ||
+    status === 503 ||
+    status === 504;
+
+  const loginUrl = `/auth/login?next=${encodeURIComponent(pathname ?? "/")}`;
 
   useEffect(() => {
-    if (profile.data?.role === "BARISTA" && (pathname === "/" || pathname === "/dashboard")) router.replace(home);
+    if (mounted && !checked) router.replace(loginUrl);
+  }, [mounted, checked, router, loginUrl]);
+
+  useEffect(() => {
+    if (
+      profile.data?.role === "BARISTA" &&
+      (pathname === "/" || pathname === "/dashboard")
+    )
+      router.replace(home);
   }, [profile.data?.role, pathname, router, home]);
 
-  if (!checked || profile.isLoading || profile.isUninitialized) {
+  useEffect(() => {
+    if (!hasAccount && status === 401) {
+      clearTokens();
+      router.replace(loginUrl);
+    }
+  }, [hasAccount, status, router, loginUrl]);
+
+  useEffect(() => {
+    if (hasAccount || !serverUnreachable || profile.isFetching) return;
+    const timer = setTimeout(() => void profile.refetch(), AUTO_RETRY_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAccount, serverUnreachable, profile.isFetching]);
+
+  if (hasAccount) {
+    if (!canAccessAdminPage(profile.data?.role, pathname)) {
+      const isCustomer = profile.data?.role === "CUSTOMER";
+      return (
+        <GuardCard
+          icon={<ShieldAlert className="h-7 w-7 text-amber-600" />}
+          title={
+            isCustomer
+              ? t("guard.customer_title", "This is a customer account")
+              : t("guard.role_title", "This page needs a different staff role")
+          }
+          message={
+            isCustomer
+              ? t("guard.customer_message", "Customer accounts can't open the staff dashboard. Sign in with an admin or barista account.")
+              : t("guard.role_message", "Your account doesn't have access to this page.")
+          }
+        >
+          {isCustomer ? (
+            <SignOutButton primary />
+          ) : (
+            <Link href={home} className="btn_primary_black">
+              {t("guard.back_to_dashboard", "Back to your dashboard")}
+            </Link>
+          )}
+        </GuardCard>
+      );
+    }
+    return <>{children}</>;
+  }
+
+  if (
+    !checked ||
+    profile.isUninitialized ||
+    profile.isFetching ||
+    !profile.error ||
+    status === 401
+  ) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-(--surface-muted)">
+        <LogoMark />
+        <Loader />
       </div>
     );
   }
 
-  if (profile.error) return <div className="p-8" role="alert">
-    <p>Could not load your account.</p>
-    <button type="button" className="mt-3 underline" onClick={() => profile.refetch()}>Retry</button>
-  </div>;
+  return (
+    <GuardCard
+      icon={
+        serverUnreachable ? (
+          <WifiOff className="h-7 w-7 text-red-500" />
+        ) : (
+          <ShieldAlert className="h-7 w-7 text-red-500" />
+        )
+      }
+      title={
+        serverUnreachable
+          ? t("guard.unreachable_title", "Can't reach the server")
+          : t("guard.load_failed_title", "We couldn't load your account")
+      }
+      message={
+        serverUnreachable
+          ? t("guard.unreachable_message", "The system is unavailable right now. This page will try again automatically.")
+          : apiErrorMessage(
+              profile.error as FetchBaseQueryError,
+              t("guard.load_failed_message", "Something went wrong while loading your account."),
+            )
+      }
+    >
+      <Button
+       
+        variant="primary"
+        onClick={() => profile.refetch()}
+      >
+        <RotateCcw />
+        {t("actions.try_again", "Try again")}
+      </Button>
+      <SignOutButton />
+    </GuardCard>
+  );
+}
 
-  if (!canAccessAdminPage(profile.data?.role, pathname)) return <div className="p-8">
-    <h1 className="text-xl font-semibold">This page requires a different staff role</h1>
-    <p className="mt-2">{profile.data?.role === "CUSTOMER" ? "Customer accounts cannot access the staff dashboard." : "Your account does not have access to this page."}</p>
-    <Link className="mt-4 inline-block underline" href={profile.data?.role === "CUSTOMER" ? "/auth/login" : home}>
-      {profile.data?.role === "CUSTOMER" ? "Sign in with a staff account" : "Back to your dashboard"}
-    </Link>
-  </div>;
+function GuardCard({
+  icon,
+  title,
+  message,
+  children,
+}: {
+  icon: ReactNode;
+  title: string;
+  message: string;
+  children: ReactNode;
+}) {
+  return (
+    <main className="flex min-h-dvh items-center justify-center bg-(--surface-muted) px-4">
+      <div
+        role="alert"
+        className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-sm"
+      >
+        <div className="flex justify-center">
+          <LogoMark />
+        </div>
+        <div className="mx-auto mt-8 grid h-14 w-14 place-items-center rounded-full bg-gray-100">
+          {icon}
+        </div>
+        <h1 className="mt-5 text-lg font-bold text-gray-900">{title}</h1>
+        <p className="mt-2 text-sm text-gray-500">{message}</p>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          {children}
+        </div>
+      </div>
+    </main>
+  );
+}
 
-  return <>{children}</>;
+function SignOutButton({ primary = false }: { primary?: boolean }) {
+  const [logout, { isLoading }] = useLogoutMutation();
+  const { t } = useI18n();
+  return (
+    <Button
+      variant={primary ? "primary" : "outline"}
+      loading={isLoading}
+      onClick={async () => {
+        try {
+          await logout().unwrap();
+        } catch {
+        }
+        window.location.href = "/auth/login";
+      }}
+    >
+      {isLoading ? null : <LogOut />}
+      {t("actions.sign_out", "Sign out")}
+    </Button>
+  );
 }

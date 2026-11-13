@@ -1,0 +1,55 @@
+{
+  "title": "Categories List",
+  "breadcrumb": {
+    "categories": "Categories",
+    "list": "Categories List"
+  },
+  "fields": {
+    "category_name": "Category Name",
+    "total_products": "Total Products",
+    "menu_group": "Menu Group"
+  },
+  "stats": {
+    "all": "All Categories",
+    "active_page": "Active (this page)",
+    "products_categorised": "Products Categorised"
+  },
+  "filters": {
+    "search_by_name": "Search by name",
+    "all_statuses": "All statuses"
+  },
+  "card": {
+    "title": "Categories",
+    "meta": "Total Categories: {count}"
+  },
+  "empty": {
+    "filtered": "No categories match these filters.",
+    "admin": "No categories yet. Use Register to add the first one.",
+    "none": "No categories found."
+  },
+  "toast": {
+    "created": "Category created",
+    "updated": "Category updated",
+    "deleted": "Category deleted"
+  },
+  "errors": {
+    "save": "Could not save the category.",
+    "delete": "Could not delete the category."
+  },
+  "confirm": {
+    "delete_title": "Delete category",
+    "delete_description": "Delete category \"{name}\"?"
+  },
+  "form": {
+    "register_title": "Register Category",
+    "modify_title": "Modify Category",
+    "category_name_placeholder": "e.g. Coffee",
+    "description_placeholder": "Short description",
+    "menu_group_internal": "Internal (not on the customer menu)",
+    "select_status": "Select status"
+  },
+  "detail": {
+    "title": "Category Detail",
+    "by_name": "by {name}"
+  }
+}

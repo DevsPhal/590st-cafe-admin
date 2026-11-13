@@ -1,0 +1,29 @@
+{
+  "title": "Stock Alerts",
+  "breadcrumb": {
+    "inventory": "Inventory"
+  },
+  "stats": {
+    "needing_restock": "Products Needing Restock",
+    "out_of_stock_page": "Out of Stock (this page)"
+  },
+  "card": {
+    "title": "Low Stock",
+    "meta": "At or below reorder level: {count}"
+  },
+  "table": {
+    "product_name": "Product Name",
+    "on_hand": "On Hand",
+    "reorder_level": "Reorder Level",
+    "shortfall": "Shortfall",
+    "severity": "Severity",
+    "per_stock_unit": "{count} per {unit}"
+  },
+  "empty": {
+    "no_alerts": "Nothing is below its reorder level. Stock levels are healthy."
+  },
+  "severity": {
+    "out_of_stock": "Out of Stock",
+    "low_stock": "Low Stock"
+  }
+}

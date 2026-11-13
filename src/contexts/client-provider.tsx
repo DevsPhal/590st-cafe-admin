@@ -3,29 +3,44 @@
 import React, { ReactNode, Suspense } from "react";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "react-hot-toast";
-import { I18nProvider } from "@/contexts/I18nContext";
+import { AppToast } from "@/components/common/AppToast";
+import { I18nProvider, useI18n } from "@/contexts/I18nContext";
 import { StoreProvider } from "@/store/StoreProvider";
 import { FontProvider } from "./font-provider";
+import { useOpenNativePickers } from "@/hooks/useOpenNativePickers";
+
+function LoadingFallback() {
+  const { t } = useI18n();
+  return <div>{t("states.loading", "Loading...")}</div>;
+}
 
 interface ClientProvidersProps {
   children: ReactNode;
 }
 
-/**
- * StoreProvider is outermost so every other provider — and every screen — can reach the RTK
- * Query cache. It replaces next-auth's SessionProvider: the admin authenticates against the
- * Spring API with a JWT it holds itself, and there was never a NextAuth route to back a
- * session.
- */
 export default function ClientProvider({ children }: ClientProvidersProps) {
+  useOpenNativePickers();
   return (
     <StoreProvider>
-      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+      {/* Follows the device until someone picks a theme with the header toggle; the pick is kept in
+          localStorage ("theme") and applied by next-themes' inline script before the first paint. */}
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+      >
         <I18nProvider>
           <FontProvider>
-            <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
-            {/* Every mutation reports success/failure through react-hot-toast. */}
-            <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
+            <Suspense fallback={<LoadingFallback />}>{children}</Suspense>
+            <Toaster
+              position="top-right"
+              gutter={10}
+              containerClassName="admin_toaster"
+              toastOptions={{ duration: 4000, error: { duration: 6000 } }}
+            >
+              {(t) => <AppToast t={t} />}
+            </Toaster>
           </FontProvider>
         </I18nProvider>
       </ThemeProvider>

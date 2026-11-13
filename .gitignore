@@ -1,22 +1,16 @@
-# Dependencies
 node_modules/
 /.pnp
 .pnp.js
-package-lock.json
 yarn.lock
 
-# Testing
 /coverage
 
-# Next.js
 /.next/
 /out/
 
-# Production
 /build
 /dist
 
-# Misc
 .DS_Store
 *.pem
 *.log
@@ -30,7 +24,6 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
-# IDE
 .vscode/
 .idea/
 *.swp
@@ -39,34 +32,27 @@ yarn-error.log*
 *.sublime-workspace
 *.sublime-project
 
-# OS
 Thumbs.db
 .AppleDouble
 .LSOverride
 *.class
 
-# Cache
 .cache/
 .eslintcache
 .turbo
 
-# Optional npm cache directory
 .npm
 
-# Optional eslint cache
 .eslintcache
 
-# Output of 'npm pack'
 *.tgz
 
-# dotenv environment variables file
 .env*
 
-# macOS
 .DS_Store
 .AppleDouble
 .LSOverride
 
-# Windows
 Thumbs.db
 ehthumbs.db
+tsconfig.tsbuildinfo

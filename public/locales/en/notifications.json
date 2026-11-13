@@ -1,0 +1,42 @@
+{
+  "title": "Current alerts",
+  "contact": {
+    "label": "Customer messages",
+    "status_label": "Message status",
+    "loading": "Loading messages...",
+    "reply_by_email": "Reply by email",
+    "mark_resolved": "Mark resolved",
+    "reopen": "Reopen",
+    "page_of": "Page {page} of {total}",
+    "toast": {
+      "resolved": "Marked as resolved",
+      "reopened": "Moved back to Needs attention",
+      "email_copied": "Email copied"
+    },
+    "errors": {
+      "load": "Could not load messages.",
+      "update": "Could not update the message.",
+      "copy": "Could not copy the email."
+    },
+    "topics": {
+      "general_inquiry": "General inquiry",
+      "catering_events": "Catering & events",
+      "feedback_suggestions": "Feedback & suggestions",
+      "partnership": "Partnership",
+      "order_support": "Order support"
+    },
+    "tabs": {
+      "new": "Needs attention",
+      "resolved": "Resolved"
+    },
+    "empty_new": "All caught up — no messages need a reply.",
+    "empty_resolved": "No resolved messages yet.",
+    "pagination": "Message pages",
+    "unread": "Needs a reply",
+    "account": "Account: {name}",
+    "show_more": "Show full message",
+    "show_less": "Show less",
+    "call": "Call",
+    "copy_email": "Copy email"
+  }
+}

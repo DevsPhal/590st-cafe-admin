@@ -1,0 +1,57 @@
+{
+  "title": "My Profile",
+  "breadcrumb": {
+    "profile": "Profile"
+  },
+  "errors": {
+    "load": "Could not load your account."
+  },
+  "loading_aria": "Loading your profile",
+  "photo": {
+    "title": "Photo",
+    "meta": "Shown beside your name across the dashboard.",
+    "hint": "JPG or PNG, up to 5 MB.",
+    "replace": "Replace",
+    "upload": "Upload"
+  },
+  "account": {
+    "title": "Account",
+    "meta": "Managed by a super admin.",
+    "linked": "Linked",
+    "not_linked": "Not linked",
+    "self_registered": "Self-registered",
+    "server_config": "Server configuration"
+  },
+  "personal": {
+    "title": "Personal Information",
+    "meta": "Your own details — you don't need a super admin to change these.",
+    "name_placeholder": "Your name",
+    "gender": "Gender",
+    "gender_placeholder": "Not set",
+    "email_note": "Your email is your sign-in name and cannot be changed here — ask a super admin if it needs to move.",
+    "super_admin_email_note": "The super admin signs in with the email set in the server configuration, so it is changed there."
+  },
+  "password": {
+    "meta": "Changing it signs your other devices out.",
+    "super_admin_note": "The super admin password is set in the server configuration and can't be changed from the dashboard.",
+    "current": "Current Password",
+    "new": "New Password",
+    "confirm": "Confirm New Password",
+    "hint": "At least 8 characters, including an uppercase letter, a lowercase letter, a number and a symbol.",
+    "changing": "Changing...",
+    "change": "Change Password"
+  },
+  "toast": {
+    "nothing_to_save": "Nothing to save.",
+    "profile_updated": "Profile updated",
+    "profile_update_failed": "Could not update your profile.",
+    "password_changed": "Password changed. Other devices will need to sign in again.",
+    "password_change_failed": "Could not change your password.",
+    "choose_image": "Choose an image file.",
+    "image_too_large": "Image must be 5 MB or smaller.",
+    "photo_updated": "Photo updated",
+    "photo_upload_failed": "Could not upload your photo.",
+    "photo_removed": "Photo removed",
+    "photo_remove_failed": "Could not remove your photo."
+  }
+}

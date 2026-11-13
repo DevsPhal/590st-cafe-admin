@@ -1,0 +1,45 @@
+{
+  "title": "Settings",
+  "account": {
+    "title": "Signed-in Account",
+    "loading_aria": "Loading your account",
+    "load_failed": "Could not load your account.",
+    "edit_profile": "Edit my profile"
+  },
+  "display": {
+    "title": "Display Preferences",
+    "meta": "Saved for your account in this browser, and applied the next time a screen loads.",
+    "reset": "Reset to defaults",
+    "reset_toast": "Preferences reset to defaults"
+  },
+  "language": {
+    "label": "Language",
+    "help": "Same setting as the flag in the header — changes the sidebar and page labels."
+  },
+  "page_size": {
+    "label": "Rows per page",
+    "help": "What the Products, Orders, Inventory, Staff and Users tables open with. Each screen's own footer still overrides it while you are on that screen."
+  },
+  "refresh": {
+    "label": "Live refresh",
+    "help": "How often the Dashboard, Orders, Payments, Users and Audit screens re-poll the API. The barista queue keeps its own faster cadence so orders are never missed.",
+    "off": "Off",
+    "seconds": "{count}s",
+    "minutes": "{count} min",
+    "pause": "Pause refreshing while this tab is in the background",
+    "pause_help": "Saves API calls on a terminal left open all day."
+  },
+  "exchange": {
+    "title": "Bakong Exchange Rate",
+    "meta": "Used to price KHR QR payments. Stored on the server and shared by all staff.",
+    "loading_aria": "Loading the exchange rate",
+    "load_failed": "Could not load the exchange rate.",
+    "applied": "KHR per USD (applied)",
+    "market": "Market rate (reference only)",
+    "last_updated": "Last updated {date}",
+    "last_updated_by": "Last updated {date} by {name}",
+    "save": "Save Rate",
+    "updated": "Exchange rate updated",
+    "update_failed": "Could not update the exchange rate."
+  }
+}

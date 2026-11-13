@@ -1,6 +1,5 @@
 import type { FormatInput } from "@/types/FormInputType";
 
-// Map Khmer digits to Latin digits
 const khmerToLatinMap: Record<string, string> = {
   "០": "0",
   "១": "1",
@@ -20,12 +19,11 @@ const convertKhmerToLatin = (str: string) =>
 export const formatWithCommas = (input: FormatInput, locale = "en-US"): string => {
   if (input === null || input === undefined) return "0";
 
-  // Convert Khmer digits to Latin if it's a string
   let value: number;
   if (typeof input === "string") {
     const latinStr = convertKhmerToLatin(input);
     value = Number(latinStr);
-    if (isNaN(value)) return input; // Return original string if not numeric
+    if (isNaN(value)) return input;
   } else {
     value = input;
   }

@@ -1,0 +1,132 @@
+{
+  "title": "Orders List",
+  "breadcrumb": {
+    "orders": "Orders"
+  },
+  "stats": {
+    "all_orders": "All Orders",
+    "unpaid_page": "Unpaid (this page)",
+    "paid_value_page": "Paid Value (this page)"
+  },
+  "filters": {
+    "all_statuses": "All statuses"
+  },
+  "card": {
+    "title": "Orders",
+    "meta": "Total Orders: {count}"
+  },
+  "table": {
+    "order_id": "Order ID",
+    "handled_by": "Handled By",
+    "items": "Items",
+    "payment": "Payment",
+    "order_date": "Order Date"
+  },
+  "empty": {
+    "list": "No orders match this filter."
+  },
+  "common": {
+    "walk_in": "Walk-in"
+  },
+  "badge": {
+    "delivery_fee_needed": "Delivery fee needed"
+  },
+  "confirm": {
+    "cancel_title": "Cancel order"
+  },
+  "toast": {
+    "cancelled": "Order cancelled",
+    "delivery_fee_saved": "Delivery fee saved",
+    "estimate_set": "Estimated time set to {minutes} min",
+    "sent_to_kitchen": "Order sent to the kitchen queue",
+    "dispatched": "Order dispatched for delivery",
+    "completed": "Order marked completed",
+    "delivered": "Order marked delivered"
+  },
+  "errors": {
+    "cancel": "Could not cancel the order.",
+    "delivery_fee": "Could not save the delivery fee.",
+    "estimate": "Could not save the estimated time.",
+    "update": "Could not update the order."
+  },
+  "detail": {
+    "title": "Order Detail",
+    "not_paid": "Not paid",
+    "amount_tendered": "Amount Tendered",
+    "total_khr": "Total in KHR",
+    "change_due": "Change Due",
+    "ordered_at": "Ordered At",
+    "paid_at": "Paid At",
+    "fulfillment": "Fulfillment",
+    "items_label": "Items :",
+    "options": "Options",
+    "qty": "Qty",
+    "unit_price": "Unit Price",
+    "subtotal": "Subtotal",
+    "sugar": "Sugar {level}",
+    "ice": "Ice {level}"
+  },
+  "progress": {
+    "title": "Order progress",
+    "go_to_payments": "Go to Payments",
+    "waiting_delivery_fee": "Waiting for the delivery fee to be set before this can start.",
+    "waiting_qr_payment": "Waiting for the customer's QR payment — it confirms automatically, then this can start.",
+    "waiting_payment_choice": "Waiting for the customer to choose how to pay.",
+    "start_preparing": "Start Preparing",
+    "start_preparing_hint": "Send this order to the kitchen queue.",
+    "cash_not_collected_complete": "Cash hasn't been collected yet — take it from the Barista queue before completing this order.",
+    "dispatch": "Dispatch for Delivery",
+    "dispatch_hint": "Send this order out with a courier.",
+    "mark_completed": "Mark Completed",
+    "mark_completed_hint": "Hand the order over at the counter.",
+    "cash_not_collected_deliver": "Cash hasn't been collected yet — collect it before marking this delivered.",
+    "mark_delivered": "Mark Delivered",
+    "mark_delivered_hint": "Confirm the courier has handed it over."
+  },
+  "history": {
+    "title": "Order History",
+    "loading": "Loading history...",
+    "error": "Could not load order history.",
+    "action": "Action",
+    "actor": "Actor",
+    "when": "When",
+    "empty": "No history recorded for this order."
+  },
+  "invoice": {
+    "title": "Invoice #{code}",
+    "load_error": "Could not load the invoice."
+  },
+  "cancel": {
+    "blocked_admin": "This order is paid. Only an admin can cancel it and refund the cash.",
+    "blocked_bakong": "Paid by Bakong KHQR: the refund goes through the bank, so it can't be cancelled here.",
+    "blocked_finished": "This order is finished and can't be cancelled.",
+    "blocked_handler": "Another staff member is handling this order.",
+    "by_customer": "Cancelled by the customer",
+    "by_staff": "Cancelled by staff",
+    "by_system": "Cancelled automatically",
+    "cancellation": "Cancellation",
+    "confirm": "Cancel order",
+    "confirm_refund": "Cancel and refund",
+    "details": "More details (optional)",
+    "hint": "The customer and the staff see the reason with the order.",
+    "keep": "Keep order",
+    "other": "Or write the reason",
+    "reason_required": "Choose a reason or write one.",
+    "refund": "This order is paid. Hand back {amount} in cash; it leaves the sales figures.",
+    "refunded": "refunded {amount}",
+    "restock": "Not made yet",
+    "restock_hint": "Put everything back in stock.",
+    "stock_question": "The stock for this order was already taken. Was it made?",
+    "title": "Cancel order #{code}",
+    "waste": "Already made",
+    "waste_hint": "Count it as waste in the inventory.",
+    "why": "Why is it cancelled?",
+    "reasons": {
+      "customer_changed_mind": "Customer changed their mind",
+      "customer_no_show": "Customer didn't come to collect",
+      "out_of_stock": "Item ran out",
+      "wrong_order": "Order entered by mistake",
+      "delivery_refused": "Customer refused the delivery"
+    }
+  }
+}

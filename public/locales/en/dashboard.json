@@ -1,0 +1,71 @@
+{
+  "title": "Dashboard",
+  "subtitle": "Shop data for {date}. Refreshes every 30 seconds.",
+  "errors": {
+    "daily_report": "Daily report",
+    "finance": "Finance",
+    "low_stock": "Low stock",
+    "pending_orders": "Pending orders",
+    "completed_orders": "Completed orders",
+    "weekly_report": "Weekly report",
+    "load_failed": "Could not load this data."
+  },
+  "stats": {
+    "unavailable": "Unavailable",
+    "revenue_today": "Revenue Today",
+    "profit_hint": "Profit: {amount}",
+    "orders_today": "Orders Today",
+    "staff_with_sales": "{count} staff member(s) with completed sales",
+    "pending_orders": "Pending Orders",
+    "pending_hint": "Awaiting payment or pickup",
+    "low_stock_items": "Low Stock Items"
+  },
+  "revenue": {
+    "title": "Revenue · last 7 days",
+    "subtitle": "All completed sales from the daily reports",
+    "view_report": "View Report",
+    "week_revenue": "7-day revenue",
+    "avg_daily_orders": "Average daily orders",
+    "load_failed": "Weekly sales could not be loaded.",
+    "series": "Revenue",
+    "empty": "No sales in the last 7 days yet."
+  },
+  "payments": {
+    "title": "Payment Split",
+    "subtitle": "Today, from the daily report",
+    "link": "Payments",
+    "cash": "Cash",
+    "empty": "No payments recorded today yet.",
+    "load_failed": "Payments could not be loaded.",
+    "loading": "Loading payments...",
+    "staff_heading": "Staff sales today",
+    "split_aria": "Cash {cash}%, Bakong {bakong}%"
+  },
+  "top_products": {
+    "title": "Top Products",
+    "subtitle": "By units sold across the most recent 200 completed orders",
+    "link": "Products",
+    "units": "Units",
+    "revenue": "Revenue",
+    "empty": "No sales recorded yet.",
+    "load_failed": "Products could not be loaded.",
+    "loading": "Loading products..."
+  },
+  "low_stock": {
+    "title": "Low Stock",
+    "subtitle": "At or below reorder level",
+    "link": "Stock Alerts",
+    "empty": "Everything is above its reorder level.",
+    "load_failed": "Stock could not be loaded.",
+    "loading": "Loading stock..."
+  },
+  "recent_orders": {
+    "title": "Recent Orders",
+    "subtitle": "Most recently completed",
+    "link": "Orders",
+    "walk_in": "Walk-in",
+    "empty": "No completed orders yet.",
+    "load_failed": "Orders could not be loaded.",
+    "loading": "Loading orders..."
+  }
+}

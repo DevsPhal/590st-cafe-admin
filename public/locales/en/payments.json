@@ -1,0 +1,85 @@
+{
+  "title": "Payments",
+  "stats": {
+    "awaiting_fee": "Awaiting Delivery Fee",
+    "awaiting_fee_hint": "Customer pinned a location — quote a fee to unlock payment",
+    "awaiting_cash": "Awaiting Cash Pickup",
+    "awaiting_cash_hint": "Unpaid cash orders, including ones being prepared",
+    "cash_due_page": "Cash Due (this page)",
+    "awaiting_qr": "Awaiting QR Payment",
+    "awaiting_qr_hint": "Confirmed automatically once the customer pays",
+    "qr_due_page": "QR Due (this page)",
+    "out_for_delivery": "Out for Delivery",
+    "owe_cash_hint": "{count} still owe cash on arrival",
+    "all_paid_hint": "All out-for-delivery orders are paid"
+  },
+  "cards": {
+    "waiting_meta": "Waiting: {count}",
+    "cash_on_pickup": "Cash on Pickup",
+    "bakong": "Bakong QR Payments",
+    "bakong_meta": "Auto-confirming: {count}",
+    "delivery_board": "Delivery Board",
+    "delivery_board_meta": "Out with a courier: {count}"
+  },
+  "table": {
+    "order_id": "Order ID",
+    "address": "Address",
+    "distance": "Distance",
+    "ordered_at": "Ordered At",
+    "items": "Items",
+    "amount_due": "Amount Due",
+    "currency": "Currency",
+    "payment": "Payment",
+    "dispatched_at": "Dispatched At"
+  },
+  "common": {
+    "walk_in": "Walk-in"
+  },
+  "empty": {
+    "delivery_fee": "No delivery orders are waiting for a fee.",
+    "pickup": "No unpaid cash orders.",
+    "bakong": "No QR payments are pending.",
+    "delivery_board": "Nothing is out for delivery."
+  },
+  "actions": {
+    "set_fee": "Set Fee",
+    "collect_cash": "Collect Cash",
+    "mark_delivered": "Mark Delivered"
+  },
+  "badge": {
+    "cash_due_on_arrival": "Cash due on arrival",
+    "paid": "Paid"
+  },
+  "toast": {
+    "fee_set": "Delivery fee set — the customer can now choose how to pay.",
+    "paid_change_due": "Paid. Change due: {amount}",
+    "payment_collected": "Payment collected",
+    "delivered": "Order marked delivered"
+  },
+  "errors": {
+    "fee": "Could not save the delivery fee.",
+    "cash": "Could not record the cash payment.",
+    "delivered": "Could not mark the order delivered."
+  },
+  "fee_modal": {
+    "title": "Set Delivery Fee",
+    "submit": "Save Fee",
+    "not_available": "Not available",
+    "items_subtotal": "Items Subtotal",
+    "delivery_fee": "Delivery Fee (USD)",
+    "grand_total": "Customer's Grand Total",
+    "view_on_map": "View pinned location on map"
+  },
+  "cash_modal": {
+    "submit": "Confirm Payment",
+    "total_due": "Total Due",
+    "rate_unavailable": " (rate unavailable)",
+    "amount_tendered": "Amount Tendered",
+    "change_due": "Change Due"
+  },
+  "qr": {
+    "waiting": "Waiting for QR payment",
+    "minutes_left": "Waiting · {minutes} min left",
+    "times_up": "Time's up · final check"
+  }
+}

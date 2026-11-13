@@ -1,0 +1,66 @@
+{
+  "title": "Banners",
+  "description": "Slides on the customer homepage. Active banners show in ascending display order.",
+  "add_banner": "Add Banner",
+  "default_link": "/menu (default)",
+  "remove_image": "Remove image",
+  "stats": {
+    "all": "All Banners",
+    "live": "Live on Homepage (this page)",
+    "live_without_image": "Live Without Image",
+    "live_without_image_hint": "Shown with the default photo"
+  },
+  "filters": {
+    "search_placeholder": "Search banners",
+    "all_statuses": "All statuses"
+  },
+  "meta": {
+    "total": "Total Banners: {count}"
+  },
+  "fields": {
+    "link": "Link",
+    "display_order": "Display Order"
+  },
+  "table": {
+    "order": "Order",
+    "toggle_hide": "Click to hide from the homepage",
+    "toggle_show": "Click to show on the homepage"
+  },
+  "empty": {
+    "filtered": "No banners match these filters.",
+    "none": "No banners yet. Use Add Banner to put the first slide on the homepage."
+  },
+  "form": {
+    "modify_title": "Modify Banner",
+    "title_placeholder": "e.g. New Iced Latte Menu",
+    "link_placeholder": "/menu or https://...",
+    "select_status": "Select status",
+    "image": "Banner Image",
+    "keep_image": "Keep current image",
+    "no_file": "No File Chosen",
+    "image_hint": "Wide landscape images work best. Leave a link blank to send customers to the menu."
+  },
+  "detail": {
+    "title": "Banner Detail",
+    "super_admin": "Super Admin"
+  },
+  "toast": {
+    "created": "Banner created",
+    "updated": "Banner updated",
+    "deleted": "Banner deleted",
+    "image_removed": "Image removed",
+    "now_live": "Banner is now live on the homepage",
+    "hidden": "Banner hidden from the homepage"
+  },
+  "errors": {
+    "save": "Could not save the banner.",
+    "delete": "Could not delete the banner.",
+    "remove_image": "Could not remove the image.",
+    "status": "Could not change the banner status."
+  },
+  "confirm": {
+    "delete_title": "Delete banner",
+    "delete_description": "Delete banner \"{title}\"? It will disappear from the homepage.",
+    "remove_image_description": "Remove the image from \"{title}\"? The homepage will show the default photo until a new one is uploaded."
+  }
+}

@@ -53,6 +53,9 @@ details and choose **Manage sizes and discount** to edit its size options and di
 Promotion codes, loyalty points, and table plans have no backend support yet and display
 an unavailable message. Product discounts are supported. Name/status filters on list pages
 apply to the current page; role, category, and order-status filters are sent to the API.
+The Order Queue lists one status tab at a time with live counts per tab; its search (invoice
+number or customer), date range, order type, payment, and newest/oldest filters and its
+paging all run on the API, and the selected tab and filters are kept for the session.
 
 Validation:
 
